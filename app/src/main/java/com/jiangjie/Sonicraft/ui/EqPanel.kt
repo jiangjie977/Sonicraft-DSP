@@ -1012,8 +1012,10 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                     ) {
                         Text(
                             text = if (libSelectMode) "已选 ${libSelected.size} 项" else
-                                "库 · ${library.size}/${viewModel.autoEqLibraryMax} 条" +
-                                    " · 点按装载 / 长按多选",
+                                "库 · ${library.size}/${viewModel.autoEqLibraryMax} 条 · 点按装载" +
+                                    // 超过约 4 条才需要滚动，提示一下，否则用户会以为列表不能滑
+                                    (if (library.size > 4) " · 上下滑动" else "") +
+                                    " · 长按多选",
                             fontSize = 11.sp,
                             color = ScColors.TextSub,
                         )
