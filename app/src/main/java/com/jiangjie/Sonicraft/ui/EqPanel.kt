@@ -88,13 +88,8 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     var showSaveDialog by remember { mutableStateOf(false) }
     var presetName by remember { mutableStateOf("") }
     // AutoEq 耳机修正（粘贴 ParametricEQ.txt 一键应用）
-    var showAutoEqDialog by remember { mutableStateOf(false) }
-    var autoEqText by remember { mutableStateOf("") }
-    var autoEqMsg by remember { mutableStateOf<String?>(null) }
     // 成功提示用品牌色、失败用红：此前所有提示都是红色，成功也像报错（2026-11-14 修）
-    var autoEqOk by remember { mutableStateOf<Boolean?>(null) }
     // 文件导入来源名：非空时应用成功后自动存为该名字的预设（粘贴导入为 null，不污染预设库）
-    var autoEqFileName by remember { mutableStateOf<String?>(null) }
     var draggingBand by remember { mutableStateOf(-1) }
     var selectedBand by remember { mutableStateOf(0) }
     // 手绘防误触锁（参照 wecho GraphicEqPanel 的锁定思路）：锁定后曲线区禁用
@@ -452,170 +447,6 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 },
             )
         }
-        // AutoEq 耳机修正：支持「从文件导入」（.txt 走系统文件选择器）与「粘贴导入」
-        val autoEqCtx = androidx.compose.ui.platform.LocalContext.current
-        val pickAutoEqFile = androidx.activity.compose.rememberLauncherForActivityResult(
-            androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
-        ) { uri ->
-            if (uri != null) {
-                val txt = runCatching {
-                    autoEqCtx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                }.getOrNull()
-                if (txt.isNullOrBlank()) {
-                    autoEqOk = false
-                    autoEqMsg = "读取文件失败（可能不是文本文件或编码不支持）"
-                } else {
-                    // 文件名即预设名：导出的 ParametricEQ.txt 通常带耳机型号，正好当预设名。
-                    // 先填进对话框让用户看频响曲线预览，确认后再应用（避免选错文件直接改掉 EQ）。
-                    //
-                    // 注意：SAF 的 content URI 用 lastPathSegment 拿到的是 "document:1001008065"
-                    // 这种 document id，**不是文件名** —— 必须查 OpenableColumns.DISPLAY_NAME。
-                    val displayName = runCatching {
-                        autoEqCtx.contentResolver.query(
-                            uri,
-                            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
-                            null, null, null,
-                        )?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null }
-                    }.getOrNull()
-                    val rawName = displayName
-                        ?: uri.lastPathSegment?.substringAfterLast('/')
-                        ?: "AutoEq"
-                    autoEqFileName = rawName.substringBeforeLast('.').ifBlank { "AutoEq" }
-                    autoEqText = txt
-                    autoEqMsg = null
-                    autoEqOk = null
-                    showAutoEqDialog = true
-                }
-            }
-        }
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Text(text = "AutoEq \u8033\u673a\u4fee\u6b63", fontSize = 13.sp)
-            Spacer(modifier = Modifier.weight(1f))
-            TextButton(onClick = {
-                // CSV 的 MIME 是 text/csv（部分文件管理器报 text/comma-separated-values），
-                // 只写 text/plain 会把结果 CSV 挡在选择器外
-                pickAutoEqFile.launch(
-                    arrayOf(
-                        "text/plain",
-                        "text/csv",
-                        "text/comma-separated-values",
-                        "application/octet-stream",
-                    ),
-                )
-            }) {
-                Text(text = "\u4ece\u6587\u4ef6\u5bfc\u5165", fontSize = 12.sp)
-            }
-            TextButton(onClick = {
-                autoEqText = ""
-                autoEqMsg = null
-                autoEqFileName = null
-                showAutoEqDialog = true
-            }) {
-                Text(text = "\u7c98\u8d34\u5bfc\u5165", fontSize = 12.sp)
-            }
-        }
-        autoEqMsg?.let {
-            Text(
-                text = it,
-                fontSize = 12.sp,
-                color = if (autoEqOk == false) Color(0xFFB00020) else ScColors.Primary,
-            )
-        }
-
-        if (showAutoEqDialog) {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showAutoEqDialog = false },
-                confirmButton = {
-                    TextButton(onClick = {
-                        val res = viewModel.applyAutoEq(autoEqText, saveAsPreset = autoEqFileName)
-                        autoEqOk = res.ok
-                        autoEqMsg = res.message
-                        if (res.ok) {
-                            showAutoEqDialog = false
-                            autoEqFileName = null
-                        }
-                    }) { Text(text = "\u5e94\u7528") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showAutoEqDialog = false }) { Text(text = "\u53d6\u6d88") }
-                },
-                title = {
-                    Text(
-                        text = autoEqFileName?.let { "AutoEq 导入 · $it" }
-                            ?: "\u7c98\u8d34 AutoEq ParametricEQ.txt",
-                        fontSize = 15.sp,
-                    )
-                },
-                text = {
-                    // 键盘弹出后对话框可用高度会缩水：输入框 + 曲线预览必须可滚动，
-                    // 否则预览会把输入框挤成一条缝（真机实测）。
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 340.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                    androidx.compose.material3.OutlinedTextField(
-                        value = autoEqText,
-                        onValueChange = { autoEqText = it },
-                        placeholder = {
-                            Text(
-                                text = "支持三种 AutoEq 导出：\n" +
-                                    "· ParametricEQ.txt —— Filter 1: ON PK Fc 31 Hz Gain 2.5 dB Q 0.70\n" +
-                                    "· GraphicEQ.txt —— GraphicEQ: 20 -0.2; 21 -0.2; …\n" +
-                                    "· 结果 CSV —— 取其中 equalization 列",
-                                fontSize = 11.sp,
-                            )
-                        },
-                        minLines = 3,
-                        maxLines = 5,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    // 频响曲线预览：把解析出的 PK/LSC/HSC 段按真实双二阶算成响应曲线，
-                    // 应用前就能看出形状（AutoEq 图上那条曲线在我们 EQ 里的等效结果）。
-                    // 三种格式都试：参数化 / GraphicEQ / 结果 CSV（CSV 与 GraphicEQ 会按当前段频率映射）
-                    val previewInfo = remember(autoEqText, eqBandFreqs) {
-                        val p = com.jiangjie.Sonicraft.AutoEqParser.parse(autoEqText)
-                        if (p != null) {
-                            "预览：${p.bands.size} 段（参数化）" +
-                                " · preamp ${"%+.1f".format(p.preampDb)} dB" +
-                                if (p.skipped > 0) " · 跳过 ${p.skipped} 段" else ""
-                        } else {
-                            val curve = com.jiangjie.Sonicraft.AutoEqParser.parseGraphic(autoEqText)
-                                ?: com.jiangjie.Sonicraft.AutoEqParser.parseCsvCurve(autoEqText)
-                            if (curve == null) {
-                                null
-                            } else {
-                                val bands = com.jiangjie.Sonicraft.AutoEqParser.curveToBands(curve, eqBandFreqs)
-                                val peak = curve.maxOfOrNull { it.second } ?: 0f
-                                val pre = if (peak > 0f) -peak else 0f
-                                "预览：曲线映射到 ${bands.size} 段（Q=1.41）" +
-                                    " · preamp ${"%+.1f".format(pre)} dB"
-                            }
-                        }
-                    }
-                    if (previewInfo != null) {
-                        Text(
-                            text = previewInfo,
-                            fontSize = 11.sp,
-                            color = ScColors.TextSub,
-                        )
-                        Text(
-                            text = "应用后可在下方「实际频响曲线」卡片查看叠加结果",
-                            fontSize = 11.sp,
-                            color = ScColors.TextSub,
-                        )
-                    } else if (autoEqText.isNotBlank()) {
-                        Text(
-                            text = "未识别到 AutoEq 格式 —— 支持 ParametricEQ.txt、GraphicEQ.txt 与结果 CSV",
-                            fontSize = 11.sp,
-                            color = Color(0xFFB00020),
-                        )
-                    }
-                    }
-                },
-            )
-        }
         // 数字精确输入（Q/总增益/频率/段数标签点击弹出；对齐 wecho _showValueDialog
         // 的 clamp 精确输入。解析失败静默关闭=不改值）
         numEditField?.let { field ->
@@ -912,14 +743,20 @@ private fun EqResponseChart(
     qs: List<Float>,
     types: List<Int>,
     modifier: Modifier = Modifier,
+    /** 第二条级联曲线（AutoEq）：与主曲线相加 —— 两级串联的幅频响应就是 dB 相加 */
+    extra: List<com.jiangjie.Sonicraft.AutoEqParser.Band> = emptyList(),
 ) {
-    val samples = remember(freqs, gains, qs, types) {
+    val samples = remember(freqs, gains, qs, types, extra) {
         val n = 120
         val lo = kotlin.math.ln(20.0)
         val hi = kotlin.math.ln(20000.0)
         List(n) { i ->
             val f = kotlin.math.exp(lo + (hi - lo) * i / (n - 1)).toFloat()
-            EqMath.responseAt(freqs, gains, f, qs = qs, types = types)
+            EqMath.responseAt(freqs, gains, f, qs = qs, types = types) +
+                if (extra.isEmpty()) 0f else EqMath.responseAt(
+                    extra.map { it.freq }, extra.map { it.gain }, f,
+                    qs = extra.map { it.q }, types = extra.map { it.type },
+                )
         }
     }
     val peak = samples.maxOrNull() ?: 0f
@@ -982,6 +819,22 @@ internal fun ScEqResponseCard(viewModel: MainViewModel) {
     val freqs by viewModel.eqBandFreqs.collectAsStateWithLifecycle()
     val types by viewModel.eqBandTypes.collectAsStateWithLifecycle()
     val preGain by viewModel.eqPreGainDb.collectAsStateWithLifecycle()
+    // AutoEq 独立节点的曲线：开启时叠加显示（这才是实际听到的总响应）
+    val autoEqOn by viewModel.autoEqEnabled.collectAsStateWithLifecycle()
+    val autoEqGains by viewModel.autoEqGains.collectAsStateWithLifecycle()
+    val autoEqQs by viewModel.autoEqQs.collectAsStateWithLifecycle()
+    val autoEqFreqs by viewModel.autoEqFreqs.collectAsStateWithLifecycle()
+    val autoEqTypes by viewModel.autoEqTypes.collectAsStateWithLifecycle()
+    val extraBands = remember(autoEqOn, autoEqGains, autoEqQs, autoEqFreqs, autoEqTypes) {
+        if (!autoEqOn) emptyList() else autoEqFreqs.indices.map { i ->
+            com.jiangjie.Sonicraft.AutoEqParser.Band(
+                freq = autoEqFreqs[i],
+                gain = autoEqGains.getOrElse(i) { 0f },
+                q = autoEqQs.getOrElse(i) { 0.707f },
+                type = autoEqTypes.getOrElse(i) { 0 },
+            )
+        }
+    }
 
     com.jiangjie.Sonicraft.ui.components.ScCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -1000,7 +853,8 @@ internal fun ScEqResponseCard(viewModel: MainViewModel) {
                     color = ScColors.TextMain,
                 )
                 Text(
-                    text = "$eqMode 段 · 总增益 ${"%+.1f".format(preGain)} dB",
+                    text = "$eqMode 段 · 总增益 ${"%+.1f".format(preGain)} dB" +
+                    if (extraBands.isEmpty()) "" else " · 含 AutoEq",
                     fontSize = 11.sp,
                     color = ScColors.TextSub,
                 )
@@ -1010,6 +864,7 @@ internal fun ScEqResponseCard(viewModel: MainViewModel) {
                 gains = gains,
                 qs = qs,
                 types = types,
+                extra = extraBands,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(158.dp),
@@ -1019,6 +874,206 @@ internal fun ScEqResponseCard(viewModel: MainViewModel) {
                 fontSize = 10.sp,
                 color = ScColors.TextSub,
             )
+        }
+    }
+}
+
+/**
+ * AutoEq 校正卡片（2026-11-14，与参量均衡**解耦**）。
+ *
+ * 为什么独立：AutoEq 是"耳机型号校正"，用户 PEQ 是"个人偏好"，两者语义不同。
+ * 曾经导入 AutoEq 会直接改写 PEQ 的 31 段 —— 用户手调曲线被覆盖、且无法单独关闭。
+ * 现在它有自己的 DSP 节点（AUTO_EQ_NODE_INDEX）、自己的段、自己的开关。
+ */
+@Composable
+internal fun ScAutoEqCard(viewModel: MainViewModel) {
+    val enabled by viewModel.autoEqEnabled.collectAsStateWithLifecycle()
+    val mode by viewModel.autoEqMode.collectAsStateWithLifecycle()
+    val preGain by viewModel.autoEqPreGain.collectAsStateWithLifecycle()
+    val source by viewModel.autoEqSource.collectAsStateWithLifecycle()
+    val autoEqFreqs by viewModel.autoEqFreqs.collectAsStateWithLifecycle()
+
+    var showAutoEqDialog by remember { mutableStateOf(false) }
+    var autoEqText by remember { mutableStateOf("") }
+    var autoEqMsg by remember { mutableStateOf<String?>(null) }
+    var autoEqOk by remember { mutableStateOf<Boolean?>(null) }
+    var autoEqFileName by remember { mutableStateOf<String?>(null) }
+
+    val autoEqCtx = androidx.compose.ui.platform.LocalContext.current
+    val pickAutoEqFile = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            val txt = runCatching {
+                autoEqCtx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()
+            if (txt.isNullOrBlank()) {
+                autoEqOk = false
+                autoEqMsg = "读取文件失败（可能不是文本文件或编码不支持）"
+            } else {
+                // SAF 的 lastPathSegment 是 document id，必须查 DISPLAY_NAME 才是文件名
+                val displayName = runCatching {
+                    autoEqCtx.contentResolver.query(
+                        uri,
+                        arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                        null, null, null,
+                    )?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null }
+                }.getOrNull()
+                autoEqFileName = (displayName ?: uri.lastPathSegment?.substringAfterLast('/') ?: "AutoEq")
+                    .substringBeforeLast('.').ifBlank { "AutoEq" }
+                autoEqText = txt
+                autoEqMsg = null
+                autoEqOk = null
+                showAutoEqDialog = true
+            }
+        }
+    }
+
+    com.jiangjie.Sonicraft.ui.components.ScCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(
+                        text = "AutoEq 校正",
+                        fontSize = 13.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = ScColors.TextMain,
+                    )
+                    Text(
+                        text = if (source.isBlank()) "未导入 — 耳机型号校正（不影响你的 EQ）"
+                        else "当前：$source · $mode 段 · preamp ${"%+.1f".format(preGain)} dB",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                    )
+                }
+                com.jiangjie.Sonicraft.ui.components.ScSwitch(
+                    checked = enabled,
+                    // ScSwitch 的回调无参：用当前值取反（与其它页面写法一致）
+                    onCheckedChange = { viewModel.setAutoEqEnabled(!enabled) },
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(text = "导入 AutoEq 结果", fontSize = 12.sp, color = ScColors.TextMain)
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = {
+                    pickAutoEqFile.launch(
+                        arrayOf(
+                            "text/plain",
+                            "text/csv",
+                            "text/comma-separated-values",
+                            "application/octet-stream",
+                        ),
+                    )
+                }) {
+                    Text(text = "从文件导入", fontSize = 12.sp)
+                }
+                TextButton(onClick = {
+                    autoEqText = ""
+                    autoEqMsg = null
+                    autoEqFileName = null
+                    showAutoEqDialog = true
+                }) {
+                    Text(text = "粘贴导入", fontSize = 12.sp)
+                }
+            }
+            autoEqMsg?.let {
+                Text(
+                    text = it,
+                    fontSize = 12.sp,
+                    color = if (autoEqOk == false) Color(0xFFB00020) else ScColors.Primary,
+                )
+            }
+            if (showAutoEqDialog) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showAutoEqDialog = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val res = viewModel.applyAutoEq(autoEqText, saveAsPreset = autoEqFileName)
+                            autoEqOk = res.ok
+                            autoEqMsg = res.message
+                            if (res.ok) {
+                                showAutoEqDialog = false
+                                autoEqFileName = null
+                            }
+                        }) { Text(text = "应用") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showAutoEqDialog = false }) { Text(text = "取消") }
+                    },
+                    title = {
+                        Text(
+                            text = autoEqFileName?.let { "AutoEq 导入 · $it" } ?: "粘贴 AutoEq ParametricEQ.txt",
+                            fontSize = 15.sp,
+                        )
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 320.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = autoEqText,
+                                onValueChange = { autoEqText = it },
+                                placeholder = {
+                                    Text(
+                                        text = "支持三种 AutoEq 导出：\n" +
+                                            "· ParametricEQ.txt —— Filter 1: ON PK Fc 31 Hz Gain 2.5 dB Q 0.70\n" +
+                                            "· GraphicEQ.txt —— GraphicEQ: 20 -0.2; 21 -0.2; …\n" +
+                                            "· 结果 CSV —— 取其中 equalization 列",
+                                        fontSize = 11.sp,
+                                    )
+                                },
+                                minLines = 3,
+                                maxLines = 5,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            val previewInfo = remember(autoEqText, autoEqFreqs) {
+                                val p = com.jiangjie.Sonicraft.AutoEqParser.parse(autoEqText)
+                                if (p != null) {
+                                    "预览：${p.bands.size} 段（参数化）" +
+                                        " · preamp ${"%+.1f".format(p.preampDb)} dB" +
+                                        if (p.skipped > 0) " · 跳过 ${p.skipped} 段" else ""
+                                } else {
+                                    val curve = com.jiangjie.Sonicraft.AutoEqParser.parseGraphic(autoEqText)
+                                        ?: com.jiangjie.Sonicraft.AutoEqParser.parseCsvCurve(autoEqText)
+                                    if (curve == null) {
+                                        null
+                                    } else {
+                                        val bands = com.jiangjie.Sonicraft.AutoEqParser
+                                            .curveToBands(curve, autoEqFreqs)
+                                        val peak = curve.maxOfOrNull { it.second } ?: 0f
+                                        val pre = if (peak > 0f) -peak else 0f
+                                        "预览：曲线映射到 ${bands.size} 段（Q=1.41）" +
+                                            " · preamp ${"%+.1f".format(pre)} dB"
+                                    }
+                                }
+                            }
+                            if (previewInfo != null) {
+                                Text(text = previewInfo, fontSize = 11.sp, color = ScColors.TextSub)
+                            } else if (autoEqText.isNotBlank()) {
+                                Text(
+                                    text = "未识别到 AutoEq 格式 —— 支持 ParametricEQ.txt、GraphicEQ.txt 与结果 CSV",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFB00020),
+                                )
+                            }
+                        }
+                    },
+                )
+            }
         }
     }
 }

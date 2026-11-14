@@ -2528,11 +2528,14 @@ internal fun ScEffectDetailPage(
  */
 @Composable
 internal fun ScEqDetailContent(viewModel: MainViewModel) {
-    // 两张**同级**卡：EQ 面板 + 实际频响曲线（不要把曲线塞进面板卡里，会变成卡中卡）
+    // 三张**同级**卡：EQ 面板 → AutoEq 校正 → 实际频响曲线。
+    // 三者都不要互相嵌套（嵌套会变成卡中卡，阴影叠加、层级含混）。
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ScCard(modifier = Modifier.fillMaxWidth()) {
             MultiBandEqPanel(viewModel = viewModel, modifier = Modifier.padding(14.dp))
         }
+        // AutoEq 与 PEQ 解耦后独立成卡：自带开关、自带段、自己驱动 AUTO_EQ 节点
+        ScAutoEqCard(viewModel = viewModel)
         ScEqResponseCard(viewModel = viewModel)
     }
 }

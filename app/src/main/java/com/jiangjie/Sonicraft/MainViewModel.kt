@@ -2002,6 +2002,7 @@ class MainViewModel @Inject constructor(
             "input_gain" -> setInputGain(v)
             "balance" -> setBalance(v)
             "eq_enabled" -> setEqEnabled(v > 0.5f)
+            "auto_eq_enabled" -> setAutoEqEnabled(v > 0.5f)
             "bass_gain" -> setBassGain(v)
             "treble_gain" -> setTrebleGain(v)
             "compressor_enabled" -> setCompressorEnabled(v > 0.5f)
@@ -2063,6 +2064,7 @@ class MainViewModel @Inject constructor(
         "input_gain" to _inputGain.value,
         "balance" to _balance.value,
         "eq_enabled" to if (_eqEnabled.value) 1f else 0f,
+        "auto_eq_enabled" to if (_autoEqEnabled.value) 1f else 0f,
         "bass_gain" to _bassGain.value,
         "treble_gain" to _trebleGain.value,
         "compressor_enabled" to if (_compressorEnabled.value) 1f else 0f,
@@ -2885,6 +2887,105 @@ class MainViewModel @Inject constructor(
         engine.setParam(AudioEngine.EQ_NODE_INDEX, AudioEngine.EQ_PARAM_PREGAIN_DB, clamped)
     }
 
+    // ---- AutoEq 独立校正（2026-11-14）----
+    // 与 PEQ 完全独立：自带段数/增益/Q/频率/类型/预增益与开关，下发到 AUTO_EQ_NODE_INDEX。
+    // 这样导入型号校正**不会覆盖**用户手调的 PEQ，两者可各自旁路。
+    private val _autoEqEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTOEQ_ENABLED, false))
+    val autoEqEnabled: StateFlow<Boolean> = _autoEqEnabled.asStateFlow()
+
+    private val _autoEqMode = MutableStateFlow(prefs.getInt(KEY_AUTOEQ_MODE, 10).coerceIn(1, 31))
+    val autoEqMode: StateFlow<Int> = _autoEqMode.asStateFlow()
+
+    private val _autoEqSource = MutableStateFlow(prefs.getString(KEY_AUTOEQ_SOURCE, "").orEmpty())
+    val autoEqSource: StateFlow<String> = _autoEqSource.asStateFlow()
+
+    private val _autoEqPreGain = MutableStateFlow(prefs.getFloat(KEY_AUTOEQ_PREGAIN, 0f))
+    val autoEqPreGain: StateFlow<Float> = _autoEqPreGain.asStateFlow()
+
+    private val _autoEqGains = MutableStateFlow(readAutoEqFloats(AUTOEQ_GAINS_PREFIX, _autoEqMode.value))
+    val autoEqGains: StateFlow<List<Float>> = _autoEqGains.asStateFlow()
+
+    private val _autoEqQs = MutableStateFlow(readAutoEqFloats(AUTOEQ_QS_PREFIX, _autoEqMode.value, 0.707f))
+    val autoEqQs: StateFlow<List<Float>> = _autoEqQs.asStateFlow()
+
+    private val _autoEqFreqs = MutableStateFlow(
+        readAutoEqFloats(AUTOEQ_FREQS_PREFIX, _autoEqMode.value).let { stored ->
+            if (stored.any { it > 0f }) stored else EqMath.freqTable(_autoEqMode.value)
+        },
+    )
+    val autoEqFreqs: StateFlow<List<Float>> = _autoEqFreqs.asStateFlow()
+
+    private val _autoEqTypes = MutableStateFlow(
+        runCatching {
+            prefs.getString(AUTOEQ_TYPES_PREFIX + _autoEqMode.value, null)
+                ?.split(",")?.map { it.trim().toInt() }
+        }.getOrNull()?.takeIf { it.isNotEmpty() } ?: List(_autoEqMode.value) { 0 },
+    )
+    val autoEqTypes: StateFlow<List<Int>> = _autoEqTypes.asStateFlow()
+
+    private fun readAutoEqFloats(prefix: String, mode: Int, default: Float = 0f): List<Float> = runCatching {
+        prefs.getString(prefix + mode, null)?.split(",")?.map { it.trim().toFloat() }
+    }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { stored ->
+        List(mode) { i -> stored.getOrElse(i) { default } }
+    } ?: List(mode) { default }
+
+    fun setAutoEqEnabled(enabled: Boolean) {
+        _autoEqEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_AUTOEQ_ENABLED, enabled).apply()
+        engine.setBypass(AudioEngine.AUTO_EQ_NODE_INDEX, !enabled)
+    }
+
+    /**
+     * 用导入结果整体替换 AutoEq 段（**不触碰 PEQ**）。
+     * 顺序：段数 → 各段参数 → 预增益 → 取消旁路（段数会重置各段，必须最先发）。
+     */
+    private fun writeAutoEq(
+        mode: Int,
+        gains: List<Float>,
+        qs: List<Float>,
+        freqs: List<Float>,
+        types: List<Int>,
+        preGainDb: Float,
+        sourceName: String,
+    ) {
+        val n = mode.coerceIn(1, 31)
+        val g = List(n) { gains.getOrElse(it) { 0f } }
+        val q = List(n) { qs.getOrElse(it) { 0.707f } }
+        val f = List(n) { freqs.getOrElse(it) { EqMath.freqTable(n).getOrElse(it) { 1000f } } }
+        val t = List(n) { types.getOrElse(it) { 0 } }
+        val pre = preGainDb.coerceIn(-18f, 18f)
+
+        _autoEqMode.value = n
+        _autoEqGains.value = g
+        _autoEqQs.value = q
+        _autoEqFreqs.value = f
+        _autoEqTypes.value = t
+        _autoEqPreGain.value = pre
+        _autoEqSource.value = sourceName
+        prefs.edit()
+            .putInt(KEY_AUTOEQ_MODE, n)
+            .putFloat(KEY_AUTOEQ_PREGAIN, pre)
+            .putString(KEY_AUTOEQ_SOURCE, sourceName)
+            .putString(AUTOEQ_GAINS_PREFIX + n, g.joinToString(",") { "%.2f".format(it) })
+            .putString(AUTOEQ_QS_PREFIX + n, q.joinToString(",") { "%.3f".format(it) })
+            .putString(AUTOEQ_FREQS_PREFIX + n, f.joinToString(",") { "%.1f".format(it) })
+            .putString(AUTOEQ_TYPES_PREFIX + n, t.joinToString(","))
+            .apply()
+
+        engine.setParam(AudioEngine.AUTO_EQ_NODE_INDEX, AudioEngine.EQ_PARAM_BAND_COUNT, n.toFloat())
+        for (i in 0 until n) {
+            engine.setParam(AudioEngine.AUTO_EQ_NODE_INDEX, i, g[i])
+            engine.setParam(AudioEngine.AUTO_EQ_NODE_INDEX, AudioEngine.EQ_Q_BASE + i, q[i])
+            engine.setParam(AudioEngine.AUTO_EQ_NODE_INDEX, AudioEngine.EQ_FREQ_BASE + i, f[i])
+            engine.setParam(AudioEngine.AUTO_EQ_NODE_INDEX, AudioEngine.EQ_TYPE_BASE + i, t[i].toFloat())
+        }
+        engine.setParam(AudioEngine.AUTO_EQ_NODE_INDEX, AudioEngine.EQ_PARAM_PREGAIN_DB, pre)
+        setAutoEqEnabled(true)
+        // 立刻把「已启用」写进**当前设备**的配置：设备配置是 10s 周期快照 + 切换时回放，
+        // 若不立即落盘，导入后紧接着的一次设备回放会把 enabled 覆盖成旧值（实测复现过）。
+        runCatching { saveLiveConfig(outputDeviceMonitor.current.value.key) }
+    }
+
     private val _eqBandFreqs = MutableStateFlow(readEqFreqs(_eqMode.value))
     val eqBandFreqs: StateFlow<List<Float>> = _eqBandFreqs.asStateFlow()
 
@@ -2973,6 +3074,19 @@ class MainViewModel @Inject constructor(
         _eqBandTypes.value = List(m) { i -> p.types.getOrElse(i) { 0 }.coerceIn(0, 2) }
         engine.setParam(AudioEngine.EQ_NODE_INDEX, AudioEngine.EQ_PARAM_BAND_COUNT, m.toFloat())
         engine.setParam(AudioEngine.EQ_NODE_INDEX, AudioEngine.EQ_PARAM_PREGAIN_DB, _eqPreGainDb.value)
+        // AutoEq 独立节点：重建链路后同样要重放，否则重启 App 后校正失效
+        run {
+            val n = AudioEngine.AUTO_EQ_NODE_INDEX
+            engine.setParam(n, AudioEngine.EQ_PARAM_BAND_COUNT, _autoEqMode.value.toFloat())
+            _autoEqGains.value.forEachIndexed { i, g -> engine.setParam(n, i, g) }
+            _autoEqQs.value.forEachIndexed { i, q -> engine.setParam(n, AudioEngine.EQ_Q_BASE + i, q) }
+            _autoEqFreqs.value.forEachIndexed { i, f -> engine.setParam(n, AudioEngine.EQ_FREQ_BASE + i, f) }
+            _autoEqTypes.value.forEachIndexed { i, t ->
+                engine.setParam(n, AudioEngine.EQ_TYPE_BASE + i, t.toFloat())
+            }
+            engine.setParam(n, AudioEngine.EQ_PARAM_PREGAIN_DB, _autoEqPreGain.value)
+            engine.setBypass(n, !_autoEqEnabled.value)
+        }
         p.gains.take(m).forEachIndexed { i, g -> engine.setParam(AudioEngine.EQ_NODE_INDEX, i, g) }
         p.qs.take(m).forEachIndexed { i, q -> engine.setParam(AudioEngine.EQ_NODE_INDEX, AudioEngine.EQ_Q_BASE + i, q) }
         p.freqs.take(m).forEachIndexed { i, f -> engine.setParam(AudioEngine.EQ_NODE_INDEX, AudioEngine.EQ_FREQ_BASE + i, f) }
@@ -3025,49 +3139,39 @@ class MainViewModel @Inject constructor(
                 )
             }
             // 曲线按**当前段频率**取值（定 Q=1.41），所以段数与位置保持用户设定
-            bands = AutoEqParser.curveToBands(curve, _eqBandFreqs.value)
+            bands = AutoEqParser.curveToBands(curve, _autoEqFreqs.value)
             // 曲线是补偿量：峰值为正时需要预衰减，避免叠加后削波
             val peak = curve.maxOfOrNull { it.second } ?: 0f
             preampDb = if (peak > 0f) -peak else 0f
             formatNote = "，曲线映射 · Q=1.41"
         }
         val m = bands.size
-        if (m != _eqMode.value) setEqBandCountCustom(m)
         val gains = MutableList(m) { i -> bands[i].gain }
         val qs = MutableList(m) { i -> bands[i].q }
         val freqs = MutableList(m) { i -> bands[i].freq }
         val types = MutableList(m) { i -> bands[i].type }
-        for (i in 0 until m) {
-            engine.setParam(AudioEngine.EQ_NODE_INDEX, i, gains[i])
-            engine.setParam(AudioEngine.EQ_NODE_INDEX, AudioEngine.EQ_Q_BASE + i, qs[i])
-            engine.setParam(AudioEngine.EQ_NODE_INDEX, AudioEngine.EQ_FREQ_BASE + i, freqs[i])
-            engine.setParam(AudioEngine.EQ_NODE_INDEX, AudioEngine.EQ_TYPE_BASE + i, types[i].toFloat())
-        }
-        _eqBandGains.value = gains
-        _eqBandQs.value = qs
-        _eqBandFreqs.value = freqs
-        _eqBandTypes.value = types
-        setEqPreGainDb(preampDb)
-        persistEqBands(m, gains)
-        persistEqQs(m, qs)
-        persistEqTypes(m, types)
-        prefs.edit().putString("eq_freq_$m", freqs.joinToString(",") { "%.1f".format(it) }).apply()
-        _bassGain.value = gains.firstOrNull() ?: 0f
-        _trebleGain.value = gains.lastOrNull() ?: 0f
-        // 预设名带来源前缀：用户自己手调的曲线与导入曲线在同一列表里时能一眼分开
-        val prefixed = saveAsPreset?.takeIf { it.isNotBlank() }?.let { "AutoEq · $it" }
-        if (prefixed != null) saveEqUserPreset(prefixed)
+        // 写入**独立的 AutoEq 节点**：不再改动 PEQ 的任何一段，
+        // 用户手调的偏好曲线得以保留；两者各自旁路、可分别开关。
+        writeAutoEq(
+            mode = m,
+            gains = gains,
+            qs = qs,
+            freqs = freqs,
+            types = types,
+            preGainDb = preampDb,
+            sourceName = saveAsPreset?.takeIf { it.isNotBlank() }.orEmpty(),
+        )
         val skipNote = if (skipped > 0) "，跳过 $skipped 段（LP/HP/None 不支持）" else ""
         // 超范围钳位提示：AutoEq 偶尔给出 ±12 dB 之外的增益，我们按硬件范围截断
         val clampNote = if (clamped > 0) "，$clamped 处超范围已截断" else ""
-        val presetNote = if (prefixed != null) "，已存为预设「$prefixed」" else ""
+        val presetNote = if (saveAsPreset.isNullOrBlank()) "" else "，来源「$saveAsPreset」"
         // 语境提示：AutoEq 曲线是按耳机（Harman 等目标）拟合的，外放上用通常不理想
         val ctxNote = if (!outputDeviceMonitor.isSpeakerOutput()) "" else
             "；当前是扬声器输出 —— AutoEq 曲线为耳机设计，外放效果通常不佳"
         return AutoEqOutcome(
             true,
-            "已应用 $m 段（preamp ${"%.1f".format(preampDb)} dB$formatNote）" +
-                "$skipNote$clampNote$presetNote$ctxNote",
+            "已应用到 AutoEq $m 段（preamp ${"%.1f".format(preampDb)} dB$formatNote）" +
+                "$skipNote$clampNote$presetNote，PEQ 未改动$ctxNote",
         )
     }
 
@@ -5205,6 +5309,17 @@ class MainViewModel @Inject constructor(
         const val KEY_EQ_MODE = "eq_mode"
         const val KEY_EQ_PREGAIN = "eq_pregain"
         const val KEY_EQ_USER_PRESETS = "eq_user_presets_json"
+
+    // ---- AutoEq 独立校正（与 PEQ 分开存，互不覆盖）----
+    const val KEY_AUTOEQ_ENABLED = "auto_eq_enabled"
+    const val KEY_AUTOEQ_MODE = "auto_eq_mode"
+    const val KEY_AUTOEQ_PREGAIN = "auto_eq_pregain"
+    /** 最近一次导入的来源名（文件名），用于在卡片上显示"当前：HD600" */
+    const val KEY_AUTOEQ_SOURCE = "auto_eq_source"
+    private const val AUTOEQ_GAINS_PREFIX = "auto_eq_gains_"
+    private const val AUTOEQ_QS_PREFIX = "auto_eq_qs_"
+    private const val AUTOEQ_FREQS_PREFIX = "auto_eq_freqs_"
+    private const val AUTOEQ_TYPES_PREFIX = "auto_eq_types_"
         const val KEY_LIMITER_ENABLED = "limiter_enabled"
         const val KEY_LIMITER_CEILING = "limiter_ceiling"
         /** 界面缩放（2026-11-09，从 wecho 定制版移植）：主倍率与微调分开存 */
