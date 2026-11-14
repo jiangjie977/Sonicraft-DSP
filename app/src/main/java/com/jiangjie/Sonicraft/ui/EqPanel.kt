@@ -150,19 +150,12 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
-            Column {
-                Text(
-                    text = "参量均衡",
-                    fontSize = 13.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                    color = ScColors.TextMain,
-                )
-                Text(
-                    text = if (eqEnabled) "已启用 · $eqMode 段" else "已旁路 · 参数可预调",
-                    fontSize = 11.sp,
-                    color = ScColors.TextSub,
-                )
-            }
+            Text(
+                text = "均衡器",
+                fontSize = 13.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                color = ScColors.TextMain,
+            )
             com.jiangjie.Sonicraft.ui.components.ScSwitch(
                 checked = eqEnabled,
                 onCheckedChange = { viewModel.setEqEnabled(!eqEnabled) },

@@ -342,7 +342,7 @@ fun ScFavoritesScreen(viewModel: MainViewModel, onOpenEq: () -> Unit) {
                     Text(
                         // 文案与行为对齐：applyAutoEq 只改写「当前 EQ 段」，
                         // 不会自动生成预设条目（要进这个列表必须先「保存当前」）
-                        text = "还没有自定义 EQ 预设 —— 在「参量均衡」里点「保存当前」才会出现在这里；" +
+                        text = "还没有自定义 EQ 预设 —— 在「均衡器」里点「保存当前」才会出现在这里；" +
                             "直接粘贴 AutoEq 曲线只改当前 EQ，不会自动存成预设。",
                         fontSize = 12.sp,
                         color = ScColors.TextSub,
@@ -2504,7 +2504,9 @@ internal fun ScEffectDetailPage(
                     fontWeight = FontWeight.Bold,
                     color = ScColors.TextMain,
                 )
-                Text(text = subtitle, fontSize = 11.sp, color = ScColors.TextSub)
+                if (subtitle.isNotBlank()) {
+                    Text(text = subtitle, fontSize = 11.sp, color = ScColors.TextSub)
+                }
             }
             if (enabled != null && onEnabledChange != null) {
                 ScSwitch(checked = enabled, onCheckedChange = { onEnabledChange(!enabled) })

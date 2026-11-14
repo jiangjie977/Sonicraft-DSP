@@ -332,8 +332,9 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 eqOpen -> ScEffectDetailPage(
                     // 总开关**下沉到均衡器卡片内**（同压限器处理：卡片标题行右侧），
                     // 所以这里不传 enabled / onEnabledChange —— 页头不再渲染开关。
-                    title = "参量均衡",
-                    subtitle = "多段曲线校正 · 手绘曲线 + 滑条墙",
+                    // 副标题传空：页头只留「均衡器」，避免小字顶在两行之间显乱。
+                    title = "均衡器",
+                    subtitle = "",
                     onBack = { eqOpen = false },
                 ) { ScEqDetailContent(viewModel) }
                 bandOpen -> ScEffectDetailPage(
@@ -874,7 +875,7 @@ private fun P1LibrarySection(
                 modifier = Modifier.weight(1f),
             )
             ScEffectCard(
-                title = "参量均衡",
+                title = "均衡器",
                 subtitle = "多段曲线校正",
                 icon = ScEffectIconKind.EQ,
                 enabled = eqEnabled,
