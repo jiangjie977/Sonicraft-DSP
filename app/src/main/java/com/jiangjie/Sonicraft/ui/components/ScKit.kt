@@ -12,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -82,6 +84,14 @@ fun ScCard(
      * 与父卡区分，反而更干净 —— 这层语义本来就是"卡内分区"，不是"浮起的另一张卡"。
      */
     elevated: Boolean = true,
+    /**
+     * 是否由卡片自己加 16dp 内边距。
+     *
+     * **卡片头需要整行可点时必须传 false**：16dp 内边距是"死区"——
+     * 点在里面不会触发任何东西，用户表现为"要点好几次才成功"。
+     * 传 false 后由调用方给头部/内容各自加内边距，头部就能贴到卡片边缘。
+     */
+    padded: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val shape = RoundedCornerShape(ScRadius.Card)
@@ -106,7 +116,11 @@ fun ScCard(
                 shape,
             ),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        if (padded) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                content()
+            }
+        } else {
             content()
         }
     }
@@ -728,4 +742,16 @@ fun ScTabBar(
             }
         }
     }
+}
+
+/**
+ * 卡片头整行点击：**去掉涟漪**，只保留行为。
+ *
+ * 为什么不用默认 clickable：卡片头本来就宽（整行），涟漪会铺满一整条灰带，
+ * 看起来像"选中/未实现"，用户明确反馈影响观感。这里显式传
+ * `indication = null`，并复用同一个 InteractionSource（不创建多余对象）。
+ */
+fun Modifier.scNoRippleClick(onClick: () -> Unit): Modifier = composed {
+    val interaction = remember { MutableInteractionSource() }
+    clickable(interactionSource = interaction, indication = null, onClick = onClick)
 }

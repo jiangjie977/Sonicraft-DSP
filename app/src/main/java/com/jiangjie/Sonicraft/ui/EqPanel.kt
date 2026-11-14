@@ -9,6 +9,7 @@
 package com.jiangjie.Sonicraft.ui
 
 import com.jiangjie.Sonicraft.ui.components.ScKnob
+import com.jiangjie.Sonicraft.ui.components.scNoRippleClick
 import com.jiangjie.Sonicraft.ui.theme.ScColors
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -888,14 +889,17 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
         }
     }
 
-    com.jiangjie.Sonicraft.ui.components.ScCard(modifier = Modifier.fillMaxWidth()) {
+    com.jiangjie.Sonicraft.ui.components.ScCard(
+        modifier = Modifier.fillMaxWidth(),
+        padded = false,
+    ) {
         Column {
-            // 头部**占满整行**（含左右内边距）都可点：不依赖点标题文字
+            // 头部**贴到卡片边缘**（无 16dp 死区），整行空白处都能点
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { autoEqExpanded.value = !autoEqExpanded.value }
-                    .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 10.dp),
+                    .scNoRippleClick { autoEqExpanded.value = !autoEqExpanded.value }
+                    .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             ) {
@@ -920,7 +924,7 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
             }
             if (autoEqExpanded.value) {
             Column(
-                modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
             Row(
@@ -1002,7 +1006,7 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .clickable { libExpanded = !libExpanded }
+                            .scNoRippleClick { libExpanded = !libExpanded }
                             .padding(vertical = 2.dp),
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                     ) {

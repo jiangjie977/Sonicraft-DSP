@@ -153,6 +153,7 @@ import com.jiangjie.Sonicraft.ui.components.ScPillVariant
 import com.jiangjie.Sonicraft.ui.components.ScPowerIcon
 import com.jiangjie.Sonicraft.ui.components.ScSoftButton
 import com.jiangjie.Sonicraft.ui.components.ScSwitch
+import com.jiangjie.Sonicraft.ui.components.scNoRippleClick
 import com.jiangjie.Sonicraft.ui.components.ScTextOneLine
 import com.jiangjie.Sonicraft.ui.components.ScCompactBreakpoint
 import androidx.compose.ui.platform.LocalConfiguration
@@ -2229,8 +2230,9 @@ internal fun ScSlotHeader(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 32.dp)
-            .clickable { onToggleExpand() },
+            // 点击热区加高到 44dp 并去掉涟漪：整行（含左右空白）都能稳定点中
+            .heightIn(min = 44.dp)
+            .scNoRippleClick { onToggleExpand() },
     ) {
         Text(
             text = title,
@@ -2535,13 +2537,13 @@ internal fun ScEqDetailContent(viewModel: MainViewModel) {
     // 折叠默认跟随开关：开=展开、关=收起；点标题行可手动展开/收起
     val eqExpanded = rememberExpandedFollowing(eqEnabled, "eq_panel_expanded")
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ScCard(modifier = Modifier.fillMaxWidth()) {
+        ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
             Column {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { eqExpanded.value = !eqExpanded.value }
-                        .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 10.dp),
+                        .scNoRippleClick { eqExpanded.value = !eqExpanded.value }
+                        .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -2565,7 +2567,7 @@ internal fun ScEqDetailContent(viewModel: MainViewModel) {
                 if (eqExpanded.value) {
                     MultiBandEqPanel(
                         viewModel = viewModel,
-                        modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                     )
                 }
             }
@@ -3674,14 +3676,14 @@ internal fun ScWidthDetailContent(viewModel: MainViewModel) {
     val stereoWidthEnabled by viewModel.stereoWidthEnabled.collectAsStateWithLifecycle()
     val stereoWidth by viewModel.stereoWidth.collectAsStateWithLifecycle()
     val widthExpanded = rememberExpandedFollowing(stereoWidthEnabled, "width_card")
-    ScCard(modifier = Modifier.fillMaxWidth()) {
+    ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column {
-            // 头部整行可点（不依赖点标题文字）
+            // 头部整行可点（不依赖点标题文字；卡片不再加 16dp 死区）
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { widthExpanded.value = !widthExpanded.value }
-                    .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 10.dp),
+                    .scNoRippleClick { widthExpanded.value = !widthExpanded.value }
+                    .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -3698,7 +3700,7 @@ internal fun ScWidthDetailContent(viewModel: MainViewModel) {
             }
             if (widthExpanded.value) {
                 Column(
-                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Slider(
@@ -4298,13 +4300,13 @@ internal fun ScLimiterDetailContent(viewModel: MainViewModel) {
     val limiterEnabled by viewModel.limiterEnabled.collectAsStateWithLifecycle()
     val limiterCeiling by viewModel.limiterCeiling.collectAsStateWithLifecycle()
     val ceilingExpanded = rememberExpandedFollowing(limiterEnabled, "limiter_card")
-    ScCard(modifier = Modifier.fillMaxWidth()) {
+    ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { ceilingExpanded.value = !ceilingExpanded.value }
-                    .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 10.dp),
+                    .scNoRippleClick { ceilingExpanded.value = !ceilingExpanded.value }
+                    .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
