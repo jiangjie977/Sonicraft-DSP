@@ -144,23 +144,6 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         (flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
     }
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // 标题行 + 总开关：从页头下沉进来（页头只留标题与副标题）
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "均衡器",
-                fontSize = 13.sp,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                color = ScColors.TextMain,
-            )
-            com.jiangjie.Sonicraft.ui.components.ScSwitch(
-                checked = eqEnabled,
-                onCheckedChange = { viewModel.setEqEnabled(!eqEnabled) },
-            )
-        }
         // （U9p：锁定手绘+档位行下沉并入段数行——锁改小锁字符，省一整行）
         // 段数行（对齐 wecho Bands 数字框 + 段增删）：段数任意 1~31（改段数
         // 重置为默认平直），+段在尾部按几何中点加段，−段删除选中段。
@@ -868,6 +851,8 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
     var autoEqOk by remember { mutableStateOf<Boolean?>(null) }
     var autoEqFileName by remember { mutableStateOf<String?>(null) }
     // 库多选（对齐机架脚本库：长按进选择，顶部出现删除/完成）
+    // 折叠默认跟随开关：开=展开、关=收起；点标题行可手动展开/收起
+    val autoEqExpanded = rememberExpandedFollowing(enabled, "autoeq_card_expanded")
     var libSelectMode by remember { mutableStateOf(false) }
     var libSelected by remember { mutableStateOf(setOf<String>()) }
 
@@ -907,24 +892,18 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { autoEqExpanded.value = !autoEqExpanded.value },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "AutoEq 校正",
-                        fontSize = 13.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                        color = ScColors.TextMain,
-                    )
-                    Text(
-                        text = if (source.isBlank()) "未导入 — 耳机型号校正（不影响你的 EQ）"
-                        else "当前：$source · $mode 段 · preamp ${"%+.1f".format(preGain)} dB",
-                        fontSize = 11.sp,
-                        color = ScColors.TextSub,
-                    )
-                }
+                Text(
+                    text = "AutoEq 校正",
+                    fontSize = 13.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = ScColors.TextMain,
+                )
                 // 开关 + 状态文字：校正是否在生效必须一眼可见
                 Text(
                     text = if (enabled) "已启用" else "已关闭",
@@ -938,6 +917,7 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                     onCheckedChange = { viewModel.setAutoEqEnabled(!enabled) },
                 )
             }
+            if (autoEqExpanded.value) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1200,6 +1180,7 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                         }
                     },
                 )
+            }
             }
         }
     }

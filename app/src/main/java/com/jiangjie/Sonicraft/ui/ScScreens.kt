@@ -2208,7 +2208,7 @@ private fun ScTinySwitch(
  * 所以"关掉开关 → 卡片自动收起"是成立的，而"展开着看参数时不会被无端重置"。
  */
 @Composable
-private fun rememberExpandedFollowing(checked: Boolean, key: String): MutableState<Boolean> {
+internal fun rememberExpandedFollowing(checked: Boolean, key: String): MutableState<Boolean> {
     val state = rememberSaveable(key) { mutableStateOf(checked) }
     LaunchedEffect(checked) { state.value = checked }
     return state
@@ -2530,14 +2530,40 @@ internal fun ScEffectDetailPage(
  */
 @Composable
 internal fun ScEqDetailContent(viewModel: MainViewModel) {
-    // 三张**同级**卡：EQ 面板 → AutoEq 校正 → 实际频响曲线。
-    // 三者都不要互相嵌套（嵌套会变成卡中卡，阴影叠加、层级含混）。
+    // 两张同级卡：均衡器 → AutoEq 校正（互相嵌套会成卡中卡，阴影叠加、层级含混）
+    val eqEnabled by viewModel.eqEnabled.collectAsStateWithLifecycle()
+    // 折叠默认跟随开关：开=展开、关=收起；点标题行可手动展开/收起
+    val eqExpanded = rememberExpandedFollowing(eqEnabled, "eq_panel_expanded")
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ScCard(modifier = Modifier.fillMaxWidth()) {
-            MultiBandEqPanel(viewModel = viewModel, modifier = Modifier.padding(14.dp))
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { eqExpanded.value = !eqExpanded.value }
+                        .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "均衡器",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ScColors.TextMain,
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    ScSwitch(
+                        checked = eqEnabled,
+                        onCheckedChange = { viewModel.setEqEnabled(!eqEnabled) },
+                    )
+                }
+                if (eqExpanded.value) {
+                    MultiBandEqPanel(
+                        viewModel = viewModel,
+                        modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                    )
+                }
+            }
         }
-        // AutoEq 与 PEQ 解耦后独立成卡：自带开关、自带段、自己驱动 AUTO_EQ 节点；
-        // 频响曲线已并入该卡（不再单独成卡，避免页面过长）
         ScAutoEqCard(viewModel = viewModel)
     }
 }
