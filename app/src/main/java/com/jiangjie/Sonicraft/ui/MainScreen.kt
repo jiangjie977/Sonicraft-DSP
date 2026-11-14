@@ -663,7 +663,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         onOpenRack = { rackOpen = true },
                     )
                 }
-                1 -> ScFavoritesScreen(viewModel = viewModel, onGoToLibrary = { reverbOpen = true })
+                1 -> ScFavoritesScreen(viewModel = viewModel, onOpenEq = { eqOpen = true })
                 2 -> ScProfileScreen(viewModel = viewModel)
             }
 

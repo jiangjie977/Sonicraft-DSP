@@ -168,7 +168,7 @@ import com.jiangjie.Sonicraft.ui.theme.ScStarBrush
 // ---------------------------------------------------------------- P4 收藏屏
 
 @Composable
-fun ScFavoritesScreen(viewModel: MainViewModel, onGoToLibrary: () -> Unit) {
+fun ScFavoritesScreen(viewModel: MainViewModel, onOpenEq: () -> Unit) {
     val userPresets by viewModel.userPresets.collectAsStateWithLifecycle()
     val eqPresets by viewModel.eqUserPresets.collectAsStateWithLifecycle()
     val irLibrary by viewModel.irLibrary.collectAsStateWithLifecycle()
@@ -331,13 +331,19 @@ fun ScFavoritesScreen(viewModel: MainViewModel, onGoToLibrary: () -> Unit) {
                         fontWeight = FontWeight.Bold,
                         color = ScColors.TextMain,
                     )
-                    TextButton(onClick = onGoToLibrary) {
+                    // AutoEq 是「参量均衡」的能力（曲线修正），这里必须落到 EQ 详情页。
+                    // 历史 bug：此处曾连到 onGoToLibrary = { reverbOpen = true }，
+                    // 点它会打开「混响」页，与 AutoEq 毫无关系（2026-11-14 修）。
+                    TextButton(onClick = onOpenEq) {
                         Text("AutoEq 导入", fontSize = 12.sp)
                     }
                 }
                 if (eqPresets.isEmpty()) {
                     Text(
-                        text = "还没有自定义 EQ 预设——在音效库的参量均衡里「保存当前」或粘贴 AutoEq 曲线。",
+                        // 文案与行为对齐：applyAutoEq 只改写「当前 EQ 段」，
+                        // 不会自动生成预设条目（要进这个列表必须先「保存当前」）
+                        text = "还没有自定义 EQ 预设 —— 在「参量均衡」里点「保存当前」才会出现在这里；" +
+                            "直接粘贴 AutoEq 曲线只改当前 EQ，不会自动存成预设。",
                         fontSize = 12.sp,
                         color = ScColors.TextSub,
                     )
