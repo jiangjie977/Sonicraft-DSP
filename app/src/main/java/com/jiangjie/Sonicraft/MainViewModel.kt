@@ -2027,7 +2027,7 @@ class MainViewModel @Inject constructor(
             "fdn_dry" -> setFdnDry(v)
             "fdn_mode" -> setFdnMode(v)
             // ---- 低频管家 / 组总闸（2026-11-14 补：设备切换时整组不跟随）----
-            "lowfreq_section" -> setLowfreqSectionEnabled(v > 0.5f)
+            "lowfreq_section_enabled" -> setLowfreqSectionEnabled(v > 0.5f)
             "dynamic_bass_enabled" -> setDynamicBassEnabled(v > 0.5f)
             "dynamic_bass_amount" -> setDynamicBassAmount(v)
             "dynamic_bass_subsonic_hz" -> setDynamicBassSubsonic(v)
@@ -2048,8 +2048,8 @@ class MainViewModel @Inject constructor(
             "virtual_bass_mid_gain" -> setVirtualBassMidGain(v)
             "virtual_bass_high_gain" -> setVirtualBassHighGain(v)
             "virtual_bass_envelope_rate" -> setVirtualBassEnvelopeRate(v)
-            "compressor_section" -> setCompressorSectionEnabled(v > 0.5f)
-            "reverb_section" -> setReverbSectionEnabled(v > 0.5f)
+            "compressor_section_enabled" -> setCompressorSectionEnabled(v > 0.5f)
+            "reverb_section_enabled" -> setReverbSectionEnabled(v > 0.5f)
         }
     }
 
@@ -2091,7 +2091,7 @@ class MainViewModel @Inject constructor(
         "fdn_dry" to _fdnDry.value,
         "fdn_mode" to _fdnMode.value,
         // ---- 低频管家（此前缺失：设备切换时整组不跟随）----
-        "lowfreq_section" to if (_lowfreqSectionEnabled.value) 1f else 0f,
+        "lowfreq_section_enabled" to if (_lowfreqSectionEnabled.value) 1f else 0f,
         "dynamic_bass_enabled" to if (_dynamicBassEnabled.value) 1f else 0f,
         "dynamic_bass_amount" to _dynamicBassAmount.value,
         "dynamic_bass_subsonic_hz" to _dynamicBassSubsonic.value,
@@ -2113,8 +2113,8 @@ class MainViewModel @Inject constructor(
         "virtual_bass_high_gain" to _virtualBassHighGain.value,
         "virtual_bass_envelope_rate" to _virtualBassEnvelopeRate.value,
         // ---- 组总闸（子效果的启用受它门控，必须跟着设备走）----
-        "compressor_section" to if (_compressorSectionEnabled.value) 1f else 0f,
-        "reverb_section" to if (_reverbSectionEnabled.value) 1f else 0f,
+        "compressor_section_enabled" to if (_compressorSectionEnabled.value) 1f else 0f,
+        "reverb_section_enabled" to if (_reverbSectionEnabled.value) 1f else 0f,
     )
 
     /** 保存当前参数为用户预设（同名覆盖） */
