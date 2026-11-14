@@ -467,7 +467,19 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 } else {
                     // 文件名即预设名：导出的 ParametricEQ.txt 通常带耳机型号，正好当预设名。
                     // 先填进对话框让用户看频响曲线预览，确认后再应用（避免选错文件直接改掉 EQ）。
-                    val rawName = uri.lastPathSegment?.substringAfterLast('/') ?: "AutoEq"
+                    //
+                    // 注意：SAF 的 content URI 用 lastPathSegment 拿到的是 "document:1001008065"
+                    // 这种 document id，**不是文件名** —— 必须查 OpenableColumns.DISPLAY_NAME。
+                    val displayName = runCatching {
+                        autoEqCtx.contentResolver.query(
+                            uri,
+                            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                            null, null, null,
+                        )?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null }
+                    }.getOrNull()
+                    val rawName = displayName
+                        ?: uri.lastPathSegment?.substringAfterLast('/')
+                        ?: "AutoEq"
                     autoEqFileName = rawName.substringBeforeLast('.').ifBlank { "AutoEq" }
                     autoEqText = txt
                     autoEqMsg = null
