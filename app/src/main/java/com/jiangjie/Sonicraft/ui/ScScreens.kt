@@ -153,6 +153,7 @@ import com.jiangjie.Sonicraft.ui.components.ScPillVariant
 import com.jiangjie.Sonicraft.ui.components.ScPowerIcon
 import com.jiangjie.Sonicraft.ui.components.ScSoftButton
 import com.jiangjie.Sonicraft.ui.components.ScSwitch
+import com.jiangjie.Sonicraft.ui.components.scFullBleedHorizontal
 import com.jiangjie.Sonicraft.ui.components.scNoRippleClick
 import com.jiangjie.Sonicraft.ui.components.ScTextOneLine
 import com.jiangjie.Sonicraft.ui.components.ScCompactBreakpoint
@@ -2230,9 +2231,12 @@ internal fun ScSlotHeader(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            // 点击热区加高到 44dp 并去掉涟漪：整行（含左右空白）都能稳定点中
+            // 头部**通长可点**：向左右各出血 16dp 吃掉卡片内边距（ScCard 16dp），
+            // 再用等量 padding 把内容推回原位 —— 视觉不变、命中区贴到卡片边缘。
+            .scFullBleedHorizontal(16.dp)
             .heightIn(min = 44.dp)
-            .scNoRippleClick { onToggleExpand() },
+            .scNoRippleClick { onToggleExpand() }
+            .padding(horizontal = 16.dp),
     ) {
         Text(
             text = title,

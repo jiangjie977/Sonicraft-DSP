@@ -34,6 +34,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -754,4 +757,23 @@ fun ScTabBar(
 fun Modifier.scNoRippleClick(onClick: () -> Unit): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
     clickable(interactionSource = interaction, indication = null, onClick = onClick)
+}
+
+/**
+ * 横向"出血"：把自身宽度向左右各扩 [expand]，并整体左移同样距离。
+ *
+ * 用途：卡片头要做成**通长可点**，但卡片内容层带内边距（ScCard 16dp + 卡片自己的 4/14dp），
+ * 头部行被这层内边距框住，左右各留一条死区。用这个修饰符让头部的**布局尺寸**吃掉内边距，
+ * 同时用等量 padding 把文字推回原位 —— 视觉零变化，命中区贴到卡片边缘。
+ *
+ * 注意：子项尺寸会超出父约束，父级若带 `clip` 只裁剪绘制，不影响命中测试。
+ */
+fun Modifier.scFullBleedHorizontal(expand: Dp): Modifier = layout { measurable, constraints ->
+    val extra = expand.roundToPx() * 2
+    val placeable = measurable.measure(
+        constraints.copy(maxWidth = constraints.maxWidth + extra),
+    )
+    layout(placeable.width, placeable.height) {
+        placeable.place(-expand.roundToPx(), 0)
+    }
 }
