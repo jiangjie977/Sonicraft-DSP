@@ -9,6 +9,7 @@
 package com.jiangjie.Sonicraft.ui
 
 import com.jiangjie.Sonicraft.ui.components.ScKnob
+import com.jiangjie.Sonicraft.ui.theme.ScColors
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -88,6 +89,8 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     var showAutoEqDialog by remember { mutableStateOf(false) }
     var autoEqText by remember { mutableStateOf("") }
     var autoEqMsg by remember { mutableStateOf<String?>(null) }
+    // 成功提示用品牌色、失败用红：此前所有提示都是红色，成功也像报错（2026-11-14 修）
+    var autoEqOk by remember { mutableStateOf<Boolean?>(null) }
     var draggingBand by remember { mutableStateOf(-1) }
     var selectedBand by remember { mutableStateOf(0) }
     // 手绘防误触锁（参照 wecho GraphicEqPanel 的锁定思路）：锁定后曲线区禁用
@@ -445,27 +448,56 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 },
             )
         }
-        // AutoEq 耳机修正（从 AutoEq 项目页复制 ParametricEQ.txt 全文粘贴）
+        // AutoEq 耳机修正：支持「从文件导入」（.txt 走系统文件选择器）与「粘贴导入」
+        val autoEqCtx = androidx.compose.ui.platform.LocalContext.current
+        val pickAutoEqFile = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+        ) { uri ->
+            if (uri != null) {
+                val txt = runCatching {
+                    autoEqCtx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                }.getOrNull()
+                if (txt.isNullOrBlank()) {
+                    autoEqOk = false
+                    autoEqMsg = "读取文件失败（可能不是文本文件或编码不支持）"
+                } else {
+                    // 文件名即预设名：导出的 ParametricEQ.txt 通常带耳机型号，正好当预设名
+                    val rawName = uri.lastPathSegment?.substringAfterLast('/') ?: "AutoEq"
+                    val name = rawName.substringBeforeLast('.').ifBlank { "AutoEq" }
+                    val res = viewModel.applyAutoEq(txt, saveAsPreset = name)
+                    autoEqOk = res.ok
+                    autoEqMsg = res.message
+                }
+            }
+        }
         Row(modifier = Modifier.fillMaxWidth()) {
             Text(text = "AutoEq \u8033\u673a\u4fee\u6b63", fontSize = 13.sp)
             Spacer(modifier = Modifier.weight(1f))
+            TextButton(onClick = {
+                pickAutoEqFile.launch(arrayOf("text/plain", "application/octet-stream"))
+            }) {
+                Text(text = "\u4ece\u6587\u4ef6\u5bfc\u5165", fontSize = 12.sp)
+            }
             TextButton(onClick = { autoEqText = ""; autoEqMsg = null; showAutoEqDialog = true }) {
                 Text(text = "\u7c98\u8d34\u5bfc\u5165", fontSize = 12.sp)
             }
         }
-        autoEqMsg?.let { Text(text = it, fontSize = 12.sp, color = Color(0xFFB00020)) }
+        autoEqMsg?.let {
+            Text(
+                text = it,
+                fontSize = 12.sp,
+                color = if (autoEqOk == false) Color(0xFFB00020) else ScColors.Primary,
+            )
+        }
         if (showAutoEqDialog) {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showAutoEqDialog = false },
                 confirmButton = {
                     TextButton(onClick = {
-                        val err = viewModel.applyAutoEq(autoEqText)
-                        if (err == null) {
-                            autoEqMsg = "\u5df2\u5e94\u7528 AutoEq \u914d\u7f6e\uff08\u542b preamp\uff09"
-                            showAutoEqDialog = false
-                        } else {
-                            autoEqMsg = err
-                        }
+                        val res = viewModel.applyAutoEq(autoEqText)
+                        autoEqOk = res.ok
+                        autoEqMsg = res.message
+                        if (res.ok) showAutoEqDialog = false
                     }) { Text(text = "\u5e94\u7528") }
                 },
                 dismissButton = {

@@ -2992,9 +2992,21 @@ class MainViewModel @Inject constructor(
      * 向上取档留静默段）、逐段覆盖增益/Q/频率/类型、preamp→EQ 总增益。
      * 返回 null=成功，非 null=错误提示。
      */
-    fun applyAutoEq(text: String): String? {
+    /** AutoEq 导入结果：ok=false 时 message 是失败原因 */
+    data class AutoEqOutcome(val ok: Boolean, val message: String)
+
+    /**
+     * 解析并应用 AutoEq 文本。
+     *
+     * @param saveAsPreset 非空时，应用成功后把结果存成同名 EQ 预设（文件导入走这条，
+     *   让「我的 EQ 预设」成为曲线的统一入口）；粘贴导入传 null，不污染预设库。
+     */
+    fun applyAutoEq(text: String, saveAsPreset: String? = null): AutoEqOutcome {
         val r = AutoEqParser.parse(text)
-            ?: return "未识别到 AutoEq 滤波器行（应为 Filter N: ON PK/LSC/HSC Fc … Hz Gain … dB Q …）"
+            ?: return AutoEqOutcome(
+                false,
+                "未识别到 AutoEq 滤波器行（应为 Filter N: ON PK/LSC/HSC Fc … Hz Gain … dB Q …）",
+            )
         val m = r.bands.size
         if (m != _eqMode.value) setEqBandCountCustom(m)
         val gains = MutableList(m) { i -> r.bands[i].gain }
@@ -3018,7 +3030,13 @@ class MainViewModel @Inject constructor(
         prefs.edit().putString("eq_freq_$m", freqs.joinToString(",") { "%.1f".format(it) }).apply()
         _bassGain.value = gains.firstOrNull() ?: 0f
         _trebleGain.value = gains.lastOrNull() ?: 0f
-        return null
+        if (!saveAsPreset.isNullOrBlank()) saveEqUserPreset(saveAsPreset)
+        val skipNote = if (r.skipped > 0) "，跳过 ${r.skipped} 段（LP/HP/None 不支持）" else ""
+        val presetNote = if (!saveAsPreset.isNullOrBlank()) "，已存为预设「$saveAsPreset」" else ""
+        return AutoEqOutcome(
+            true,
+            "已应用 $m 段（preamp ${"%.1f".format(r.preampDb)} dB）$skipNote$presetNote",
+        )
     }
 
     // ---- 夜间保活短期方案----

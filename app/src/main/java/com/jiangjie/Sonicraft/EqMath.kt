@@ -214,12 +214,25 @@ object EqMath {
  */
 object AutoEqParser {
     data class Band(val freq: Float, val gain: Float, val q: Float, val type: Int) // type: 0=PK 1=LSC 2=HSC
-    data class Result(val preampDb: Float, val bands: List<Band>)
 
+    /**
+     * [skipped] 统计被丢弃的滤波器行（LP/HP/None/OFF）—— 导入后要告诉用户"少了 N 段"，
+     * 否则用户以为导入完整，实际低切/高切被静默吞掉。
+     */
+    data class Result(val preampDb: Float, val bands: List<Band>, val skipped: Int = 0)
+
+    // 兼容写法（2026-11-14 放宽）：
+    //   · ON 可省略（部分工具导出 `Filter 1: PK Fc 100 Hz Gain 3 dB Q 1.4`）
+    //   · 类型含 LS/HS（老写法，等价 LSC/HSC）与 PEQ（等价 PK）
+    //   · Q 可省略（shelf 用斜率 S 的文件）→ 缺省 0.707
     private val filterRe = Regex(
-        "Filter\\s+\\d+:\\s*ON\\s+(PK|LSC|HSC|LSQ|HSQ|PKQ)\\s+Fc\\s+([\\d.]+)\\s*Hz\\s+Gain\\s+(-?[\\d.]+)\\s*dB\\s+Q\\s+([\\d.]+)",
+        "Filter\\s+\\d+:\\s*(?:ON\\s+)?(PK|PEQ|LSC|HSC|LS|HS|LSQ|HSQ|PKQ)\\s+" +
+            "Fc\\s+([\\d.]+)\\s*Hz\\s+Gain\\s+(-?[\\d.]+)\\s*dB" +
+            "(?:\\s+(Q|S)\\s+([\\d.]+))?",
         RegexOption.IGNORE_CASE,
     )
+    // 被跳过的行（有 Filter N 但没有可用的 PK/LS/HS + Gain）
+    private val anyFilterRe = Regex("Filter\\s+\\d+:", RegexOption.IGNORE_CASE)
     private val preampRe = Regex("Preamp:\\s*(-?[\\d.]+)\\s*dB", RegexOption.IGNORE_CASE)
 
     /** 无有效滤波器行时返回 null（调用方提示解析失败） */
@@ -228,19 +241,29 @@ object AutoEqParser {
         var preamp = 0f
         preampRe.findAll(text).lastOrNull()?.let { m -> preamp = m.groupValues[1].toFloatOrNull() ?: 0f }
         val bands = ArrayList<Band>(16)
+        var skipped = 0
         for (raw in text.lineSequence()) {
-            val m = filterRe.find(raw) ?: continue
+            val m = filterRe.find(raw)
+            if (m == null) {
+                if (anyFilterRe.containsMatchIn(raw)) skipped++
+                continue
+            }
             val type = when (m.groupValues[1].uppercase()) {
-                "LSC", "LSQ" -> 1
-                "HSC", "HSQ" -> 2
+                "LSC", "LSQ", "LS" -> 1
+                "HSC", "HSQ", "HS" -> 2
                 else -> 0
             }
             val f = m.groupValues[2].toFloatOrNull() ?: continue
             val g = m.groupValues[3].toFloatOrNull() ?: continue
-            val q = m.groupValues[4].toFloatOrNull() ?: continue
-            if (bands.size >= 31) break
+            // group4 = 标签(Q/S)，group5 = 数值。
+            // shelf 的斜率 S 与 Q 不是同一量纲，不做换算，按 Butterworth 缺省 0.707 处理；
+            // 完全没有 Q/S 时同样取 0.707（2026-11-14：此前把 S 的数值直接当 Q，导致 Q 偏大）。
+            val qLabel = m.groupValues[4].uppercase()
+            val qRaw = m.groupValues[5].toFloatOrNull()
+            val q = if (qLabel == "Q" && qRaw != null) qRaw else 0.707f
+            if (bands.size >= 31) { skipped++; continue }
             bands.add(Band(f.coerceIn(20f, 20000f), g.coerceIn(-12f, 12f), q.coerceIn(0.3f, 8f), type))
         }
-        return if (bands.isEmpty()) null else Result(preamp, bands)
+        return if (bands.isEmpty()) null else Result(preamp, bands, skipped)
     }
 }
