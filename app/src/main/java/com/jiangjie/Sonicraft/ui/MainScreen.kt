@@ -815,10 +815,30 @@ private fun P1LibrarySection(
         // ---- 音效：参量均衡器 ----
         Text(text = "音效", style = MaterialTheme.typography.titleSmall)
         // （U9l：U6 信号链条退役——效果启停状态各卡片开关已表达，单帧耗时首卡健康格已有）
-        // ---- U8k 布局重排：卷积混响全宽一行，其余效果卡两两并排，卡高统一 ----
-        // ---- 统一两列短卡（2026-11-11 用户要求「全部用短卡片，不用长卡片」）----
-        // 原来「混响」与「立体声宽度」是全宽卡、其它是半宽卡，混排时行距与卡宽节奏不齐；
-        // 现在六张卡全部 weight(1f)，排成 3 行 × 2 列。
+        // ---- 卡片顺序（2026-11-14 用户指定）：压限器 → 限幅器 → 混响 → 立体声宽度 → 低频管家 → 参量均衡 → 机架 ----
+        // 两列网格后自然成三组语义：动态类（压/限）、空间类（混响/宽度）、频率类（低频/均衡）。
+        // 六张短卡全部 weight(1f)，3 行 × 2 列；机架仍是全宽卡收尾。
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // 压限器：标题 2026-11-11 从「多频段压限」改来，开关为组总闸
+            ScEffectCard(
+                title = "压限器",
+                subtitle = "多段 + 单段压缩",
+                icon = ScEffectIconKind.BURST,
+                enabled = sectionEnabled,
+                onClick = onOpenBand,
+                onToggle = { viewModel.setCompressorSectionEnabled(!sectionEnabled) },
+                modifier = Modifier.weight(1f),
+            )
+            ScEffectCard(
+                title = "限幅器",
+                subtitle = "防削波安全网",
+                icon = ScEffectIconKind.LIMITER,
+                enabled = limiterEnabled,
+                onClick = onOpenLimiter,
+                onToggle = { viewModel.setLimiterEnabled(!limiterEnabled) },
+                modifier = Modifier.weight(1f),
+            )
+        }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             // 混响：卷积 + 算法合并为组，开关是总闸（关 = 两个混响节点同时旁通）
             ScEffectCard(
@@ -833,27 +853,6 @@ private fun P1LibrarySection(
                 modifier = Modifier.weight(1f),
             )
             ScEffectCard(
-                title = "参量均衡",
-                subtitle = "多段曲线校正",
-                icon = ScEffectIconKind.EQ,
-                enabled = eqEnabled,
-                onClick = onOpenEq,
-                onToggle = { viewModel.setEqEnabled(!eqEnabled) },
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            // 压限器：标题 2026-11-11 从「多频段压限」改来，开关为组总闸
-            ScEffectCard(
-                title = "压限器",
-                subtitle = "多段 + 单段压缩",
-                icon = ScEffectIconKind.BURST,
-                enabled = sectionEnabled,
-                onClick = onOpenBand,
-                onToggle = { viewModel.setCompressorSectionEnabled(!sectionEnabled) },
-                modifier = Modifier.weight(1f),
-            )
-            ScEffectCard(
                 title = "立体声宽度",
                 subtitle = "M/S 矩阵",
                 icon = ScEffectIconKind.PULSE,
@@ -863,10 +862,8 @@ private fun P1LibrarySection(
                 modifier = Modifier.weight(1f),
             )
         }
-        // ---- U8k：低频增强+限幅器并排（U7b 的限幅器全宽形态退役） ----
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            // 从「动态低音」升级为**低频管家**效果组 ——
-            // 内含动态低音（耳机）+ 虚拟低音（外放）两张槽卡，开关是**总闸**。
+            // 低频管家：内含动态低音（耳机）+ 虚拟低音（外放）两张槽卡，开关是**总闸**
             ScEffectCard(
                 title = "低频管家",
                 subtitle = "耳机 / 外放",
@@ -877,12 +874,12 @@ private fun P1LibrarySection(
                 modifier = Modifier.weight(1f),
             )
             ScEffectCard(
-                title = "限幅器",
-                subtitle = "防削波安全网",
-                icon = ScEffectIconKind.LIMITER,
-                enabled = limiterEnabled,
-                onClick = onOpenLimiter,
-                onToggle = { viewModel.setLimiterEnabled(!limiterEnabled) },
+                title = "参量均衡",
+                subtitle = "多段曲线校正",
+                icon = ScEffectIconKind.EQ,
+                enabled = eqEnabled,
+                onClick = onOpenEq,
+                onToggle = { viewModel.setEqEnabled(!eqEnabled) },
                 modifier = Modifier.weight(1f),
             )
         }

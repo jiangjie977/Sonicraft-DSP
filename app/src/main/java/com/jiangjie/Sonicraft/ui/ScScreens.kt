@@ -185,7 +185,10 @@ fun ScFavoritesScreen(viewModel: MainViewModel, onGoToLibrary: () -> Unit) {
             title = "收藏",
             trailing = {
                 Text(
-                    text = "${userPresets.size} 个组合 · ${eqPresets.size} 个预设",
+                    // 统计口径：内置场景也算"组合"（否则有 4 个内置时仍显示 "0 个组合"），
+                    // 同时补上 IR 收藏数 —— 页面的三类内容都要能一眼看到数量
+                    text = "${viewModel.builtinPresets.size + userPresets.size} 个组合 · " +
+                        "${eqPresets.size} 个 EQ 预设 · ${favEntries.size} 个脉冲",
                     fontSize = 12.sp,
                     color = ScColors.TextSub,
                 )
@@ -224,6 +227,15 @@ fun ScFavoritesScreen(viewModel: MainViewModel, onGoToLibrary: () -> Unit) {
                         isUser = true,
                         onApply = { viewModel.applyPreset(preset) },
                         onDelete = { viewModel.deleteUserPreset(preset.name) },
+                    )
+                }
+                // 空态引导：没有自定义组合时，用户不知道「＋保存当前」能干什么
+                if (userPresets.isEmpty()) {
+                    Text(
+                        text = "还没有自己的组合 —— 点右上「＋ 保存当前」，把当前整套效果" +
+                            "（增益 / 压限 / 限幅 / 混响 / 宽度 / 低频管家）存成一组，以后一键切回。",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
                     )
                 }
                 Row(
