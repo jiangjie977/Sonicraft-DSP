@@ -52,23 +52,25 @@ constexpr bool kBindBigCores = false;
 constexpr int kNodeInputGain   = 0;
 constexpr int kNodeBalance     = 1;
 constexpr int kNodeEq          = 2;
-// 动态低音（2026-11-11 插入，位于 EQ 与压限之间 → 其余索引整体 +1）
-constexpr int kNodeDynamicBass = 3;
-// 虚拟低音（2026-11-11 插入，紧随动态低音 → 其余索引整体 +1）
-constexpr int kNodeVirtualBass = 4;
+// AutoEq 耳机校正（2026-11-14 插入，紧跟 PEQ 之后 → 其余索引整体 +1）
+constexpr int kNodeAutoEq      = 3;
+// 动态低音（2026-11-11 插入，位于 EQ 与压限之间）
+constexpr int kNodeDynamicBass = 4;
+// 虚拟低音（2026-11-11 插入，紧随动态低音）
+constexpr int kNodeVirtualBass = 5;
 // 低音增强（2026-11-11 插入，M/S + EQ + 瞬态 + 次谐波，设备无关）
-constexpr int kNodeBassEnhance = 5;
-constexpr int kNodeCompressor  = 6;
-constexpr int kNodeMultiband   = 7;
-constexpr int kNodeConvolver   = 8;
-constexpr int kNodeReverb      = 9;
-constexpr int kNodeStereoWidth = 10;
-constexpr int kNodeOutputGain  = 11;
+constexpr int kNodeBassEnhance = 6;
+constexpr int kNodeCompressor  = 7;
+constexpr int kNodeMultiband   = 8;
+constexpr int kNodeConvolver   = 9;
+constexpr int kNodeReverb      = 10;
+constexpr int kNodeStereoWidth = 11;
+constexpr int kNodeOutputGain  = 12;
 // 自定义脚本效果器：位于 OutputGain 之后、Limiter 之前，
 // 保证 Limiter 仍是绝对末级（用户脚本 boost 也会被限幅兜住）。
-constexpr int kNodeScriptEffect = 12;
-constexpr int kNodeLimiter     = 13;
-constexpr int kNodeCount       = 14;
+constexpr int kNodeScriptEffect = 13;
+constexpr int kNodeLimiter     = 14;
+constexpr int kNodeCount       = 15;
 
 /**
  * 索引脱节标志。由 AddNodeAt 置位，装配末尾汇总写诊断文件。
@@ -130,7 +132,14 @@ NativeAudioEngine::NativeAudioEngine(int sample_rate, int channels, int max_fram
   auto eq = std::make_unique<dsp::ParametricEqNode>();
   eq->set_channel_count(channels);
   AddNodeAt(*graph_, std::move(eq), kNodeEq);
-  // 动态低音（M15，index 3，2026-11-11）：插在 EQ 之后、压限之前 ——
+  // AutoEq 耳机校正（2026-11-14，index 3）：第二个 ParametricEqNode 实例，
+  // 与用户 PEQ **完全独立** —— 型号校正吃自己那 31 段，用户仍可自由调 PEQ 做个人偏好，
+  // 两者互不覆盖、可各自旁路。紧贴 PEQ 之后：校正先行，后面的非线性节点
+  // （动态低音/压限）看到的是已校正的信号。
+  auto autoEq = std::make_unique<dsp::ParametricEqNode>();
+  autoEq->set_channel_count(channels);
+  AddNodeAt(*graph_, std::move(autoEq), kNodeAutoEq);
+  // 动态低音（M15）：插在 EQ 之后、压限之前 ——
   // 低音增强后的电平由后续压限顺带兜住；但本节点**不依赖**压限（自带低频保护，
   // 见 docs/M15_DYNAMIC_BASS_DESIGN.md ）。
   auto dynBass = std::make_unique<dsp::DynamicBassNode>();

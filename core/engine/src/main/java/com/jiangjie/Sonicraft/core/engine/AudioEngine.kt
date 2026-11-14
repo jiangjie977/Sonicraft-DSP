@@ -184,31 +184,34 @@ interface AudioEngine {
         const val INPUT_GAIN_NODE_INDEX = 0
         const val BALANCE_NODE_INDEX = 1
         const val EQ_NODE_INDEX = 2
+
+    /** AutoEq 耳机校正节点：与 [EQ_NODE_INDEX] 同为 ParametricEqNode，参数区完全独立 */
+    const val AUTO_EQ_NODE_INDEX = 3
         // 多段 EQ：93 参容量（[0,31)增益 [31,62)Q [62,93)频率 93=段数 10/15/31）
         const val EQ_PARAM_BAND_COUNT = 93
         const val EQ_PARAM_PREGAIN_DB = 94  // M9 批3 总增益（dB ±12）
         const val EQ_Q_BASE = 31
         const val EQ_FREQ_BASE = 62
         const val EQ_TYPE_BASE = 95  // M9 AutoEQ 前置：段类型（0=PK 1=LSC 2=HSC，95~125）
-        const val DYNAMIC_BASS_NODE_INDEX = 3
-        const val VIRTUAL_BASS_NODE_INDEX = 4
-        const val BASS_ENHANCE_NODE_INDEX = 5
-        const val COMPRESSOR_NODE_INDEX = 6
-        const val MULTIBAND_NODE_INDEX = 7
-        const val CONVOLVER_NODE_INDEX = 8
-        const val ALGORITHMIC_REVERB_NODE_INDEX = 9
-        const val STEREO_WIDTH_NODE_INDEX = 10
-        const val OUTPUT_GAIN_NODE_INDEX = 11
+        const val DYNAMIC_BASS_NODE_INDEX = 4
+        const val VIRTUAL_BASS_NODE_INDEX = 5
+        const val BASS_ENHANCE_NODE_INDEX = 6
+        const val COMPRESSOR_NODE_INDEX = 7
+        const val MULTIBAND_NODE_INDEX = 8
+        const val CONVOLVER_NODE_INDEX = 9
+        const val ALGORITHMIC_REVERB_NODE_INDEX = 10
+        const val STEREO_WIDTH_NODE_INDEX = 11
+        const val OUTPUT_GAIN_NODE_INDEX = 12
 
         /**
          * 自定义脚本效果器：位于 OutputGain 之后、Limiter 之前，
          * 保证 Limiter 仍是绝对末级（用户脚本 boost 也会被限幅兜住）。
          * 默认 bypass=true，由 prefs `script_effect_enabled` 控制。
          */
-        const val SCRIPT_EFFECT_NODE_INDEX = 12
+        const val SCRIPT_EFFECT_NODE_INDEX = 13
 
         /** Limiter 绝对末级（index 13）。 */
-        const val LIMITER_NODE_INDEX = 13
+        const val LIMITER_NODE_INDEX = 14
 
         /**
          * 低音增强参数 id（与 native `BassEnhanceNode` 常量对齐）。
