@@ -2555,6 +2555,12 @@ internal fun ScEqDetailContent(viewModel: MainViewModel) {
                         checked = eqEnabled,
                         onCheckedChange = { viewModel.setEqEnabled(!eqEnabled) },
                     )
+                    Text(
+                        text = if (eqExpanded.value) "▾" else "▸",
+                        fontSize = 13.sp,
+                        color = ScColors.TextSub,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
                 }
                 if (eqExpanded.value) {
                     MultiBandEqPanel(
@@ -3667,24 +3673,47 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
 internal fun ScWidthDetailContent(viewModel: MainViewModel) {
     val stereoWidthEnabled by viewModel.stereoWidthEnabled.collectAsStateWithLifecycle()
     val stereoWidth by viewModel.stereoWidth.collectAsStateWithLifecycle()
+    val widthExpanded = rememberExpandedFollowing(stereoWidthEnabled, "width_card")
     ScCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "宽度：${"%.2f".format(stereoWidth)}×",
-                fontSize = 12.sp,
-                color = ScColors.TextMain,
-            )
-            Slider(
-                value = stereoWidth,
-                onValueChange = { viewModel.setStereoWidth(it) },
-                valueRange = 0f..2f,
-                enabled = stereoWidthEnabled,
-            )
-            Text(
-                text = "M/S 矩阵：0=单声道，1=原样，2=加倍展宽。拖动实时生效（30ms 平滑无爆音）。",
-                fontSize = 11.sp,
-                color = ScColors.TextSub,
-            )
+        Column {
+            // 头部整行可点（不依赖点标题文字）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { widthExpanded.value = !widthExpanded.value }
+                    .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "宽度：${"%.2f".format(stereoWidth)}×",
+                    fontSize = 12.sp,
+                    color = ScColors.TextMain,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = if (widthExpanded.value) "▾" else "▸",
+                    fontSize = 13.sp,
+                    color = ScColors.TextSub,
+                )
+            }
+            if (widthExpanded.value) {
+                Column(
+                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Slider(
+                        value = stereoWidth,
+                        onValueChange = { viewModel.setStereoWidth(it) },
+                        valueRange = 0f..2f,
+                        enabled = stereoWidthEnabled,
+                    )
+                    Text(
+                        text = "M/S 矩阵：0=单声道，1=原样，2=加倍展宽。拖动实时生效（30ms 平滑无爆音）。",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                    )
+                }
+            }
         }
     }
 }
@@ -4268,27 +4297,49 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
 internal fun ScLimiterDetailContent(viewModel: MainViewModel) {
     val limiterEnabled by viewModel.limiterEnabled.collectAsStateWithLifecycle()
     val limiterCeiling by viewModel.limiterCeiling.collectAsStateWithLifecycle()
+    val ceilingExpanded = rememberExpandedFollowing(limiterEnabled, "limiter_card")
     ScCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "输出上限：${"%.1f".format(limiterCeiling)} dBFS",
-                fontSize = 12.sp,
-                color = ScColors.TextMain,
-            )
-            Slider(
-                value = limiterCeiling,
-                onValueChange = viewModel::setLimiterCeiling,
-                valueRange = -12f..0f,
-                enabled = limiterEnabled,
-            )
-            Text(
-                text = "超过上限的采样被硬钳制到天花板，杜绝削波爆音。与压缩器分层工作：" +
-                    "压缩器先压平动态范围，限幅器只兜瞬时峰值，明显减少呼吸感。" +
-                    "配合输出增益（响度补偿）使用：先补偿响度，再由限幅器收口。" +
-                    "look-ahead 2.5ms 预读：EQ 增益拉大或源音量突增时保护听感仍生效。",
-                fontSize = 11.sp,
-                color = ScColors.TextSub,
-            )
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { ceilingExpanded.value = !ceilingExpanded.value }
+                    .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "输出上限：${"%.1f".format(limiterCeiling)} dBFS",
+                    fontSize = 12.sp,
+                    color = ScColors.TextMain,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = if (ceilingExpanded.value) "▾" else "▸",
+                    fontSize = 13.sp,
+                    color = ScColors.TextSub,
+                )
+            }
+            if (ceilingExpanded.value) {
+                Column(
+                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Slider(
+                        value = limiterCeiling,
+                        onValueChange = viewModel::setLimiterCeiling,
+                        valueRange = -12f..0f,
+                        enabled = limiterEnabled,
+                    )
+                    Text(
+                        text = "超过上限的采样被硬钳制到天花板，杜绝削波爆音。与压缩器分层工作：" +
+                            "压缩器先压平动态范围，限幅器只兜瞬时峰值，明显减少呼吸感。" +
+                            "配合输出增益（响度补偿）使用：先补偿响度，再由限幅器收口。" +
+                            "look-ahead 2.5ms 预读：EQ 增益拉大或源音量突增时保护听感仍生效。",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                    )
+                }
+            }
         }
     }
     // ---- U9m 静音门限（自音效库列表迁入：门限与输出链收口同属一处） ----

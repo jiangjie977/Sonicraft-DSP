@@ -34,10 +34,8 @@ class DeviceProfileCoverageTest {
     private val notDeviceFollowed = setOf(
         "auto_takeover_enabled",       // 接管策略是全局行为
         "virtual_bass_headphone_ack",  // 耳机风险确认标记，不是音效参数
-        // TODO(设备跟随第二相)：脚本机架与 EQ 曲线是字符串型配置（脚本文本 / EQ 曲线 JSON），
-        // 当前设备快照是 Map<String, Float> 装不下，需要改成"浮点表 + 字符串表"两段式。
-        // 第二相落地后**删掉这一行**，让本测试强制要求它跟随设备。
-        "script_effect_enabled",
+        // 机架脚本文本已随字符串段跟随设备（script_src_N），总闸也已登记，
+        // 所以这里不再需要 script_effect_enabled 的例外。
     )
 
     /** 取某个顶层函数的函数体（按缩进 4 的 `    }` 结束）。 */

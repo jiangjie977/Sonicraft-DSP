@@ -887,14 +887,13 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
     }
 
     com.jiangjie.Sonicraft.ui.components.ScCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        Column {
+            // 头部**占满整行**（含左右内边距）都可点：不依赖点标题文字
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { autoEqExpanded.value = !autoEqExpanded.value },
+                    .clickable { autoEqExpanded.value = !autoEqExpanded.value }
+                    .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             ) {
@@ -904,20 +903,24 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                     color = ScColors.TextMain,
                 )
-                // 开关 + 状态文字：校正是否在生效必须一眼可见
-                Text(
-                    text = if (enabled) "已启用" else "已关闭",
-                    fontSize = 11.sp,
-                    color = if (enabled) ScColors.Primary else ScColors.TextSub,
-                )
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.weight(1f))
                 com.jiangjie.Sonicraft.ui.components.ScSwitch(
                     checked = enabled,
                     // ScSwitch 的回调无参：用当前值取反（与其它页面写法一致）
                     onCheckedChange = { viewModel.setAutoEqEnabled(!enabled) },
                 )
+                Text(
+                    text = if (autoEqExpanded.value) "▾" else "▸",
+                    fontSize = 13.sp,
+                    color = ScColors.TextSub,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
             }
             if (autoEqExpanded.value) {
+            Column(
+                modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1180,6 +1183,7 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                         }
                     },
                 )
+            }
             }
             }
         }

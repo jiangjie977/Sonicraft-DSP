@@ -2003,6 +2003,7 @@ class MainViewModel @Inject constructor(
             "balance" -> setBalance(v)
             "eq_enabled" -> setEqEnabled(v > 0.5f)
             "auto_eq_enabled" -> setAutoEqEnabled(v > 0.5f)
+            "script_effect_enabled" -> setScriptEffectEnabled(v > 0.5f)
             "bass_gain" -> setBassGain(v)
             "treble_gain" -> setTrebleGain(v)
             "compressor_enabled" -> setCompressorEnabled(v > 0.5f)
@@ -2078,12 +2079,46 @@ class MainViewModel @Inject constructor(
         for ((k, v) in preset.params) applyParam(k, v)
     }
 
+    /** 脚本文本在 prefs 里的键（lane0 无后缀，其余带 _N） */
+    private fun scriptSourceKey(lane: Int): String =
+        if (lane == 0) "script_effect_source" else "script_effect_source_$lane"
+
+    /**
+     * 设备配置的**字符串段**。
+     *
+     * 设备配置主体是 `Map<String, Float>`，装不下脚本源码；这里把文本以
+     * `obj.put(key, String)` 的形式混进同一个 JSON —— 回放时按值类型分流。
+     */
+    private fun snapshotStringParams(): Map<String, String> = buildMap {
+        for (lane in 0..2) {
+            val src = prefs.getString(scriptSourceKey(lane), "").orEmpty()
+            if (src.isNotBlank()) put("script_src_$lane", src)
+        }
+    }
+
+    /** 回放字符串键：目前只有机架脚本 */
+    private fun applyStringParam(key: String, value: String) {
+        if (!key.startsWith("script_src_")) return
+        val lane = key.removePrefix("script_src_").toIntOrNull() ?: return
+        if (lane !in 0..2) return
+        prefs.edit().putString(scriptSourceKey(lane), value).commit()
+        engine.setScriptSource(value, lane)
+        engine.setScriptLaneEnabled(lane, true)
+        if (lane == _scriptLane.value) {
+            _scriptSource.value = value
+            _scriptLaneOn.value = true
+        }
+        refreshLaneMeta()
+    }
+
     /** 当前参数快照 */
     private fun snapshotParams(): Map<String, Float> = mapOf(
         "input_gain" to _inputGain.value,
         "balance" to _balance.value,
         "eq_enabled" to if (_eqEnabled.value) 1f else 0f,
         "auto_eq_enabled" to if (_autoEqEnabled.value) 1f else 0f,
+        // 机架总闸（脚本文本走字符串表，见 snapshotStringParams）
+        "script_effect_enabled" to if (_scriptEffectEnabled.value) 1f else 0f,
         // EQ 与 AutoEq 的逐段曲线：之前只存三段快捷增益，切设备后整条曲线丢失
         *buildList {
             for (i in 0 until _eqMode.value) {
@@ -2414,6 +2449,9 @@ class MainViewModel @Inject constructor(
         val snap = snapshotParams()
         val obj = org.json.JSONObject()
         snap.forEach { (k, v) -> obj.put(k, v.toDouble()) }
+        // 字符串段（机架脚本文本）：同一个 JSON 里按值类型区分
+        val strSnap = snapshotStringParams()
+        strSnap.forEach { (k, v) -> obj.put(k, v) }
         val json = obj.toString()
         if (!force && json == lastSavedConfigJson) return
         lastSavedConfigJson = json
@@ -2428,7 +2466,7 @@ class MainViewModel @Inject constructor(
         }
         editor.apply()
         writeDiag(
-            "最近配置已保存（${snap.size} 项，device=${deviceKey ?: "-"}，" +
+            "最近配置已保存（${snap.size} 项 + ${strSnap.size} 段文本，device=${deviceKey ?: "-"}，" +
                 "type=${deviceKey?.let { deviceCategoryOf(it) } ?: "-"}，force=$force）"
         )
     }
@@ -2497,21 +2535,30 @@ class MainViewModel @Inject constructor(
             writeDiag("设备切换: $key 未绑定预设，保持现状")
             return
         }
-        val params = runCatching {
+        val numeric = LinkedHashMap<String, Float>()
+        val strings = LinkedHashMap<String, String>()
+        runCatching {
             val obj = org.json.JSONObject(json)
-            obj.keys().asSequence().associateWith { k -> obj.getDouble(k).toFloat() }
+            obj.keys().asSequence().forEach { k ->
+                val v = obj.get(k)
+                if (v is String) strings[k] = v else numeric[k] = obj.getDouble(k).toFloat()
+            }
         }.getOrNull()
-        if (params.isNullOrEmpty()) {
+        val params = numeric
+        if (params.isEmpty() && strings.isEmpty()) {
             writeDiag("设备切换: $key 预设解析失败，保持现状")
             return
         }
         // 目标参数与当前完全一致（典型场景：未绑定设备回落到「最近配置」，而最近配置就是
         // 切换前刚存的当前状态）→ 不必整轮下发，避免白跑 47 次 setter
         val current = snapshotParams()
-        if (params.size == current.size && params.all { (k, v) ->
+        val curStrings = snapshotStringParams()
+        if (strings.isEmpty() &&
+            params.size == current.size && params.all { (k, v) ->
                 val cur = current[k]
                 cur != null && kotlin.math.abs(cur - v) < 1e-6f
-            }) {
+            } && curStrings.isEmpty()
+        ) {
             writeDiag("设备切换: $key 目标配置与当前一致，跳过下发")
             return
         }
@@ -2523,6 +2570,8 @@ class MainViewModel @Inject constructor(
                 writeDiag("设备切换: $key 等引擎 ready 超时（${engineState.value}），放弃本次应用")
                 return
             }
+            // 先回放字符串（脚本文本），再下发数值 —— 脚本源要先于它的控件值就位
+            strings.forEach { (k, v) -> applyStringParam(k, v) }
             // 组总闸先下发：子效果的 setter 受总闸门控，顺序颠倒会丢参数
             val ordered = params.entries.sortedBy { if (it.key.contains("section")) 0 else 1 }
             for ((k, v) in ordered) applyParam(k, v)
