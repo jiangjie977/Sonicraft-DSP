@@ -83,6 +83,7 @@ import kotlin.math.roundToInt
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
+    val eqEnabled by viewModel.eqEnabled.collectAsStateWithLifecycle()
     val eqMode by viewModel.eqMode.collectAsStateWithLifecycle()
     val eqBandGains by viewModel.eqBandGains.collectAsStateWithLifecycle()
     val eqBandQs by viewModel.eqBandQs.collectAsStateWithLifecycle()
@@ -143,7 +144,30 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         (flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
     }
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // （U9o：「多段 EQ」标题退役——详情页页头已标明「参量均衡」，冗余）
+        // 标题行 + 总开关：从页头下沉进来（页头只留标题与副标题）
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            Column {
+                Text(
+                    text = "参量均衡",
+                    fontSize = 13.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = ScColors.TextMain,
+                )
+                Text(
+                    text = if (eqEnabled) "已启用 · $eqMode 段" else "已旁路 · 参数可预调",
+                    fontSize = 11.sp,
+                    color = ScColors.TextSub,
+                )
+            }
+            com.jiangjie.Sonicraft.ui.components.ScSwitch(
+                checked = eqEnabled,
+                onCheckedChange = { viewModel.setEqEnabled(!eqEnabled) },
+            )
+        }
         // （U9p：锁定手绘+档位行下沉并入段数行——锁改小锁字符，省一整行）
         // 段数行（对齐 wecho Bands 数字框 + 段增删）：段数任意 1~31（改段数
         // 重置为默认平直），+段在尾部按几何中点加段，−段删除选中段。

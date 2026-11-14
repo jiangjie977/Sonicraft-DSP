@@ -330,10 +330,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             val scriptEnabled by viewModel.scriptEffectEnabled.collectAsStateWithLifecycle()
             when {
                 eqOpen -> ScEffectDetailPage(
+                    // 总开关**下沉到均衡器卡片内**（同压限器处理：卡片标题行右侧），
+                    // 所以这里不传 enabled / onEnabledChange —— 页头不再渲染开关。
                     title = "参量均衡",
                     subtitle = "多段曲线校正 · 手绘曲线 + 滑条墙",
-                    enabled = eqEnabled,
-                    onEnabledChange = viewModel::setEqEnabled,
                     onBack = { eqOpen = false },
                 ) { ScEqDetailContent(viewModel) }
                 bandOpen -> ScEffectDetailPage(
