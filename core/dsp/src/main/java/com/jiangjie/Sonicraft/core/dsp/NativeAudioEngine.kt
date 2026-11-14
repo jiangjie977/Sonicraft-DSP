@@ -160,7 +160,7 @@ class NativeAudioEngine private constructor(private var handle: Long) : AutoClos
         return if (nativeMultibandMeters(handle, out)) out else null
     }
 
-    /** 单段压缩器计量（2026-11-09）：{输入峰值, 增益衰减 dB, 输出峰值} */
+    /** 单段压缩器计量：{输入峰值, 增益衰减 dB, 输出峰值} */
     fun compressorMeters(): FloatArray? {
         if (handle == 0L) return null
         val out = FloatArray(4)
@@ -362,7 +362,7 @@ data class NativeEngineStats(
     val underrunBlocks: Long = 0,
     /** AAudio 输出流自身 underrun 计数（DSP 超时 → 输出饿 = 可闻噪声） */
     val xRunBlocks: Long = 0,
-    /** 空载旁路激活（M9 省电：输入静音 4s 后 DSP 链暂停，信号恢复自动解除） */
+    /** 空载旁路激活（省电：输入静音 4s 后 DSP 链暂停，信号恢复自动解除） */
     val idleBypassActive: Boolean = false,
     /** 卷积器 Prepare 次数（增长 = 图被重建，预设会被重置为 Dry） */
     val convPrepareCount: Long = 0,

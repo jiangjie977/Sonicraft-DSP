@@ -75,7 +75,7 @@ fun ScCard(
     modifier: Modifier = Modifier,
     background: Brush = ScCardBrush,
     /**
-     * 是否画 L1 投影（2026-11-11）。
+     * 是否画 L1 投影。
      *
      * **嵌套在另一张卡里时必须传 false**：两层阴影会叠加，内层卡边缘出现一圈灰雾，
      * 看起来像"卡片没对齐"而不是"卡片浮在上面"。关掉后靠 1dp 高光描边 + 渐变底
@@ -94,7 +94,7 @@ fun ScCard(
             )
             .clip(shape)
             .background(background)
-            // 描边始终保留，但**颜色分两种**（2026-11-11）：
+            // 描边始终保留，但**颜色分两种**：
             //   有阴影时用 ScHighlightBorder（0xE6FFFFFF，近乎纯白的高光边）——
             //     它模拟"受光的凸起面"，靠下面的阴影撑出立体感，本身就是白的，几乎看不见
             //   无阴影时改用 ScColors.Divider（0xFFE4E9EC 浅灰）——

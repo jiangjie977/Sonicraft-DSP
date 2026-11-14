@@ -25,7 +25,7 @@ object StellarHelper {
     }
 
     /**
-     * 只认 Stellar Manager（2026-11-08）。
+     * 只认 Stellar Manager。
      *
      * 与 [isManagerInstalled] 的区别：后者为兼容 Shizuku 而把原版 Shizuku 也算作"已安装"，
      * 但 Sonicraft 绑定的是 `com.stellar.server.IStellarService`——**原版 Shizuku 没有这个

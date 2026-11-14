@@ -6,10 +6,10 @@ package com.jiangjie.Sonicraft
  */
 
 /*
- * M9 多段 EQ 数学工具：频点表 / 频响曲线合成 / 预设控制点插值 / 内置预设。
+ * 多段 EQ 数学工具：频点表 / 频响曲线合成 / 预设控制点插值 / 内置预设。
  * 与 native ParametricEqNode 的模式频点表保持一致。
  */
-/** M9 批3 自定义预设（完整快照：模式+增益+Q+频率） */
+/** 批3 自定义预设（完整快照：模式+增益+Q+频率） */
 data class EqUserPreset(
     val name: String,
     val mode: Int,

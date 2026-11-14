@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * SCVM —— Sonicraft 自研「类 C 栈式虚拟机」（2026-11-12）。
+ * SCVM —— Sonicraft 自研「类 C 栈式虚拟机」。
  * 用于自定义脚本效果器（见 docs/SCRIPT_EFFECT_DESIGN.md）。
  *
  * 设计目标（对齐 JamesDSP/EEL2 的实时特性）：

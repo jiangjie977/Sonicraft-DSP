@@ -42,7 +42,7 @@ interface AudioEngine {
     fun startCapture(projection: MediaProjection, excludedUids: IntArray = IntArray(0))
 
     /**
-     * P1 专用入口（2026-11-04）：用 [LoopbackPcmSource]（特权侧 AudioPolicy/LOOP_BACK）
+     * P1 专用入口：用 [LoopbackPcmSource]（特权侧 AudioPolicy/LOOP_BACK）
      * 作为输入源，替代 MediaProjection。可抓 opt-out app（酷狗 ALLOW_CAPTURE_BY_SYSTEM
      * + 0x400）的流。
      * @return false = 源启动失败（调用方回退）
@@ -133,14 +133,14 @@ interface AudioEngine {
     fun setTailPartitionLimit(maxParts: Int) {}
 
     /**
-     * 多频段每段计量（2026-11-08）：9 个 float，[band*3 + 0/1/2] = 入峰值 / GR(dB) / 出峰值，
+     * 多频段每段计量：9 个 float，[band*3 + 0/1/2] = 入峰值 / GR(dB) / 出峰值，
      * band 0=低 1=中 2=高。null = 引擎未就绪或不支持。
      * 供多段压限 UI 的 IN/GR/OUT 电平表，UI 侧按 ~10fps 轮询即可（块级快照，非采样级）。
      */
     fun multibandMeters(): FloatArray? = null
 
     /**
-     * 单段压缩器计量（2026-11-09）：{输入峰值, 增益衰减 dB, 输出峰值, GR 峰值保持 dB}。
+     * 单段压缩器计量：{输入峰值, 增益衰减 dB, 输出峰值, GR 峰值保持 dB}。
      * null = 引擎未就绪或无压缩器节点（调用方跳过本次刷新，不清零已有读数）。
      */
     fun compressorMeters(): FloatArray? = null
@@ -184,7 +184,7 @@ interface AudioEngine {
         const val INPUT_GAIN_NODE_INDEX = 0
         const val BALANCE_NODE_INDEX = 1
         const val EQ_NODE_INDEX = 2
-        // M9 多段 EQ：93 参容量（[0,31)增益 [31,62)Q [62,93)频率 93=段数 10/15/31）
+        // 多段 EQ：93 参容量（[0,31)增益 [31,62)Q [62,93)频率 93=段数 10/15/31）
         const val EQ_PARAM_BAND_COUNT = 93
         const val EQ_PARAM_PREGAIN_DB = 94  // M9 批3 总增益（dB ±12）
         const val EQ_Q_BASE = 31
@@ -201,7 +201,7 @@ interface AudioEngine {
         const val OUTPUT_GAIN_NODE_INDEX = 11
 
         /**
-         * 自定义脚本效果器（2026-11-12）：位于 OutputGain 之后、Limiter 之前，
+         * 自定义脚本效果器：位于 OutputGain 之后、Limiter 之前，
          * 保证 Limiter 仍是绝对末级（用户脚本 boost 也会被限幅兜住）。
          * 默认 bypass=true，由 prefs `script_effect_enabled` 控制。
          */
@@ -239,7 +239,7 @@ interface AudioEngine {
         const val VIRTUAL_BASS_PARAM_ENVELOPE_RATE = 4
 
         /**
-         * M15 动态低音参数 id（与 native `DynamicBassNode` 常量对齐）。
+         * 动态低音参数 id（与 native `DynamicBassNode` 常量对齐）。
          * **跨语言契约**：任一侧改动都要同步，漏改会让参数打到错误 id 上（静默失效）。
          */
         const val DYNAMIC_BASS_PARAM_AMOUNT = 0

@@ -1,5 +1,5 @@
 #pragma once
-// M10 多段参量均衡器（peaking/low-shelf/high-shelf，RBJ cookbook）。SPDX-License-Identifier: GPL-3.0-only
+// 多段参量均衡器（peaking/low-shelf/high-shelf，RBJ cookbook）。SPDX-License-Identifier: GPL-3.0-only
 // 容量 31 段；段数 1~31 任意（SetParam(93)，对齐 wecho 自定义段数）：10/15/31 用标准
 // 频点表，其余段数按 20~20k 对数均分生成默认表；切段数时频点重置+状态清零。每段三参数：
 // 增益(±12dB)/Q(0.3~8)/频率(20~20k)，外加段类型（95~125：0=PK peaking / 1=LSC low

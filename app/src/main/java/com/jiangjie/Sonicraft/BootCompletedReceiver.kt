@@ -10,7 +10,7 @@ import android.content.Intent
 import java.io.File
 
 /**
- * 夜间保活短期方案（2026-10-28 立项）：开机自启恢复警示。
+ * 夜间保活短期方案：开机自启恢复警示。
  *
  * 背景（取证结论）：夜间音效丢失根因 = system_server watchdog 软重启（NX733J
  * ROM 慢性病，3 天 5 次），全部 app 进程连同 MediaProjection consent 授权一并
@@ -30,7 +30,7 @@ class BootCompletedReceiver : BroadcastReceiver() {
             .putBoolean(ForegroundDspService.KEY_SYSTEM_KILLED_UNACKED, true)
             .apply()
         writeDiag(context, "BOOT_COMPLETED：上次会话运行中，已写被终止标记并拉起警示服务")
-        // 2026-11-03 trae 审阅采纳：Android 15（targetSdk 35）起官方对 BOOT_COMPLETED
+        // trae 审阅采纳：Android 15（targetSdk 35）起官方对 BOOT_COMPLETED
         // 启动 mediaProjection 等 6 类 FGS 移除豁免，违规抛
         // ForegroundServiceStartNotAllowedException。本机 NX733J/Android16 实测 105 次
         // BOOT 全放行（电池优化白名单的 FGS 后台启动豁免覆盖，autostart_diag 双侧行

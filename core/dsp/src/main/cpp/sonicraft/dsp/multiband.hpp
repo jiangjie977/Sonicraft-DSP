@@ -56,14 +56,14 @@ namespace sonicraft::dsp {
  *      param 19 = fc2（Mid|High 分频点 Hz）
  *      总开关走 SetBypass（节点惯例，不占 param_id）。
  *
- * M8b 里程碑：频段动力学已接入（param 0-17 生效）；引擎接入与 Kotlin 镜像随 M8c。
+ * 里程碑：频段动力学已接入（param 0-17 生效）；引擎接入与 Kotlin 镜像随 M8c。
  */
 class MultibandNode : public DspNode {
  public:
   static constexpr int kBands = 3;
-  // M8f：防过冲天花板（线性，比下游 LimiterNode −0.45dB 松，只在极端兜底）
+  // ：防过冲天花板（线性，比下游 LimiterNode −0.45dB 松，只在极端兜底）
   static constexpr float kProtCeil = 1.0f;
-  // M8f：DC blocker 转折频率（2Hz：@20Hz 衰减 ≈0.04dB，9a 预算内）
+  // ：DC blocker 转折频率（2Hz：@20Hz 衰减 ≈0.04dB，9a 预算内）
   static constexpr float kDcFcHz = 2.0f;
   /** 检测包络的固定释放时间（ms）：与单段 CompressorNode::kEnvReleaseMs 同口径 */
   static constexpr float kEnvReleaseMs = 40.0f;
@@ -89,7 +89,7 @@ class MultibandNode : public DspNode {
   static constexpr int kParamSplit1Hz = 18;
   static constexpr int kParamSplit2Hz = 19;
 
-  // 母带温和式默认（docs/M8_MULTIBAND_LIMITER_DESIGN.md §3.3）
+  // 母带温和式默认（docs/M8_MULTIBAND_LIMITER_DESIGN.md ）
   static constexpr float kDefaultThrLow = -26.0f, kDefaultThrMid = -22.0f, kDefaultThrHigh = -20.0f;
   static constexpr float kDefaultRatioLow = 2.5f, kDefaultRatioMid = 2.0f, kDefaultRatioHigh = 2.0f;
   static constexpr float kDefaultAtkLow = 20.0f, kDefaultAtkMid = 15.0f, kDefaultAtkHigh = 5.0f;
@@ -180,7 +180,7 @@ class MultibandNode : public DspNode {
       }
     }
 
-    // 频段动力学（M8f 立体声联动）：每段一个共享包络/增益，检测取跨声道
+    // 频段动力学（立体声联动）：每段一个共享包络/增益，检测取跨声道
     // max(|L|,|R|)——单声道时 max 即自身，无特判。合成 → 段间防过冲 → DC。
     {
       float env0 = env_[0], env1 = env_[1], env2 = env_[2];
@@ -189,7 +189,7 @@ class MultibandNode : public DspNode {
       const BandParams& d1 = dyn_[1];
       const BandParams& d2 = dyn_[2];
       float prot = prot_env_;
-      // 计量累加器（2026-11-08）：块内峰值，块尾写回成员供 UI 读
+      // 计量累加器：块内峰值，块尾写回成员供 UI 读
       float pk0 = 0.0f, pk1 = 0.0f, pk2 = 0.0f;
       float op0 = 0.0f, op1 = 0.0f, op2 = 0.0f;
       for (int n = 0; n < frames; ++n) {
@@ -217,7 +217,7 @@ class MultibandNode : public DspNode {
           channels[c][n] = bandData(0, c)[n] * gl0 + bandData(1, c)[n] * gl1 +
                            bandData(2, c)[n] * gl2;
         }
-        // M8f 尾部 DC blocker（先 DC 后 trim：逐样本乘法可交换，数学等价，
+        // 尾部 DC blocker（先 DC 后 trim：逐样本乘法可交换，数学等价，
         // 但保护钳制的天花板因此就是最终输出天花板——若先 trim 后 DC，
         // DC 高通会在钳制波形上再抬 ~0.13% 破坏 1.0 上限）
         for (int c = 0; c < channels_; ++c) {
@@ -255,7 +255,7 @@ class MultibandNode : public DspNode {
       gain_db_[1] = g1;
       gain_db_[2] = g2;
       prot_env_ = prot;
-      // 计量写回（2026-11-08）：块级峰值，供 UI 绘制 IN/GR/OUT 电平表
+      // 计量写回：块级峰值，供 UI 绘制 IN/GR/OUT 电平表
       band_in_pk_[0] = pk0;
       band_in_pk_[1] = pk1;
       band_in_pk_[2] = pk2;

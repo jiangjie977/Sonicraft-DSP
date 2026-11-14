@@ -29,7 +29,7 @@ data class PrivilegeState(
     /** 0 = root，2000 = adb/shell，-1 = 不可用 */
     val uid: Int = -1,
     /**
-     * 只认 Stellar Manager（2026-11-08）。
+     * 只认 Stellar Manager。
      * [managerInstalled] 为兼容 Shizuku 会把原版 Shizuku 也算已安装，但本应用绑定的是
      * `IStellarService`，原版 Shizuku 无法授权。UI 依据本字段区分「引导下载」与「拉起授权」。
      */
@@ -51,7 +51,7 @@ interface PrivilegedClient {
     val uid: Int
 
     /**
-     * 重新探测特权状态（2026-11-08）。
+     * 重新探测特权状态。
      * 必须由 onResume 调用：用户去 Stellar 里授权后切回本应用，binder 并没有重连，
      * 不主动刷新的话 UI 会一直停在「未授权」。
      */
@@ -59,7 +59,7 @@ interface PrivilegedClient {
     /** 向 Stellar 请求本 App 的 stellar 权限（用户在 Stellar 侧确认一次） */
     fun requestPermission()
     fun grantMediaProjectionSilently(): Boolean
-    /** M2：经 Stellar 免弹窗创建归属于本 app 的 MediaProjection；失败返回 null（降级系统弹窗）。
+    /** ：经 Stellar 免弹窗创建归属于本 app 的 MediaProjection；失败返回 null（降级系统弹窗）。
      *  [onFailureDetail] 失败详情回调（本机 logcat 不可用，诊断信息经此落盘）。 */
     fun createMediaProjectionSilently(onFailureDetail: ((String) -> Unit)? = null): MediaProjection?
     fun runCommand(vararg cmd: String): CommandResult

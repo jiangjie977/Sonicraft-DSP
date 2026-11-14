@@ -178,7 +178,7 @@ class VirtualBassNode : public DspNode {
         lp_soft_[ci] += lp_soft_alpha_ * (sub - lp_soft_[ci]);
         sub = lp_soft_[ci];
 
-        // **对齐 yuanma `Harmonic<3>` + coeffs {0, 0.13, 0.13}**（2026-11-12）。
+        // **对齐 yuanma `Harmonic<3>` + coeffs {0, 0.13, 0.13}**。
         // 其 setCoeffs 把增益写进 tmp[1..3]，再按 Chebyshev T_i 展开：
         //   0.13·T2 + 0.13·T3 = 0.52x³ + 0.26x² − 0.39x − 0.13
         // 我们原先只用了二次（0.26x²+0.13x−0.13），**少了三次谐波**
@@ -334,7 +334,7 @@ class VirtualBassNode : public DspNode {
 
   void updateEnvelopeCoeffs() {
     const float sr = static_cast<float>(sample_rate_);
-    // **按 `wecho yuanma` 对齐（2026-11-12）**：
+    // **按 `wecho yuanma` 对齐**：
     //   envelope_alpha = 2π×25/sr（固定，setEnvelopeRate 不更新它）
     //   lp_soft_alpha  = 2π×envelopeRate/sr（跟随「跟随速度」滑块）
     // 新版 studio_rack 把「两者都跟参数」当成 bug 修了，但用户实听对比的

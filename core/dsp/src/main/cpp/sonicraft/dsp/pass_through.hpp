@@ -8,7 +8,7 @@
 
 namespace sonicraft::dsp {
 
-/** 直通节点：M0 用于验证管线与自检，bypass 时逐样本置零。 */
+/** 直通节点：用于验证管线与自检，bypass 时逐样本置零。 */
 class PassThroughNode : public DspNode {
  public:
   std::string_view id() const override { return "pass_through"; }

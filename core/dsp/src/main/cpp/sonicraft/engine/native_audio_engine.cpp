@@ -32,7 +32,7 @@
 namespace sonicraft::engine {
 
 namespace {
-// M9 省电（2026-10-27）：默认不绑核。块预算 4ms vs 全链实算 ~1ms，余量巨大，
+// 省电：默认不绑核。块预算 4ms vs 全链实算 ~1ms，余量巨大，
 // 绑大核的延迟收益不再值得锁簇功耗代价——空载 54% 大核占用经静音直通治理后，
 // 剩余负载交由调度器 EAS 自由放置（参照 audioserver FastMixer 不绑核零事故）。
 // 回退开关：真机 stress 若出现 xRun/水位爬升，改回 true 重编即可（低配机仍建议绑核）。
@@ -48,11 +48,11 @@ constexpr bool kBindBigCores = false;
 // 现在：装配时校验实际索引与常量一致（脱节会打印 FATAL），node_at 一律用常量。
 //
 // **必须与 Kotlin 侧 `AudioEngine.*_NODE_INDEX` 保持一致**（跨语言契约，
-// 两边任一改动都要同步；M15 动态低音插入后会整体 +1）。
+// 两边任一改动都要同步；动态低音插入后会整体 +1）。
 constexpr int kNodeInputGain   = 0;
 constexpr int kNodeBalance     = 1;
 constexpr int kNodeEq          = 2;
-// M15 动态低音（2026-11-11 插入，位于 EQ 与压限之间 → 其余索引整体 +1）
+// 动态低音（2026-11-11 插入，位于 EQ 与压限之间 → 其余索引整体 +1）
 constexpr int kNodeDynamicBass = 3;
 // 虚拟低音（2026-11-11 插入，紧随动态低音 → 其余索引整体 +1）
 constexpr int kNodeVirtualBass = 4;
@@ -64,14 +64,14 @@ constexpr int kNodeConvolver   = 8;
 constexpr int kNodeReverb      = 9;
 constexpr int kNodeStereoWidth = 10;
 constexpr int kNodeOutputGain  = 11;
-// 自定义脚本效果器（2026-11-12）：位于 OutputGain 之后、Limiter 之前，
+// 自定义脚本效果器：位于 OutputGain 之后、Limiter 之前，
 // 保证 Limiter 仍是绝对末级（用户脚本 boost 也会被限幅兜住）。
 constexpr int kNodeScriptEffect = 12;
 constexpr int kNodeLimiter     = 13;
 constexpr int kNodeCount       = 14;
 
 /**
- * 索引脱节标志（2026-11-11）。由 AddNodeAt 置位，装配末尾汇总写诊断文件。
+ * 索引脱节标志。由 AddNodeAt 置位，装配末尾汇总写诊断文件。
  *
  * 为什么不用 logcat：**本机 adb logcat 完全取不到数据**（`logcat -d` 总行数 0，
  * 厂商 ROM 限制）。日志通道实际只有 App 私有目录一条路（`adb run-as` 可直读），
@@ -132,7 +132,7 @@ NativeAudioEngine::NativeAudioEngine(int sample_rate, int channels, int max_fram
   AddNodeAt(*graph_, std::move(eq), kNodeEq);
   // 动态低音（M15，index 3，2026-11-11）：插在 EQ 之后、压限之前 ——
   // 低音增强后的电平由后续压限顺带兜住；但本节点**不依赖**压限（自带低频保护，
-  // 见 docs/M15_DYNAMIC_BASS_DESIGN.md §4）。
+  // 见 docs/M15_DYNAMIC_BASS_DESIGN.md ）。
   auto dynBass = std::make_unique<dsp::DynamicBassNode>();
   dynBass->set_channel_count(channels);
   AddNodeAt(*graph_, std::move(dynBass), kNodeDynamicBass);
@@ -169,7 +169,7 @@ NativeAudioEngine::NativeAudioEngine(int sample_rate, int channels, int max_fram
   outputGain->set_channel_count(channels);
   outputGain->set_id("output_gain");
   AddNodeAt(*graph_, std::move(outputGain), kNodeOutputGain);
-  // 自定义脚本效果器（2026-11-12）：插在 OutputGain 之后、Limiter 之前，
+  // 自定义脚本效果器：插在 OutputGain 之后、Limiter 之前，
   // 保证 Limiter 仍是绝对末级（用户脚本 boost 也会被限幅兜住）。
   // 后端为自研 SCVM；默认 bypass=true，由 Kotlin 侧 prefs 控制。
   auto scriptFx = std::make_unique<dsp::ScriptEffectNode>();
@@ -180,7 +180,7 @@ NativeAudioEngine::NativeAudioEngine(int sample_rate, int channels, int max_fram
   limiter->set_channel_count(channels);
   AddNodeAt(*graph_, std::move(limiter), kNodeLimiter);
 
-  // 装配完成汇总（2026-11-11）：**写诊断文件而不是只打日志**。
+  // 装配完成汇总：**写诊断文件而不是只打日志**。
   // 本机 adb logcat 取不到任何数据，"没有 mismatch 日志"从来不是证据；
   // 文件是唯一可靠通道（`adb shell run-as com.jiangjie.Sonicraft
   // cat files/crash/autostart_diag.txt`）。
@@ -269,7 +269,7 @@ bool NativeAudioEngine::OpenAndStartStream() {
   running_.store(true);
 
   if (AAudioStream_requestStart(stream_) != AAUDIO_OK) {
-    // 2026-11-03 审计 H1：不得调 Stop()——本函数仅由 Start()/RestartOutputStream()
+    // 审计 H1：不得调 Stop()——本函数仅由 Start()/RestartOutputStream()
     // 在持有 restart_mutex_ 下调用，std::mutex 不可重入，Stop 内二次加锁 = 同线程
     // 永久死锁（此后 GetStats 全部阻塞 = 全链僵死零日志，疑为「22 分钟死寂」真身）。
     // 手动内联无锁清理：requestStart 失败的流未启动，无回调并发，直接 close 即可。
@@ -278,7 +278,7 @@ bool NativeAudioEngine::OpenAndStartStream() {
     running_.store(false);
     return false;
   }
-  // M9 绑核禁用诊断：原在回调线程首块写（fopen 违反自家实时契约），搬至启动
+  // 绑核禁用诊断：原在回调线程首块写（fopen 违反自家实时契约），搬至启动
   // 路径（start/重建线程，非实时）。进程一次。
   static std::atomic<bool> bindDiagDone{false};
   if (!kBindBigCores && !bindDiagDone.exchange(true) && !diag_dir_.empty()) {
@@ -300,7 +300,7 @@ void NativeAudioEngine::OnStreamError(AAudioStream* /*stream*/, void* user_data,
   // capture 全零 → 空流被省电 disconnect → -899 循环，重建无法根治，降频保命，
   // 真正的恢复交给 Kotlin 采集断链保险丝）。30s 无错即重置为新故障序列。
   //
-  // 2026-11-08 调整：首档 200→50、次档 400→100。设备切换（插拔耳机/连断蓝牙）必然让
+  // 调整：首档 200→50、次档 400→100。设备切换（插拔耳机/连断蓝牙）必然让
   // AAudio 流 DISCONNECTED(-899)，旧档位使切换中断至少 200ms、第二次 400ms，用户可感知。
   // 单发路由切换属于正常事件，理应最快恢复；只有连续失败才需要退避保护（≥3 起仍是 400ms）。
   const long now = static_cast<long>(time(nullptr));
@@ -791,7 +791,7 @@ aaudio_data_callback_result_t NativeAudioEngine::OnData(void* audio_data, int32_
   const double rms = consumed > 0 ? std::sqrt(sum / consumed) : 0.0;
   input_level_scaled_.store(static_cast<int>(rms * 1e6));
 
-  // 空载旁路（M9 省电，2026-10-27）：输入静音持续 4s → 跳过整条 DSP 链。
+  // 空载旁路（省电，2026-10-27）：输入静音持续 4s → 跳过整条 DSP 链。
   // 实测 NX733J 无播放时引擎空转占 ~54% 单核大核（utime 差分），是耗电排行
   // 主因。此时输出=输入=数字静音，无需另行置零；任何超阈值块立即解冻（当块
   // 恢复全链，<1 块 ≈4ms 无感）。激活前混响尾已在全链运行中自然衰减完毕
@@ -873,9 +873,9 @@ void NativeAudioEngine::GetStats(jlong* out, int n) {
   if (n >= 10) {
     out[9] = (stream_ != nullptr) ? AAudioStream_getXRunCount(stream_) : 0;
   }
-  // 空载旁路激活标志（M9 诊断：watermark 日志可观测 DSP 是否在空转）
+  // 空载旁路激活标志（诊断：watermark 日志可观测 DSP 是否在空转）
   if (n >= 11) out[10] = idle_bypass_.active() ? 1 : 0;
-  // 卷积混响诊断三值（2026-11-06）：
+  // 卷积混响诊断三值：
   //   [11] Prepare 次数（增长=图被重建，预设会被重置为 Dry）
   //   [12] 当前预设（0=Dry，即无混响）
   //   [13] 湿声 RMS ×1e6（0 且预设非 Dry ⇒ 卷积状态坏死）

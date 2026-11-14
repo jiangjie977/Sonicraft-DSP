@@ -89,7 +89,7 @@ class ReverbNode : public DspNode {
     cur_wet_ = wet_;
     cur_dry_ = dry_;
     UpdateCoeffs();
-    // 逐样本斜坡的常量部分 + 运行值初值（2026-11-08）
+    // 逐样本斜坡的常量部分 + 运行值初值
     for (int i = 0; i < kNumComb; ++i) {
       base_d_samples_[i] = kBaseD[i] * static_cast<float>(sample_rate_);
     }
@@ -136,7 +136,7 @@ class ReverbNode : public DspNode {
     if (bypass_) return;  // A/B 标尺：bypass = 原样透传（尾音冻结，切换无断裂）
     if (channels_ < 2 || frames <= 0) return;
 
-    // 2026-11-08 修「拖动房间大小滑块有毛刺」：
+    // 修「拖动房间大小滑块有毛刺」：
     // 原实现是**块级**一阶平滑（每 4ms 才更新一次参数），块间是阶跃；这个阶跃进入
     // 8 个梳状反馈环后被放大成可闻的 zipper 噪音。改为**块内逐样本线性斜坡**：
     // 起点 = 上块末值（*_run_）、终点 = 本块 target，块尾恰好等于下块首 → 全程连续。
@@ -380,7 +380,7 @@ class ReverbNode : public DspNode {
   float rev_d_[kNumComb] = {};
   float rev_ap_[kNumAp] = {};
 
-  // ==== 块内逐样本斜坡运行值（2026-11-08 修「拖动房间大小有毛刺」）====
+  // ==== 块内逐样本斜坡运行值====
   // 原实现每块只更新一次参数（4ms 一个阶跃），8 个梳状反馈环会把这个阶跃放大成
   // 可闻的 zipper 噪音。改为块内线性斜坡：起点=上块末值、终点=本块 target、
   // 步进=(to-from)/frames，块间天然连续（块尾 == 下块首）。

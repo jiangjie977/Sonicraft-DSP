@@ -36,7 +36,7 @@ import javax.inject.Inject
  * Android 14+ 强制：通过 MediaProjection 捕获音频的前台服务必须声明 mediaProjection 类型，
  * 否则 startForeground 抛 SecurityException 导致进程闪退。
  *
- * 夜间保活短期方案（2026-10-28 立项）：
+ * 夜间保活短期方案：
  *  - [Intent] 为 null 且 prefs 标记上次会话运行中 = START_STICKY 重生（进程曾被系统
  *    杀掉——system_server 软重启/厂商回收，capture token 已失效）→ 写「被终止未确认」
  *    标记，通知升级为警示文案，用户打开 app 时横幅一键恢复；
@@ -126,7 +126,7 @@ class ForegroundDspService : Service() {
                     else -> "STICKY 重生（进程曾被系统杀掉，capture token 已失效），警示通知已挂出"
                 },
             )
-            // 自动恢复（2026-11-07 重构）：
+            // 自动恢复：
             // Loopback 模式改为**本服务直接恢复链路**（AudioChainManager），不再依赖
             // startActivity —— Android 10+ 后台启动 Activity 受限、息屏时基本必被拒。
             // MP 模式仍走 startActivity（需要用户重新授权录屏，无法静默恢复）。
@@ -154,7 +154,7 @@ class ForegroundDspService : Service() {
             }
             // auto-restore feedback: swap alert notification back to normal
             // only when engine is Running AND the capture heartbeat is alive.
-            // 2026-11-02 修正：旧判定只看引擎 Running——凌晨软重启风暴实证引擎空转
+            // 修正：旧判定只看引擎 Running——凌晨软重启风暴实证引擎空转
             // （无内录）也会 confirmed，通知回「正常」而实际无声/双声，diag 自欺。
             mainHandler.postDelayed({
                 val engineRunning = engine.state.value is EngineState.Running
@@ -242,7 +242,7 @@ class ForegroundDspService : Service() {
      */
     private fun captureHeartbeatAlive(): Boolean {
         // Loopback 模式不写 capture_diag（那是 MP 路径的），用「链在手 + 引擎 Running」当心跳，
-        // 否则恢复成功也会被判 NOT confirmed，警示通知一直留着（2026-11-07 实测）
+        // 否则恢复成功也会被判 NOT confirmed，警示通知一直留着
         if (audioChain.isLoopbackMode()) return audioChain.isChainAlive()
         return captureHeartbeatFromDiag()
     }

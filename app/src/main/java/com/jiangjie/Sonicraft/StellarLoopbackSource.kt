@@ -10,7 +10,7 @@ import com.jiangjie.Sonicraft.privilege.ILoopbackCallback
 import com.jiangjie.Sonicraft.privilege.ILoopbackProbe
 
 /**
- * P1（2026-11-04）：把特权侧（Stellar UserService / shell uid=2000）的 Loopback PCM
+ * P1：把特权侧（Stellar UserService / shell uid=2000）的 Loopback PCM
  * 桥接成引擎可用的 [LoopbackPcmSource]。
  *
  * 数据链：UserService 的 AudioRecord(REMOTE_SUBMIX) → PCM16 交织 → oneway AIDL 回调

@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * Host-side DSP self-check harness (M0 / M4a).
+ * Host-side DSP self-check harness (/ M4a).
  * Verifies:
  *   1. DspGraph pass-through (PassThroughNode): output is sample-identical to input;
  *   2. PassThroughNode bypass command: output is zeroed;
@@ -859,7 +859,7 @@ int main(int argc, char** argv) {
               "compressor: 2x oversampling keeps level within 5% (filter is flat)");
     }
 
-    // 6k) **M15 动态低音（阶段 1）：旁路透明 + 次低频清理**（2026-11-11）
+    // 6k) **动态低音（阶段 1）：旁路透明 + 次低频清理**
     //     本阶段节点只有 HPF；后面的分频重构/动态增强/保护限幅各有自己的探针。
     {
         using sonicraft::dsp::DynamicBassNode;
@@ -907,7 +907,7 @@ int main(int argc, char** argv) {
             db.Prepare(kSampleRate, kMaxFrames);
             db.SetBypass(false);
             db.SetParam(DynamicBassNode::kParamSubsonicHz, subsonicHz);
-            // 隔离变量（2026-11-11）：本条只测 HPF，关掉动态增强与低频保护，
+            // 隔离变量：本条只测 HPF，关掉动态增强与低频保护，
             // 否则它们会改变低频电平，让"HPF 衰减量"这个测量失去意义
             db.SetParam(DynamicBassNode::kParamBoostDepth, 0.0f);
             db.SetParam(DynamicBassNode::kParamProtectLevel, 0.0f);   // 同理：只测分频
@@ -949,7 +949,7 @@ int main(int argc, char** argv) {
               "dynamic bass: subsonic HPF leaves 80Hz untouched (<1dB)");
     }
 
-    // 6l) **M15 阶段 2：分频重构透明性**（2026-11-11）
+    // 6l) **阶段 2：分频重构透明性**
     //     这是「只提升低音、不影响其他频段」的**技术保证**：
     //     信号被 LR4 分成低频带/高频带，只对低频带乘增益再相加。
     //     由于 LR4 的 lp4 与 hp4 相位一致、相加平坦，改动 lo 不会波及 hi。
@@ -966,7 +966,7 @@ int main(int argc, char** argv) {
             db.Prepare(kSampleRate, kMaxFrames);
             db.SetBypass(false);
             db.SetParam(DynamicBassNode::kParamSubsonicHz, 0.0f);   // 只测分频
-            // **隔离动态增强与保护**（2026-11-11）：否则稳态下 boost 恰好为 0、
+            // **隔离动态增强与保护**：否则稳态下 boost 恰好为 0、
             // 而保护会把 30Hz 压掉 4.6dB，让"分频透明性"测出莫名其妙的负数。
             // 这两个模块各由 6m / 6n 负责，本条只验重构本身。
             db.SetParam(DynamicBassNode::kParamBoostDepth, 0.0f);
@@ -1018,7 +1018,7 @@ int main(int argc, char** argv) {
               "dynamic bass split: 200Hz near crossover still flat (<0.5dB)");
     }
 
-    // 6m) **M15 阶段 3：动态低频增强方向性**（2026-11-11）
+    // 6m) **阶段 3：动态低频增强方向性**
     //     必须用**瞬态**验，不能用稳态正弦 ——
     //     稳态时 env 与 ref 都收敛到信号峰值（rel→1），boost 恒为 0，
     //     那是设计意图（持续大电平不该再提），但会让"稳态测试"误判为没实现。
@@ -1086,7 +1086,7 @@ int main(int argc, char** argv) {
               "dynamic bass: amount scales the boost (0.5 gives clearly less than 1.0)");
     }
 
-    // 6n) **M15 阶段 4：低频保护限幅**（2026-11-11）
+    // 6n) **阶段 4：低频保护限幅**
     //     验证四件事：① 超阈值被压到天花板附近；② 关掉时完全透明；
     //     ③ 低于阈值不介入；④ **只作用于低频带**，1kHz 不受影响。
     //     第 ④ 条是"不影响其他频段"承诺在保护模块上的延续。
@@ -1152,7 +1152,7 @@ int main(int argc, char** argv) {
               "dynamic bass: protect leaves 1kHz untouched (low-band only)");
     }
 
-    // 6o) **M15 虚拟低音（心理声学扩展）**（2026-11-11）
+    // 6o) **虚拟低音（心理声学扩展）**
     //     三条断言对应三个必须成立的特性：
     //       ① amount=0 完全透明（可当旁路用）
     //       ② 60Hz 基频确实生成 120Hz 二次谐波（核心功能）
@@ -1275,7 +1275,7 @@ int main(int argc, char** argv) {
         const double ratio = 20.0 * std::log10((b800 + 1e-12) / (b400 + 1e-12));
         std::printf("    INFO virtual_bass: 400Hz in -> 400Hz=%.5f  800Hz=%.5f (%.1fdB)\n",
                     b400, b800, ratio);
-        // 阈值 0.02 → 0.003（2026-11-12）：对齐 yuanma 后 mid_gain 默认 0.08
+        // 阈值 0.02 → 0.003：对齐 yuanma 后 mid_gain 默认 0.08
         // （旧版 0.5），中频直通被刻意压低以突出谐波 —— 这是设计不是缺陷。
         // 0.003 仍能区分"中频通道开着"和"通道断了"（后者 -inf）。
         Check(b400 > 0.003,
@@ -1284,7 +1284,7 @@ int main(int argc, char** argv) {
               "virtual bass: no phantom harmonic for out-of-band tone (<-40dB)");
     }
 
-    // 6p) **低音增强（M/S + EQ + 瞬态 + 次谐波，设备无关）**（2026-11-11）
+    // 6p) **低音增强（M/S + EQ + 瞬态 + 次谐波，设备无关）**
     //     移植自 wecho `BassEffect`。四条断言：
     //       ① 三个参数全 0 时接近透明（只切除 <20Hz、S 支路高通 120Hz 的痕迹）
     //       ② 60Hz 确实被抬起来（EQ 生效）
@@ -1355,7 +1355,7 @@ int main(int argc, char** argv) {
         runTo(60.0f, 0.5f, 1.0f, 0.0f, 0.0f, &boost60, nullptr);
         const double g60 = 20.0 * std::log10((rms(boost60) + 1e-12) / (rms(base60) + 1e-12));
         std::printf("    INFO bass_enhance: 60Hz amount 0->1 : %.2fdB\n", g60);
-        // 判据 3.0 → **2.0**（2026-11-11）：实测 2.24dB，这不是 bug ——
+        // 判据 3.0 → **2.0**：实测 2.24dB，这不是 bug ——
         // RBJ lowShelf 的增益是"DC 处满额、中心频率 fc 处只有一半"，
         // 所以 +6dB 的 shelf 设在 60Hz 时，60Hz 本身只得到 +3dB；
         // Peak@45Hz 在 60Hz 已回落到 ~+0.5dB。合计约 +3.5dB 的 m_low，
@@ -1816,7 +1816,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        // 7j) 黄金参照（架构保真门，M7 阶段 A 更新）：ConvolverNode 输出 vs 等效系统
+        // 7j) 黄金参照（架构保真门，阶段 A 更新）：ConvolverNode 输出 vs 等效系统
         //     的时域直接卷积独立参照。两阶段分区的等效 IR = head ir[0..H) 零延迟 +
         //     tail ir[H..L) 整体平移 H+P（u 延迟 H + 批次交付延迟 P，等效晚段混响
         //     平移 1152 帧 ≈ 24ms@48k，扩散场无感知）：
@@ -2647,7 +2647,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        // 7p) X-macro 单一定义源守卫（2026-10-24 重构）：PresetDef 表展开值逐项
+        // 7p) X-macro 单一定义源守卫：PresetDef 表展开值逐项
         //     断言。preset 参数（预延迟/低通/干声增益）是听感级且无运行期反馈，
         //     宏表误改只能靠显式断言拦截；索引稳定性另有头内 static_assert 锁定
         //     （preset 值跨进程边界：Kotlin prefs 持久化）。
@@ -2680,7 +2680,7 @@ int main(int argc, char** argv) {
                   "convolver: dry gain table complete (6 presets)");
         }
 
-        // 7r) IR 尾部裁剪 + 满载 t_eff 边界（P0-2/P1-3，2026-10-25）：
+        // 7r) IR 尾部裁剪 + 满载 t_eff 边界（/，2026-10-25）：
         //     a) 长零尾 IR（有效 1000 帧 + 零尾 29000 帧）加载后 UserIrFrames
         //        裁到 1000（-80dB 相对峰值阈值，SetIrSlot2x2 的 t_eff 随之下降）；
         //     b) 裁剪数学恒等：同内容无零尾 IR 的第二实例输出逐位一致
@@ -3712,7 +3712,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    // 9) MultibandNode（M8a）：LR4 级联分频树 + 段直通合成（频段动力学随 M8b 接入）
+    // 9) MultibandNode（M8a）：LR4 级联分频树 + 段直通合成（频段动力学随 接入）
     //    LR4 恒等式：同分频点 LP4+HP4 相位一致且 |LP+HP|=1 ∀ω → 合成不染色。
     //    9a) 步进正弦合成平坦性（全频带 <0.1dB）
     //    9b) 频段隔离：25Hz（距 fc1=200Hz 近 3 倍频程）只应出现在 Low 段（<-40dB）
@@ -4148,7 +4148,7 @@ int main(int argc, char** argv) {
             Check(exact, "multiband 9h: block-size invariance (192/2048/64 vs 128 bit-exact)");
         }
 
-        // 9i) M8f 三件套：立体声联动 / DC blocker / 段间防重新过冲
+        // 9i) 三件套：立体声联动 / DC blocker / 段间防重新过冲
         // 9i-1 联动：R=0.5·L 同源不同幅 + Low 段深压 → 增益共享下输出样本级保持
         //     2:1；独立检测时 R 包络低、增益高，2:1 必被破坏。联动生效前提=
         //     压缩确实动作（输出 RMS < 30% 输入）
@@ -4316,7 +4316,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    // ---- 10) M9 省电：空载旁路状态机 + 卷积快路径（行为回归） ----
+    // ---- 10) 省电：空载旁路状态机 + 卷积快路径（行为回归） ----
     //     10a) IdleBypass：3.9s 静音不激活 / 过 4s 门限激活 / 信号当块恢复 /
     //          -60dB 轻音量永不误判（阈值 -80dB 设计验证）
     //     10b) 干声 head δ 快路径：线性恒等（比值恒定）+ 命中计数增长；
@@ -4433,7 +4433,7 @@ int main(int argc, char** argv) {
         const double r1c = std::sqrt(rms1c / static_cast<double>(n1c));
         std::printf("    INFO 10c: rms(wet=0)=%.4f rms(wet=1)=%.4f ratio=%.2f\n",
                     r0c, r1c, r1c / (r0c + 1e-9));
-        // 阈值 1.05 → **1.02**（2026-11-11）：实测 ratio=1.04，长期假红灯。
+        // 阈值 1.05 → **1.02**：实测 ratio=1.04，长期假红灯。
         // 为什么只有 4%：该 preset 的 dry_gain=0.75，干声占绝对主导
         // （0.2/√2 × 0.75 = 0.1061，与实测 rms(wet=0) 完全吻合），
         // 混响是归一化后的叠加能量，不可能把总 RMS 拉高 5% 以上。

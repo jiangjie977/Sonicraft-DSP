@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 低频管家效果器 —— 专业基准测量工具（2026-11-11）
+ * 低频管家效果器 —— 专业基准测量工具
  *
  * 与 `host-harness` 的区别：
  *   harness 验「功能对不对」（断言 pass/fail）；
@@ -83,7 +83,7 @@ double ampAt(const std::vector<float>& x, double freq) {
     s1 = s0;
   }
   const double p = s1 * s1 + s2 * s2 - coeff * s1 * s2;
-  // **×2 是必须的**（2026-11-11 修正）：标准 Goertzel 对 N 点输入的
+  // **×2 是必须的**：标准 Goertzel 对 N 点输入的
   // `sqrt(p)` 量级是 `A·N/2`，除以 N 只得到 `A/2`。
   // 少乘这个 2 会让 THD+N 算成「剩余能量占 87%」（-1.2dB）—— 明显不可能。
   return 2.0 * std::sqrt(std::max(0.0, p)) / static_cast<double>(x.size());
@@ -162,7 +162,7 @@ NodePtr makeVirtual() {
   n->set_channel_count(kCh);
   n->Prepare(kSr, kFrames);
   n->SetBypass(false);
-  // 2026-11-12：测量口径对齐 `wecho yuanma` 默认值（与真机默认一致）。
+  // 测量口径对齐 `wecho yuanma` 默认值（与真机默认一致）。
   // 旧版这里用「全参数拉满」(1.3/0.5/0.5/40)，bench 数据与实际听感对不上。
   n->SetParam(sonicraft::dsp::VirtualBassNode::kParamAmount, 1.0f);
   n->SetParam(sonicraft::dsp::VirtualBassNode::kParamHarmonic, 1.0f);
@@ -225,7 +225,7 @@ void doDistortion() {
       const double thd = 100.0 * std::sqrt(sq) / (h1 + 1e-12);
       // THD+N 定义：**相对总输出**的剩余能量（扣除基频后的失真+噪声）
       //   THD+N = 20log10( sqrt(total² − fund²) / total )
-      // 2026-11-11 修正：原先写成「剩余 / 基频」，在本工具里因为各效果器有增益
+      // 修正：原先写成「剩余 / 基频」，在本工具里因为各效果器有增益
       // （total > fund），会算出**正 dB**（+4.8dB），物理上不可能。
       const double r = rms(t.out);
       const double fundRms = h1 / std::sqrt(2.0);
@@ -301,7 +301,7 @@ void doDynamics() {
 }
 
 /** 测 IMD（60+700Hz SMPTE 风格）与 500Hz 频响，用于 L3 根因定位 */
-/** 经典模式 Q 旋钮功能验证（2026-11-12） */
+/** 经典模式 Q 旋钮功能验证 */
 void doDiagClassicQ() {
   using sonicraft::dsp::BassEnhanceNode;
 

@@ -14,7 +14,7 @@ inline constexpr float kBiquadPi = 3.141592653589793f;
 /**
  * RBJ cookbook 二阶滤波器，带**块内系数线性 ramp**。
  *
- * 2026-11-11 从 `MultibandNode` 的私有内部结构抽取，供 M15 动态低音复用。
+ * 从 `MultibandNode` 的私有内部结构抽取，供 动态低音复用。
  *
  * 为什么需要 ramp：滤波器系数突变会让状态变量（x1/x2/y1/y2）与新系数不匹配，
  * 产生"咔"声。做法是本块开始时算出目标系数 → 逐样本线性逼近 →
@@ -22,7 +22,7 @@ inline constexpr float kBiquadPi = 3.141592653589793f;
  *
  * **迁移说明（技术债）**：`multiband.hpp` 目前仍保留同名的内部实现，
  * 两份并存是为了避免本次改动波及多段压限（它是 harness 覆盖最厚的模块之一）。
- * 待 M15 落地后单独做一次迁移提交，把 multiband 切到本文件。
+ * 待 落地后单独做一次迁移提交，把 multiband 切到本文件。
  */
 struct Biquad {
   float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f;        // 当前系数

@@ -20,7 +20,7 @@
 namespace sonicraft::dsp {
 
 /**
- * IR 卷积混响（M4c → M7 阶段 B：2×2 交叉矩阵分区卷积，路线图 §7.2 v2）。
+ * IR 卷积混响（→ 阶段 B：2×2 交叉矩阵分区卷积，路线图 v2）。
  *
  * 等效系统（黄金参照 7o 据此定义；2×2 交叉矩阵，路径索引 = in*2+out）：
  *   y_out[n] = head 贡献 + tail 贡献，out ∈ {L,R}
@@ -132,7 +132,7 @@ class ConvolverNode : public DspNode {
   static constexpr PresetDef kPresetDefs[kPresetCount] = {
       SONICRAFT_CONV_PRESETS(SONICRAFT_CONV_PRESET_DEF)};
 #undef SONICRAFT_CONV_PRESET_DEF
-  // IR 上限 7680 采样（160ms@48k）。M4c 后台双声排查结论：N=16384 全频域时后台
+  // IR 上限 7680 采样（160ms@48k）。后台双声排查结论：N=16384 全频域时后台
   // CPU 降频下单块峰值 3.8ms 逼近 4ms 回调周期 → AAudio xRun（双声）。阶段 A 分区
   // 化后单块成本降 ~5×。2026-10-24 提升 7680→32768（~680ms）再→131072（2731ms，
   // B1 教堂完整长尾）：tail 分区 T 32→128（X_cache ~2MB、tail_spec ~50MB 全 preset
@@ -200,7 +200,7 @@ class ConvolverNode : public DspNode {
     current_wet_ = 1.0f;
     target_dry_ = 1.0f;
     current_dry_ = 1.0f;
-    // 干声查表基准：随预设切换 30ms 斜坡（P1-1，2026-10-25）。首次切换直跳
+    // 干声查表基准：随预设切换 30ms 斜坡（，2026-10-25）。首次切换直跳
     // （dry_base_live_ 尚 false，无历史可平滑，且黄金参照 7j/7o 从第 0 块比对
     // ——直跳保证初始切换路径与旧版逐位一致）；之后运行中切换才走斜坡。
     current_dry_base_ = kDryGain[current_preset_];
@@ -349,7 +349,7 @@ class ConvolverNode : public DspNode {
     if (batch_half_ != 0) ComputeBatchHalf(batch_k_, 1);
 
     // 2) 输出 = head（时域直接卷积，零延迟） + tail（槽 n 存 y_t[n-P]，读槽 n）。
-    //    M9 省电快路径 A（2026-10-27）：湿电平斜坡收敛到 0 后，输出恒为
+    // 省电快路径 A：湿电平斜坡收敛到 0 后，输出恒为
     //    SoftClip(dry_g·x)——head MAC、tail 读、湿路低切贡献全乘 0，白算。
     //    只省计算、不动状态：1)/1.5)/3) 段照常推进（X_cache/tail_out 槽相位
     //    与 g_in_ 严格耦合，冻结批次会在恢复 wet 时读槽错位——参考 b70557a
@@ -411,7 +411,7 @@ class ConvolverNode : public DspNode {
                    ? std::sqrt(wet_acc_ / (2.0f * static_cast<float>(frames)))
                    : 0.0f;
 
-    // ==== wet 哨兵（2026-11-08）====
+    // ==== wet 哨兵====
     // 现象：卷积混响运行十几分钟后失效，其他节点（PEQ/多段/宽度/限幅）全部正常，
     // 重建引擎立刻恢复 → 判断是脏数据（xRun 丢块等扰动）进了分区卷积状态后，
     // NaN/denormal 永久驻留，导致湿声恒零、干声照常（用户感知为「混响没了」）。
@@ -453,7 +453,7 @@ class ConvolverNode : public DspNode {
 
   void SetBypass(bool bypass) override {
     bypass_ = bypass;
-    // 诊断修正（2026-11-06）：bypass 时 Process 不再被调用，wet_rms_ 会停留在
+    // 诊断修正：bypass 时 Process 不再被调用，wet_rms_ 会停留在
     // 最后一次的值 → 探针会显示"有湿声"的假象（曾据此误判卷积在工作）。
     // 这里在切换旁路时清零，保证「bypass ⇒ cvWet=0」语义明确。
     if (bypass) {
@@ -463,7 +463,7 @@ class ConvolverNode : public DspNode {
   }
   bool Bypassed() const override { return bypass_; }
 
-  // M9 省电快路径诊断计数（harness 10b/10c 断言旁路生效；atomic 免实时/诊断
+  // 省电快路径诊断计数（harness 10b/10c 断言旁路生效；atomic 免实时/诊断
   // 线程竞态）。干声 head δ 直赋 / 湿零快路径各自命中的块数。
   long long DryFastBlocks() const {
     return dry_fast_blocks_.load(std::memory_order_relaxed);
@@ -472,11 +472,11 @@ class ConvolverNode : public DspNode {
     return wet_fast_blocks_.load(std::memory_order_relaxed);
   }
 
-  // 诊断访问器（2026-11-06）：供引擎把三值写进水印日志
+  // 诊断访问器：供引擎把三值写进水印日志
   int DiagnPrepareCount() const { return prepare_count_; }
   int DiagnPreset() const { return current_preset_; }   // 0=Dry（无混响）
   float DiagnWetRms() const { return wet_rms_; }
-  /** wet 哨兵累计触发次数（2026-11-08）：>0 表示曾捕获到「湿声状态坏死」并自愈过 */
+  /** wet 哨兵累计触发次数：>0 表示曾捕获到「湿声状态坏死」并自愈过 */
   int DiagnWetSentinelResets() const { return wet_sentinel_resets_; }
 
   void SetParam(int param_id, float value) override {
@@ -571,7 +571,7 @@ class ConvolverNode : public DspNode {
       }
       ir_buf[q] = std::move(resampled);
     }
-    // 湿尾裁剪（P0-2，2026-10-25）：相对 4 路径全局峰值 -80dB 阈值，取最晚
+    // 湿尾裁剪（，2026-10-25）：相对 4 路径全局峰值 -80dB 阈值，取最晚
     // 有效样本位置统一截断（保持矩阵时间对齐，非逐路径独立）。其后恒零
     // 分区被 SetIrSlot2x2 的 t_eff 排除 → 长零尾 IR 的批次负载直接下降。
     // -80dB 深于 16bit 底噪（-96dB）之下的可闻下限，误裁可闻内容概率可
@@ -610,12 +610,12 @@ class ConvolverNode : public DspNode {
       }
     }
     // 病态前置自动对齐（方案 A，2026-10-26；口径 2026-10-27 段级化；范围
-    // 2026-10-27 扩大全覆盖）：前置静音 >30ms（Haas 融合区外）→ 四路径统一
+    // 扩大全覆盖）：前置静音 >30ms（Haas 融合区外）→ 四路径统一
     // 裁掉公共静音前缀，湿声不再迟到，干湿对齐，双声消除；噪声底一并裁掉
     // （HIFI最终版2 -61dB / super sound人声 -62dB 实证）。设计型纯零预延迟
     // （≤-96dB）不再豁免——用户决策：检测到病态一律校正（延迟设计意图的
     // 场景用设置开关整体关闭，7y-b 守卫）。
-    // 2026-10-27 SRS_2_2 教训：深静音残留段（RMS -64.7dB）中的孤立
+    // SRS_2_2 教训：深静音残留段（RMS -64.7dB）中的孤立
     // 毛刺样本会顶穿逐样本瞬时门，把 186ms 主体迟到误判成 1.1ms 前置而不裁
     // → 起点判定改 2ms 窗 RMS 段级门（与主脉冲包络同窗同实现，7y-c 守卫）。
     // 只裁内存副本，pulse/ 原文件不动；SetTrimSickHead(false) 整体关闭
@@ -720,7 +720,7 @@ class ConvolverNode : public DspNode {
         }
       }
       float g_side[2], peak_side[2] = {0.0f, 0.0f};
-      // NaN 防线语义（2026-10-26）：side_energy 混入 NaN 时比较恒 false →
+      // NaN 防线语义：side_energy 混入 NaN 时比较恒 false →
       // g=0（静音该侧）而非传播 NaN 炸整条链——是「最后防线」不是清洗点；
       // 数值垃圾应在 wav_loader 读入时置零（否则单声道脏样本 = 整侧湿声
       // 冤案静音，HIFI最终版2.irs 实测踩中）。本门只兜「上游漏网」。
@@ -992,7 +992,7 @@ class ConvolverNode : public DspNode {
    * 也不破音。连续无导数跳变，不产生削波毛刺。
    */
   static float SoftClip(float x) {
-    // denormal（次正规数）清除（2026-11-08）：长尾卷积衰减到 1e-30 量级后会落入
+    // denormal（次正规数）清除：长尾卷积衰减到 1e-30 量级后会落入
     // 次正规数区间，ARM 上这类数值的运算可能慢 10~100 倍 → 偶发单帧耗时尖峰，
     // 音频表现为「滋啦」。教堂尾巴最长（2.5s）、最容易吃到这个。
     // 用 `!(|x| > 阈值)` 而非 `<`，同时覆盖 0 与 NaN（NaN 比较恒 false）。
@@ -1036,7 +1036,7 @@ class ConvolverNode : public DspNode {
     const float tau_mid = 1.2f * static_cast<float>(sr);   // 样本
     const float tau_high = 0.35f * static_cast<float>(sr);
 
-    // **级联互补**分频（2026-11-08 修正）。
+    // **级联互补**分频。
     //
     // 曾经踩过的坑：直接对 v 做二阶低通再用 `v - lp2b` 当高通 —— lp2b 相位滞后
     // 约 90°，相减时低频并没有被抵消掉（反而在低频处产生凹陷），于是低频漏进
@@ -1074,7 +1074,7 @@ class ConvolverNode : public DspNode {
       if (a > new_peak) new_peak = a;
     }
 
-    // 归一化必须**同时**约束能量与峰值（2026-11-08 修复）。
+    // 归一化必须**同时**约束能量与峰值。
     // 只对总能量归一化时，被削掉的高频能量会全部堆到低频 —— 低频峰值因子本来就高，
     // 结果峰值反而从 0.58 涨到 0.88（实测，真实音乐卷积），叠加干声后逼近满刻度，
     // 对低频响应差的手机扬声器就是直接的破音（用户实测「切扬声器更严重」）。
@@ -1165,11 +1165,11 @@ class ConvolverNode : public DspNode {
 #undef SONICRAFT_CONV_PRESET_DRY
   float target_wet_ = 1.0f;
   float current_wet_ = 1.0f;
-  // M9 省电快路径命中计数（Process 写/诊断读，relaxed 足够）
+  // 省电快路径命中计数（Process 写/诊断读，relaxed 足够）
   std::atomic<long long> dry_fast_blocks_{0};  // 干声 head δ 直赋命中块数
   std::atomic<long long> wet_fast_blocks_{0};  // 湿零快路径命中块数
 
-  // ==== 诊断探针（2026-11-06）====
+  // ==== 诊断探针====
   // 目的：区分「混响消失」的两类根因
   //   ① prepare_count_ 增长且预设回到 Dry → 图被重建、Prepare 重置了预设（治本=重建后补发参数）
   //   ② 预设正常但 wet_rms_ 恒 0 → 卷积状态坏死（NaN/denormal，治本=wet 哨兵）
@@ -1178,7 +1178,7 @@ class ConvolverNode : public DspNode {
   float wet_rms_ = 0.0f;       // 最近一块湿声 RMS（0 = 无湿声输出）
   float wet_acc_ = 0.0f;       // 块内湿声能量累加（临时）
 
-  // ==== wet 哨兵（2026-11-08）====
+  // ==== wet 哨兵====
   // 「预设正常但湿声恒零 + 干声有电平」连续这么多个块就 Reset 一次。
   // 200 块 × 192 帧 / 48k ≈ 0.8 秒：足够区分真正的状态坏死与正常的淡入淡出。
   static constexpr int kWetDeadResetBlocks = 200;

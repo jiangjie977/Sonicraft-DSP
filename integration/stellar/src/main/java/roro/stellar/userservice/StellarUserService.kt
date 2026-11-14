@@ -83,7 +83,7 @@ object StellarUserService {
             Log.i(TAG, "token=$token")
             record.token = token
         } catch (e: SecurityException) {
-            // 2026-11-08 修「重装后无限崩溃」：Binder 权限拒绝抛的是 SecurityException
+            // 修「重装后无限崩溃」：Binder 权限拒绝抛的是 SecurityException
             // （RuntimeException），不是 RemoteException，原来直接逃逸到主线程 →
             // autoStartCaptureIfNeeded 崩溃 → Activity 重启 → 再探测 → 崩溃循环（每 2~3s 一个
             // crash_java 文件）。典型场景：Stellar 服务在跑但本应用未获授权。

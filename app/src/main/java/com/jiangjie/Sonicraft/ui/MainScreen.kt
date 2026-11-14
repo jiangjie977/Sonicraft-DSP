@@ -215,7 +215,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     // 失败则自动发起系统 consent（本机体验无感），全流程仅尝试一次
     var autoStartAttempted by remember { mutableStateOf(false) }
     LaunchedEffect(engineState) {
-        // 2026-11-05：不再要求 engineState 必须是 Idle —— 服务被杀后引擎状态可能
+        // 不再要求 engineState 必须是 Idle —— 服务被杀后引擎状态可能
         // 残留为 Running，那样自动启动永远不会触发（App 启动后一直没音效）。
         // 是否需要真正建链交给 autoStartCaptureIfNeeded() 内部判断。
         if (!autoStartAttempted) {
@@ -243,7 +243,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     }
 
     /**
-     * 统一启动入口（2026-11-05）：按 audio_mode 分派。
+     * 统一启动入口：按 audio_mode 分派。
      * 电源键 / 设备卡 / 重新授权 / 自动启动 都必须走这里，否则会出现
      * 「默认 loopback 但点电源键却拉 MP」的分裂行为。
      */
@@ -273,14 +273,14 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     var eqOpen by remember { mutableStateOf(false) }
     var bandOpen by remember { mutableStateOf(false) }
     var widthOpen by remember { mutableStateOf(false) }
-    // 混响组详情（2026-11-11）：卷积混响与算法混响合并到同一页，共用一个开合状态
+    // 混响组详情：卷积混响与算法混响合并到同一页，共用一个开合状态
     var reverbOpen by remember { mutableStateOf(false) }
     var limiterOpen by remember { mutableStateOf(false) }
-    // M15 动态低音（2026-11-11）：替代原来的「低频增强（规划中）」占位卡
+    // 动态低音：替代原来的「低频增强（规划中）」占位卡
     var dynBassOpen by remember { mutableStateOf(false) }
-    // 机架（2026-11-13）：脚本机架从设置页迁入音效库，独立详情页
+    // 机架：脚本机架从设置页迁入音效库，独立详情页
     var rackOpen by remember { mutableStateOf(false) }
-    // 脚本编辑器整页（2026-11-13）
+    // 脚本编辑器整页
     var scriptEditorOpen by remember { mutableStateOf(false) }
     // 打开编辑器时是否从空白开始（用户手写新脚本）
     var scriptEditorBlank by remember { mutableStateOf(false) }
@@ -317,16 +317,16 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             val eqEnabled by viewModel.eqEnabled.collectAsStateWithLifecycle()
-            // multibandEnabled 的 collect 已移除（2026-11-11）：压限器页头不再有开关，
+            // multibandEnabled 的 collect 已移除：压限器页头不再有开关，
             // 总开关下沉到「多段压限」卡片内、由 ScBandDetailContent 自己 collect。
             // 主页卡片那份仍保留（L666 附近），那边要靠它显示开关状态。
             val stereoWidthEnabled by viewModel.stereoWidthEnabled.collectAsStateWithLifecycle()
     // 低频管家的两张槽卡各自 collect 自己的开关（见 ScLowfreqGroupDetail），
     // 路由层不再需要 dynamicBassEnabled。
-    // 混响组总闸（2026-11-11）：音效库「混响」卡片的开关
+    // 混响组总闸：音效库「混响」卡片的开关
     val reverbSectionEnabled by viewModel.reverbSectionEnabled.collectAsStateWithLifecycle()
             val limiterEnabled by viewModel.limiterEnabled.collectAsStateWithLifecycle()
-            // 机架总闸（2026-11-13）：按草图放到详情页页头
+            // 机架总闸：按草图放到详情页页头
             val scriptEnabled by viewModel.scriptEffectEnabled.collectAsStateWithLifecycle()
             when {
                 eqOpen -> ScEffectDetailPage(
@@ -337,7 +337,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                     onBack = { eqOpen = false },
                 ) { ScEqDetailContent(viewModel) }
                 bandOpen -> ScEffectDetailPage(
-                    // 2026-11-11 用户要求：页头标题「多频段压限」→「压限器」；
+                    // 用户要求：页头标题「多频段压限」→「压限器」；
                     // 页头开关**下沉到「多段压限」卡片内**（与单段压缩器的开关同一层级，
                     // 两个开关并列在各自的卡片上，语义更直白）。
                     // 因此这里不再传 enabled / onEnabledChange —— 页头不渲染开关。
@@ -359,7 +359,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                     onEnabledChange = viewModel::setLimiterEnabled,
                     onBack = { limiterOpen = false },
                 ) { ScLimiterDetailContent(viewModel) }
-                // 低频管家（2026-11-11）：原「动态低音」页升级为**效果组**，
+                // 低频管家：原「动态低音」页升级为**效果组**，
                 // 内含 动态低音（耳机）+ 虚拟低音（外放）两张槽卡，互斥。
                 // 页头**不再有总开关** —— 总闸在音效库卡片上，与压限器/混响一致。
                 dynBassOpen -> ScEffectDetailPage(
@@ -367,7 +367,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                     subtitle = "三种低频方案 · 可叠加",
                     onBack = { dynBassOpen = false },
                 ) { ScLowfreqGroupDetail(viewModel) }
-                // 机架（2026-11-13）：脚本机架从设置页迁来这里，页头不放开关
+                // 机架：脚本机架从设置页迁来这里，页头不放开关
                 // （总闸在音效库「机架」卡片上，与压限器/混响一致）
                 rackOpen -> ScEffectDetailPage(
                     title = "机架",
@@ -388,7 +388,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         },
                     )
                 }
-                // 混响组（2026-11-11）：卷积 + 算法两张槽卡在同一页，
+                // 混响组：卷积 + 算法两张槽卡在同一页，
                 // 页头不放开关（与压限器一致）—— 总闸在音效库的「混响」卡片上
                 else -> ScEffectDetailPage(
                     title = "混响",
@@ -426,7 +426,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val totalScale = (autoScale * uiScale * uiFineScale).coerceIn(0.68f, 1.69f)
     ScUiScaleLayer(totalScale = totalScale) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            // 2026-11-08 横屏修复：原固定 560dp 上限只考虑了平板/折叠屏，没考虑**手机横屏**——
+            // 横屏修复：原固定 560dp 上限只考虑了平板/折叠屏，没考虑**手机横屏**——
             // 本机横屏 973dp 宽被压到 57%，两侧各留 200dp+ 空白（真机截图实证）。
             // 横屏放宽到 840dp：既不让内容被压窄，也不至于在大屏上无限拉伸。
             val contentWidth = minOf(maxWidth, if (maxWidth > maxHeight) 840.dp else 560.dp)
@@ -459,7 +459,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         color = ScColors.TextMain,
                     )
                     Text(
-                        // 副标题与实际内容对齐（2026-11-09）：
+                        // 副标题与实际内容对齐：
                         // "我的"页原写「设备 · 引擎健康 · 设置」——但那两张卡早已迁到音效库顶部，
                         // 页面里实际是设置/隐私/Capture/诊断；首页那个用了半角句点，与其它两页
                         // 的「·」分隔符不一致，一并统一。
@@ -560,7 +560,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             //      用户有歧义，2026-11-02 指示去掉）。系统终止后即普通 Idle 态，用户点电源键
             //      重新开启即可；systemKilledUnacked 标记与服务端检测逻辑保留不动。----
 
-            // ---- Loopback 不可用 → 告知原因并可切换平替模式（2026-11-05）----
+            // ---- Loopback 不可用 → 告知原因并可切换平替模式----
             // 不做运行期热回退（会打断播放）；只在首次探测失败时弹一次，由用户确认
             val lbUnsupported by viewModel.loopbackUnsupported.collectAsStateWithLifecycle()
             lbUnsupported?.let { msg ->
@@ -613,7 +613,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 val obs = LifecycleEventObserver { _, event ->
                     if (event == Lifecycle.Event.ON_RESUME) {
                         viewModel.refreshBatteryState()
-                        // 2026-11-08：从 Stellar 授权页切回来时 binder 未重连，
+                        // 从 Stellar 授权页切回来时 binder 未重连，
                         // 不主动重检的话「Stellar 待授权」胶囊会一直不变
                         viewModel.refreshPrivilege()
                     }
@@ -699,24 +699,24 @@ private fun P1LibrarySection(
     val bassGain by viewModel.bassGain.collectAsStateWithLifecycle()
     val trebleGain by viewModel.trebleGain.collectAsStateWithLifecycle()
     val limiterEnabled by viewModel.limiterEnabled.collectAsStateWithLifecycle()
-    // reverbPreset / activeRecentIrName 的 collect 已删除（2026-11-11）：
+    // reverbPreset / activeRecentIrName 的 collect 已删除：
     // 「混响」卡副标题从「卷积 + 算法 · 自定义 IR」压到「卷积 + 算法」，
     // 半宽卡放不下 IR 名字；这些信息在详情页里本来就有。
-    // 混响组总闸（2026-11-11）：音效库「混响」卡片的开关
+    // 混响组总闸：音效库「混响」卡片的开关
     val reverbSectionEnabled by viewModel.reverbSectionEnabled.collectAsStateWithLifecycle()
     // U7：fdn*/stereoWidth/compressorThreshold/Ratio/multibandParams 已迁各自详情页组件内收集
     val inputGain by viewModel.inputGain.collectAsStateWithLifecycle()
     val balance by viewModel.balance.collectAsStateWithLifecycle()
     val outputGain by viewModel.outputGain.collectAsStateWithLifecycle()
     val stereoWidthEnabled by viewModel.stereoWidthEnabled.collectAsStateWithLifecycle()
-    // 低频管家总闸（2026-11-11）：音效库卡片的开关。
+    // 低频管家总闸：音效库卡片的开关。
     // 关 = 动态低音与虚拟低音同时旁通，两张槽卡记忆不动。
     val lowfreqSectionEnabled by viewModel.lowfreqSectionEnabled.collectAsStateWithLifecycle()
-    // 机架总闸（2026-11-13）：音效库「机架」卡片的开关
+    // 机架总闸：音效库「机架」卡片的开关
     val scriptEnabled by viewModel.scriptEffectEnabled.collectAsStateWithLifecycle()
     val compressorEnabled by viewModel.compressorEnabled.collectAsStateWithLifecycle()
     val multibandEnabled by viewModel.multibandEnabled.collectAsStateWithLifecycle()
-    // 压限器总闸（2026-11-11）：卡片开关绑它。关 = 多段与单段整体旁通，
+    // 压限器总闸：卡片开关绑它。关 = 多段与单段整体旁通，
     // 详情页两张卡联动显示为关并置灰；再开时各自回到原状态。
     val sectionEnabled by viewModel.compressorSectionEnabled.collectAsStateWithLifecycle()
     val stats by viewModel.stats.collectAsStateWithLifecycle()
@@ -726,7 +726,7 @@ private fun P1LibrarySection(
 
         // ---- U8 增益与平衡（用户手绘稿：三拟物旋钮横排，置于引擎运行卡正下方） ----
         ScCard(modifier = Modifier.fillMaxWidth()) {
-            // 响应式（2026-11-07）：三旋钮原为固定 104dp + 24dp 间距，共需 380dp；
+            // 响应式：三旋钮原为固定 104dp + 24dp 间距，共需 380dp；
             // 窄屏（360dp 级）会把最后一个旋钮挤成 1 字宽 → 「声道平衡」竖排。
             // 按可用宽度反算旋钮尺寸与间距，本机宽度足够时仍为 104dp（外观零变化）。
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -748,9 +748,9 @@ private fun P1LibrarySection(
                     sizeDp = knobSize,
                     textScale = 0.6f,
                     format = { "%.2f×".format(it) },
-                    // 2026-11-08：>1.0 即为正增益，叠加链路易逼近满刻度 → 过载视觉预警
+                    // >1.0 即为正增益，叠加链路易逼近满刻度 → 过载视觉预警
                     overloadFrom = 1.0f,
-                    // 双击归位到 0dB（2026-11-08）
+                    // 双击归位到 0dB
                     resetValue = 1.0f,
                     onValueChange = viewModel::setInputGain,
                 )
@@ -762,11 +762,11 @@ private fun P1LibrarySection(
                     sizeDp = knobSize,
                     textScale = 0.6f,
                     format = { "%.2f×".format(it) },
-                    // 2026-11-08：阈值取 +2dB（10^(2/20) ≈ 1.259）。
+                    // 阈值取 +2dB（10^(2/20) ≈ 1.259）。
                     // 输出级小幅正增益属正常操作（补偿录音偏小的曲目），到 +2dB 才提示，
                     // 避免 1.0x 刚往上一点就亮红框、把正常调整也标成问题。
                     overloadFrom = 1.259f,
-                    // 双击归位到 0dB（2026-11-08）
+                    // 双击归位到 0dB
                     resetValue = 1.0f,
                     onValueChange = viewModel::setOutputGain,
                 )
@@ -812,7 +812,7 @@ private fun P1LibrarySection(
         }
 
         // U4：效果预设按钮行退役——场景组合卡（P4 收藏屏）承载「内置+自定义快照+保存当前」
-        // ---- M4a 音效：参量均衡器 ----
+        // ---- 音效：参量均衡器 ----
         Text(text = "音效", style = MaterialTheme.typography.titleSmall)
         // （U9l：U6 信号链条退役——效果启停状态各卡片开关已表达，单帧耗时首卡健康格已有）
         // ---- U8k 布局重排：卷积混响全宽一行，其余效果卡两两并排，卡高统一 ----
@@ -865,7 +865,7 @@ private fun P1LibrarySection(
         }
         // ---- U8k：低频增强+限幅器并排（U7b 的限幅器全宽形态退役） ----
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            // 2026-11-11：从「动态低音」升级为**低频管家**效果组 ——
+            // 从「动态低音」升级为**低频管家**效果组 ——
             // 内含动态低音（耳机）+ 虚拟低音（外放）两张槽卡，开关是**总闸**。
             ScEffectCard(
                 title = "低频管家",
@@ -886,7 +886,7 @@ private fun P1LibrarySection(
                 modifier = Modifier.weight(1f),
             )
         }
-        // 机架（2026-11-13）：脚本机架自设置页迁来，全宽卡片；开关为整机总闸
+        // 机架：脚本机架自设置页迁来，全宽卡片；开关为整机总闸
         ScEffectCard(
             title = "机架",
             subtitle = "脚本槽位 ×3 · SCVM 引擎",

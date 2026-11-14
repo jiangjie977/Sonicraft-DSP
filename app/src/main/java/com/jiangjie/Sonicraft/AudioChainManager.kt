@@ -28,7 +28,7 @@ import javax.inject.Singleton
 import kotlin.coroutines.resume
 
 /**
- * 进程级音频链路管理器（2026-11-07 重构）。
+ * 进程级音频链路管理器。
  *
  * 为什么需要它：原先「建链/停链/参数重放」全部长在 `MainViewModel` 里，而 ViewModel
  * 会随 Activity 销毁。这导致两个后果：
@@ -227,7 +227,7 @@ class AudioChainManager @Inject constructor(
             engine.setBypass(AudioEngine.BALANCE_NODE_INDEX, f("balance", 0f) == 0f)
             engine.setBypass(AudioEngine.OUTPUT_GAIN_NODE_INDEX, f("output_gain", 1f) == 1f)
 
-            // M15 动态低音（2026-11-11）：五个参数 + 旁路。
+            // 动态低音：五个参数 + 旁路。
             // 任何一处漏重放都会导致"重启后静默回默认"——本项目已中过两次
             // （重放只发 param 0、compressor_sidechain_hp 无写入端），所以逐个列全。
             engine.setParam(
@@ -253,7 +253,7 @@ class AudioChainManager @Inject constructor(
             // 注：动态低音/虚拟低音的 bypass 由下面的表驱动循环统一处理
             // （EffectGroups.all 遍历），这里只重放各自的**参数**。
 
-            // 低音增强（2026-11-11）：三个参数逐个列全。
+            // 低音增强：三个参数逐个列全。
             engine.setParam(
                 AudioEngine.BASS_ENHANCE_NODE_INDEX,
                 AudioEngine.BASS_ENHANCE_PARAM_AMOUNT, f("bass_enhance_amount", 0.5f),
@@ -266,10 +266,10 @@ class AudioChainManager @Inject constructor(
                 AudioEngine.BASS_ENHANCE_NODE_INDEX,
                 AudioEngine.BASS_ENHANCE_PARAM_PUNCH, f("bass_enhance_punch", 0.6f),
             )
-            // 双模式（2026-11-11）：模式 + 经典模式三个参数。
+            // 双模式：模式 + 经典模式三个参数。
             // **两套参数都要重放**（不只是当前模式那套）——否则切模式后
             // 另一套参数会回默认，用户会觉得"切回去音色变了"。
-            // **必须用 getInt 而不是 f()**（2026-11-11 修）：
+            // **必须用 getInt 而不是 f()**：
             // `bass_enhance_mode` 在 prefs 里是 Int（setBassEnhanceMode 用 putInt），
             // 而 `f()` = prefs.getFloat —— Android 对 Int 键调 getFloat 会抛
             // ClassCastException，被外层 runCatching 吞掉 →
@@ -296,7 +296,7 @@ class AudioChainManager @Inject constructor(
                 f("bass_enhance_classic_center", 60f),
             )
 
-            // 虚拟低音（2026-11-11）：五个参数逐个列全。
+            // 虚拟低音：五个参数逐个列全。
             engine.setParam(
                 AudioEngine.VIRTUAL_BASS_NODE_INDEX,
                 AudioEngine.VIRTUAL_BASS_PARAM_AMOUNT, f("virtual_bass_amount", 1.0f),
@@ -356,7 +356,7 @@ class AudioChainManager @Inject constructor(
             val scriptSrc = prefs.getString("script_effect_source", "") ?: ""
             if (scriptSrc.isNotEmpty()) engine.setScriptSource(scriptSrc)
             engine.setBypass(AudioEngine.SCRIPT_EFFECT_NODE_INDEX, !b("script_effect_enabled", false))
-            // 单段压缩器：**全参数重放**（2026-11-09 补齐）
+            // 单段压缩器：**全参数重放**
             // 原来只发了 param 0（threshold，且默认值写成 0f 应为 -20f），
             // ratio/attack/release/makeup 在重启后全部回到 node 内默认值——用户调过的
             // 压缩比会静默丢失。这里按 prefs 逐一重放六参。
@@ -384,10 +384,10 @@ class AudioChainManager @Inject constructor(
                 AudioEngine.COMPRESSOR_NODE_INDEX,
                 AudioEngine.COMPRESSOR_PARAM_MAKEUP_DB, f("compressor_makeup_db", 0f),
             )
-            // 2026-11-11 新增四项 + 侧链高通（param 6 此前也漏了重放）：
+            // 新增四项 + 侧链高通（param 6 此前也漏了重放）：
             // 这五个参数若漏重放，重启后会静默回默认。
             // 侧链高通原先更是**只有重放没有写入端**（永远读到默认 120），
-            // 2026-11-11 已补 `setCompressorSidechainHp` 与 UI 档位，此处是它的持久化读端。
+            // 已补 `setCompressorSidechainHp` 与 UI 档位，此处是它的持久化读端。
             engine.setParam(
                 AudioEngine.COMPRESSOR_NODE_INDEX,
                 AudioEngine.COMPRESSOR_PARAM_SIDECHAIN_HP_HZ, f("compressor_sidechain_hp", 120f),

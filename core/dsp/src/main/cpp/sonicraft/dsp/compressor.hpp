@@ -249,7 +249,7 @@ class CompressorNode : public DspNode {
 
   /**
    * 压缩核心：原有全部算法（检测 → 静态曲线 → 增益平滑 → 应用）。
-   * 2026-11-11 从 `Process` 拆出，以便外面套重采样外壳；
+   * 从 `Process` 拆出，以便外面套重采样外壳；
    * 它工作在**调用方给的采样率**下，不关心是否被过采样。
    */
   void CompressCore(float* const* channels, int frames) {
@@ -264,7 +264,7 @@ class CompressorNode : public DspNode {
     float in_pk = 0.0f;
     float out_pk = 0.0f;
 
-    // **逐样本外层、逐声道内层**（2026-11-09）：立体声联动要求先跨声道取检测最大值，
+    // **逐样本外层、逐声道内层**：立体声联动要求先跨声道取检测最大值，
     // 再算一次增益、应用到所有声道；原来的「逐声道外层」结构做不到这一点。
     for (int n = 0; n < frames; ++n) {
       // ① 检测：每声道先过侧链高通，再取绝对值，最后跨声道取最大
@@ -448,7 +448,7 @@ class CompressorNode : public DspNode {
 
  private:
   void recomputeRates() {
-    // **用「核心实际采样率」**（2026-11-11）：过采样时核心跑在 factor× 采样率下，
+    // **用「核心实际采样率」**：过采样时核心跑在 factor× 采样率下，
     // 若仍按原始 sr 算时间常数，同样的 attack/release 毫秒数会变成一半 —— 听觉上
     // 是「开了过采样，压缩突然变快」，属于最难查的那类 bug。
     const float sr = static_cast<float>(sample_rate_) *

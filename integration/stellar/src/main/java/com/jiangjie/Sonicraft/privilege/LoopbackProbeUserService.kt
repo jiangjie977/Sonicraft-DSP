@@ -74,7 +74,7 @@ class LoopbackProbeUserService(
         // （框架限制 ≤16kHz）。实验目的：验证「16k 特权 mix 能否把 BY_SYSTEM app
         // 重路由进 submix（=静音原声）」，音质不在乎——真要用于生产时会另起一路
         // 48k LOOP_BACK 取音频，16k 这路只负责"压原声"。
-        // ★ 实验（2026-11-05）：**16k 放首位**，验证「特权捕获能否把 BY_SYSTEM app
+        // ★ 实验：**16k 放首位**，验证「特权捕获能否把 BY_SYSTEM app
         // 重路由进我方 submix」。若成立，就能用 16k 那路只做"压原声"（音质无所谓），
         // 48k 副本另走一路 LOOP_BACK。实验后按结果把顺序改回。
         val candidates = linkedSetOf(sampleRate, 48_000, 44_100, 22_050, 16_000)
@@ -182,7 +182,7 @@ class LoopbackProbeUserService(
             // shell(2000) 持 CAPTURE_AUDIO_OUTPUT/CAPTURE_MEDIA_OUTPUT，可置该标志使该路音轨可被捕获。
             // 只在 ≤16 kHz 时才开特权捕获：框架硬限制
             // `Privileged audio capture sample rate 48000 can not be over 16000kHz`
-            // （2026-11-05 实测报错原文），开在 48k 会直接导致 AudioMix 构建失败。
+            // ，开在 48k 会直接导致 AudioMix 构建失败。
             if (sampleRate <= 16_000) {
                 runCatching {
                     val m = findMethod(
@@ -240,7 +240,7 @@ class LoopbackProbeUserService(
                 mixCls.getField("ROUTE_FLAG_RENDER").getInt(null)
             }.getOrDefault(-1)
             val combos = ArrayList<Pair<String, Int>>()
-            // 2026-11-06 对照万象源码后的关键修正：
+            // 对照万象源码后的关键修正：
             //   万象 LoopbackPolicy 的配置表是
             //     ①usage+排除+role+LOOP_BACK（默认）
             //     ⓪usage+排除+role+LOOPBACK|RENDER（**preferRender 时插到最前**）
@@ -519,7 +519,7 @@ class LoopbackProbeUserService(
             // 流入该 record，无需 addr tag。这是 NX733J 上唯一能拿到数据面的顺序。
             running = true
             readThread = Thread({
-                // P2③（2026-11-05）：采集线程必须提到音频紧急级。
+                // P2③：采集线程必须提到音频紧急级。
                 // UserService 进程里还跑着 Stellar 的 binder/管理逻辑，默认优先级下
                 // read 会被抢占 → 供数中断 → 听感「有节奏的断断续续」（underrun 实锤）。
                 runCatching {
@@ -847,7 +847,7 @@ class LoopbackProbeUserService(
         val before = runCatching { am.mode }.getOrDefault(-1)
         val out = StringBuilder("before=$before ")
         runCatching {
-            // **禁止切 MODE_IN_COMMUNICATION**（2026-11-06 实测）：该模式会让正在播放的
+            // **禁止切 MODE_IN_COMMUNICATION**：该模式会让正在播放的
             // 媒体（酷狗）失去焦点并**暂停**，导致建链时没有播放源 → 重路由无对象 →
             // 用户感知为"启动后没音效"。改用不改变播放状态的通信设备切换来触发 APM
             // 重算路由。
@@ -861,7 +861,7 @@ class LoopbackProbeUserService(
     }
 
     /**
-     * 校验 + 强制重建 track（2026-11-05）。
+     * 校验 + 强制重建 track。
      * 重路由只在 player 的 AudioTrack 晚于我方 Remote Submix 设备就绪时创建才生效，
      * 已存在的 track 不迁移 → 同版本代码时好时坏。这里用 pause/play 逼它重建。
      */
@@ -913,7 +913,7 @@ class LoopbackProbeUserService(
             }
         }
 
-        // **必须先有活跃播放器才谈得上“已重路由”**（2026-11-06 实测误报）：
+        // **必须先有活跃播放器才谈得上“已重路由”**：
         // 没有播放器时原实现直接返回 ok，导致上层误以为 reroute 成立、跳过静音，
         // 结果既没重路由也没压制 → 双声/无声。
         if (mediaPlayers().isEmpty()) {
@@ -921,7 +921,7 @@ class LoopbackProbeUserService(
         }
         if (othersRerouted()) return "ok 已重路由 port=$port"
 
-        // 实测结论（2026-11-05）：重路由只在 **track 晚于 submix 设备就绪** 时创建才生效。
+        // 实测结论：重路由只在 **track 晚于 submix 设备就绪** 时创建才生效。
         // 我们已保证 mix 先注册，所以「先起引擎、再按播放」必然重路由。
         // 只有「音乐比引擎先播」这一种情况需要逼 track 重建，而重建只能靠 pause→play；
         // 该操作必须**确认恢复播放**，否则用户会静音（实测 play 键可能被忽略）。
@@ -1198,7 +1198,7 @@ class LoopbackProbeUserService(
 
         /** 每次 read/回传的帧数（2048 帧 ≈ 21ms @48k，P2③ 平滑供给粒度） */
         // 读粒度（帧）：2048@48k ≈ 42.7ms。
-    // 2026-11-06 曾试降到 1024 以压低延迟，实测**反而更差**（waterMark 1500 → 4300~4600），
+    // 曾试降到 1024 以压低延迟，实测**反而更差**（waterMark 1500 → 4300~4600），
     // 说明该指标不是"积压延迟"而是与供给节奏强相关；无收益故回退，保持 2048。
     const val CHUNK_SAMPLES = 2048
 

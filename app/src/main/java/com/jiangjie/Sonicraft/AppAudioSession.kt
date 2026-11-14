@@ -7,7 +7,7 @@ import android.media.session.PlaybackState
 /**
  * 让系统把本 App 认定为「合法的媒体播放者」。
  *
- * 背景（2026-11-13 实测）：系统回环模式下本 App 必须常驻后台（前台留给被采集的 App），
+ * 背景：系统回环模式下本 App 必须常驻后台（前台留给被采集的 App），
  * 部分系统会对"没有播放身份的后台播放"做静音处理：
  *   `background playback would be muted for com.jiangjie.Sonicraft, level: partial`
  * 表现就是：刷下一个视频时偶发无声、切走再切回来又有声。

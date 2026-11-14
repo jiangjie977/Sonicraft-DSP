@@ -19,7 +19,7 @@ import java.io.File
 import javax.inject.Inject
 
 /**
- * 夜间保活 alarm 哨兵（2026-11-03 立项）：[KeepAliveJobService]（persisted periodic）
+ * 夜间保活 alarm 哨兵：[KeepAliveJobService]（persisted periodic）
  * 在 Doze 深睡期会被 JobScheduler defer 到维护窗口——凌晨簇整夜死的时间段恰是 job
  * 触发盲区。本哨兵用 setExactAndAllowWhileIdle 补 Doze 下的准点触发（allowWhileIdle
  * 每 15min 窗口强制放行），与 job 形成双保险：alarm 管「准点」，job 管「跨软重启」

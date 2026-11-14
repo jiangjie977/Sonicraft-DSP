@@ -57,7 +57,7 @@ void DspGraph::ProcessInterleaved(float* interleaved, int frames) {
   }
 
   // 逐节点就地处理（全部共享同一 planar 缓冲）
-  // 2026-11-06：逐节点耗时统计（诊断用，定位"单帧 5.3ms 超 4ms 预算"的大头）。
+  // 逐节点耗时统计（诊断用，定位"单帧 5.3ms 超 4ms 预算"的大头）。
   // 累加自上次 ResetNodeNanos 以来的 ns；仅在诊断线程读取，实时线程只做 ++。
   if (node_ns_.size() != nodes_.size()) node_ns_.assign(nodes_.size(), 0);
   for (std::size_t ni = 0; ni < nodes_.size(); ++ni) {

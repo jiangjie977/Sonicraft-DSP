@@ -1,4 +1,4 @@
-// M12 全效果器行业验收 harness（仿 eq-harness：MSVC 直编 native 头文件）
+// 全效果器行业验收 harness（仿 eq-harness：MSVC 直编 native 头文件）
 // 用例编号 V*：W=宽度 L=限幅 K=压缩 R=FDN B=多频段 C=卷积
 // 用法纪律：①需要参数平滑收敛的节点（width/reverb/convolver wet-dry）逐块
 // Process(kFrames)——一次长调用只走一步平滑会测出假衰减（R1 教训）；
@@ -747,7 +747,7 @@ int main() {
         report("B3 multiband crossover phase (no cancellation)", worst <= 2.0, db3);
     }
 
-    // ================= M12 补测（2026-11-06）=================
+    // ================= 补测=================
     {
         // C4: wet/dry 线性精度。
         // Dry 预设 head=δ（LL[0]=RR[0]=1）、tail 全零，故输出应为 dry_g·x + wet_g·x。

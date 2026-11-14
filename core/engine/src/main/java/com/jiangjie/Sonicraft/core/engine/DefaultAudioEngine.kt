@@ -61,7 +61,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
-     * M5（2026-11-03 审计）：native 句柄全调用点互斥。stop() 会 close+置 null——
+     * （2026-11-03 审计）：native 句柄全调用点互斥。stop() 会 close+置 null——
      * 原判空快照（`nativeEngine?.x()` 两步：读字段→调用）挡不住「读后删」竞态，
      * UAF 窗口随看门狗每 250ms 开合一次；H1 修复消除了死锁型长窗口，残余短窗口
      * 仍可 SIGSEGV。所有 native 调用（含 close/nativeEngine 写）统一经 nativeLock。
@@ -83,7 +83,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
     /** 看门狗重建连续失败计数（成功即清零；采样写诊断防刷盘） */
     private var rebuildFailStreak: Long = 0L
 
-    /** EQ 参数诊断采样计数（P1-④：每 20 条落盘 1 条，避免拖滑条主线程频密 IO） */
+    /** EQ 参数诊断采样计数（：每 20 条落盘 1 条，避免拖滑条主线程频密 IO） */
     private val eqDiagCount = java.util.concurrent.atomic.AtomicLong(0L)
 
     @Volatile
@@ -128,7 +128,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
                 SonicraftLog.w(TAG, "CaptureRelay 需通过 startCapture(projection) 启动")
             }
             EngineMode.LocalPlayer -> {
-                // M0 占位：LocalPlayer 在后续里程碑接入解码管线
+                // 占位：LocalPlayer 在后续里程碑接入解码管线
                 SonicraftLog.w(TAG, "LocalPlayer 尚未实现，暂以 Idle 处理")
             }
             null -> SonicraftLog.w(TAG, "start 被忽略：未指定模式")
@@ -202,7 +202,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
     }
 
     /**
-     * P1（2026-11-04）：用 Loopback 源替代 MediaProjection 启动引擎。
+     * P1：用 Loopback 源替代 MediaProjection 启动引擎。
      * 与 [startCapture] 的唯一差别是输入源与 projection 生命周期（此处没有 projection）。
      */
     override fun startLoopback(source: LoopbackPcmSource): Boolean {
@@ -273,7 +273,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
                             _outputStalled.value = null
                             lastProcessCount = withNative { it.stats() }?.processCount ?: lastProcessCount
                         } else {
-                            // 2026-11-03 全静音事故：重建失败此前完全静默（事故里连续
+                            // 全静音事故：重建失败此前完全静默（事故里连续
                             // 失败 22 分钟零日志零感知）。留痕 + 挂 UI 警示；自愈探针
                             // 解除系统压制（如 PLAY_AUDIO deny）后此处自动恢复。
                             rebuildFailStreak++
@@ -331,7 +331,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
                 if (now - lastWatermarkLogTs >= 10_000) {
                     lastWatermarkLogTs = now
                     runCatching {
-                        // 逐节点耗时 Top3（ns→µs），用于定位“单帧超预算”的大头（2026-11-06）
+                        // 逐节点耗时 Top3（ns→µs），用于定位“单帧超预算”的大头
                         val nodeTop = s.nodeAvgNanos.withIndex()
                             .filter { it.value > 0 }
                             .sortedByDescending { it.value }
@@ -343,7 +343,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
                                     "ondataMax=${s.ondataMaxFrames} pushDrop=${s.pushDropBlocks} " +
                                     "underrun=${s.underrunBlocks} xRun=${s.xRunBlocks} " +
                                     "idleBypass=${if (s.idleBypassActive) 1 else 0} maxNs=${s.maxProcessNanos} " +
-                                    // 卷积混响探针（2026-11-06）：
+                                    // 卷积混响探针：
                                     // cvPrep 增长⇒图被重建（预设会被重置为 Dry）
                                     // cvPreset=0 ⇒ 当前就是 Dry（无混响）
                                     // cvWet=0 且 cvPreset≠0 ⇒ 卷积状态坏死（NaN/denormal）
@@ -373,8 +373,8 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
     }
 
     override fun setParam(nodeIndex: Int, paramId: Int, value: Float) {
-        // M9 诊断：EQ 参数下发链路取证。调用方是 Compose 滑块回调（主线程），逐条
-        // appendText 等于帧率级主线程磁盘 IO（架构评估 P1-④）——降为每 20 条采样
+        // 诊断：EQ 参数下发链路取证。调用方是 Compose 滑块回调（主线程），逐条
+        // appendText 等于帧率级主线程磁盘 IO（架构评估 ）——降为每 20 条采样
         // 1 条（首条必写），链路连通性证据保留、拖动路径零阻塞。
         if (nodeIndex == com.jiangjie.Sonicraft.core.engine.AudioEngine.EQ_NODE_INDEX) {
             val n = eqDiagCount.incrementAndGet()
@@ -456,7 +456,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
 
     override fun multibandMeters(): FloatArray? = withNative { it.multibandMeters() }
 
-    // 单段压缩器计量（2026-11-09）：接口方法必须在**这一层**委托，
+    // 单段压缩器计量：接口方法必须在**这一层**委托，
     // 只在 NativeAudioEngine（底层 JNI 包装）上加方法是够不到的——
     // AudioEngine 接口的 compressorMeters 默认返回 null，UI 会一直读到 null
     // → 电平表恒为「-- 0.0dB --」（本次实机发现的问题）。
@@ -485,7 +485,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
     }
 
     override fun loadImpulseResponse(path: String): String? {
-        // M5：native 调用经锁。哨兵区分「无 native」与「native 返回 null=成功」——
+        // ：native 调用经锁。哨兵区分「无 native」与「native 返回 null=成功」——
         // 语义：null = 成功，非空 = 失败原因。此前 `r ?: "引擎未就绪"` 把 native 的
         // 成功（null）误转成错误串，导致加载成功却永远不发 SetParam(4)（2026-10-23
         // 自定义 IR「不生效」根因，诊断打点定位：native err=[null] 而上层收到未就绪）。
@@ -540,7 +540,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
         // 保证后续 native/graph 资源照常释放
         runCatching { captureProjection?.stop() }
         captureProjection = null
-        // M5：close 与置 null 必须持锁——否则看门狗/UI 线程读走句柄后 close 即 UAF
+        // ：close 与置 null 必须持锁——否则看门狗/UI 线程读走句柄后 close 即 UAF
         synchronized(nativeLock) {
             nativeEngine?.close()
             nativeEngine = null
@@ -560,7 +560,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
     private companion object {
         const val TAG = "Engine"
 
-        /** M5：loadIR 哨兵——native 成功返回 null，需与「无 native」（withNative 返回 null）区分 */
+        /** ：loadIR 哨兵——native 成功返回 null，需与「无 native」（withNative 返回 null）区分 */
         const val LOAD_OK_SENTINEL = "\u0000load_ok"
     }
 }

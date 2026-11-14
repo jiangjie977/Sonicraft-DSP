@@ -13,7 +13,7 @@ import com.jiangjie.Sonicraft.core.common.SonicraftLog
 import roro.stellar.Stellar
 
 /**
- * M2：经 Stellar（shell/root）免弹窗创建 MediaProjection。
+ * ：经 Stellar（shell/root）免弹窗创建 MediaProjection。
  *
  * 路线：
  *  1. [Stellar.getSystemService]("media_projection") 以 shell/root 身份拿
@@ -52,7 +52,7 @@ object SilentProjectionFactory {
                 ?: error("getSystemService($SERVICE_NAME) 返回 null")
 
             // IMediaProjectionManager$Stub.asInterface(binder)：按名字+参数个数找。
-            // 注意（2026-11-05 实测）：Android 15/16 的 AIDL 生成会把 asInterface 放到
+            // 注意：Android 15/16 的 AIDL 生成会把 asInterface 放到
             // **接口类** `IMediaProjectionManager` 上，`$Stub` 里可能只有 2 个方法且不含
             // 它 —— 只查 $Stub 会报「Stub 无 asInterface(1参)：共2方法」。故两个类都试。
             val candidates = listOf(

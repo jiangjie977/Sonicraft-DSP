@@ -11,7 +11,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Loopback 链路的**进程级**持有者（2026-11-07）。
+ * Loopback 链路的**进程级**持有者。
  *
  * 背景：`ILoopbackProbe` 句柄与 `LoopbackPcmSource` 原先都是 `MainViewModel` 的字段。
  * ViewModel 随 Activity 销毁而清理（从桌面重新点图标、系统回收后台 Activity 都会发生），
@@ -36,7 +36,7 @@ class LoopbackChainHolder @Inject constructor() {
         private set
 
     /**
-     * 是否正在建链（2026-11-07）。
+     * 是否正在建链。
      * 前台(ViewMode)建链与前台服务(headless)恢复**不能同时绑定**同一个 UserService：
      * 两次 bindUserService 令牌不同 → 后到者拿到 `code=-2 验证令牌不匹配`。
      */

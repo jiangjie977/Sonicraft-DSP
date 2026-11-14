@@ -15,7 +15,7 @@
 namespace sonicraft::dsp {
 
 /**
- * M15 动态低音节点（耳机专用）。设计见 `docs/M15_DYNAMIC_BASS_DESIGN.md`。
+ * 动态低音节点（耳机专用）。设计见 `docs/M15_DYNAMIC_BASS_DESIGN.md`。
  *
  * ## 为什么不是一个"低频增益"旋钮
  * 耳机的三个物理约束决定了必须分开处理：
@@ -59,7 +59,7 @@ class DynamicBassNode : public DspNode {
    * 默认 0.6 → 新映射下 ceiling ≈ -8.4dBFS（0.38）。
    *
    * **注意方向**：protectLevel 越高、阈值越高、介入越晚。
-   * 2026-11-11 曾误改成 0.4，那会让 ceiling 掉到 -11.6dBFS、保护**更激进**，
+   * 曾误改成 0.4，那会让 ceiling 掉到 -11.6dBFS、保护**更激进**，
    * 与"让保护别乱压"的意图正好相反 —— 已改回 0.6（新映射本身已比旧映射宽松）。
    */
   static constexpr float kDefaultProtectLevel = 0.6f;
@@ -70,7 +70,7 @@ class DynamicBassNode : public DspNode {
   /** 包络释放：放慢，避免低频周期性起伏导致增益"呼吸" */
   static constexpr float kEnvReleaseMs = 250.0f;
   /**
-   * 参考峰值的**上升**时间（2026-11-11 修正）：
+   * 参考峰值的**上升**时间：
    * 必须显著慢于包络的 release，否则 `ref` 会瞬时贴住 `env`、导致 rel ≡ 1、
    * 动态增益恒为 0 —— 首次实现就踩了这个坑（阶段 2 透明性探针没 FAIL 反而暴露了它）。
    */

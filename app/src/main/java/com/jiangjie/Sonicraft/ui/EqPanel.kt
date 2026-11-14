@@ -66,7 +66,7 @@ import kotlinx.coroutines.isActive
 import kotlin.math.roundToInt
 
 /**
- * M9 多段 EQ 一体化面板（U9n GEQ 退役，仅 PEQ）：
+ * 多段 EQ 一体化面板（U9n GEQ 退役，仅 PEQ）：
  * 上区 = 手绘曲线编辑区（横轴频点、纵轴 ±12dB、1dB 步进网格；手指划过连续设置
  *        各频点增益，跳过的 band 按线性插值填充；曲线实时更新）；
  * 下区 = 选中段迷你旋钮（Q/G/F，Pro-Q 式就近调节）。
@@ -123,7 +123,7 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     // 原 freqTable(eqMode) 在导入非档位频率时会画错轴（潜在错位，段数泛化后必现）
     val freqs = eqBandFreqs
     val bands = freqs.size
-    // 调试轴控件开关（2026-11-08）：默认隐藏，连点「选中段 N」8 次切换显隐。
+    // 调试轴控件开关：默认隐藏，连点「选中段 N」8 次切换显隐。
     // 声明在 Column 之外——轴控件行本身在段数 Row 之后，需要同一作用域。
     // 仅 BuildConfig.DEBUG 可开：release 包连点也无效，用户永远看不到开发期旋钮。
     var showAxisDebug by remember { mutableStateOf(false) }
@@ -331,7 +331,7 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
-        // M12 阶段 3：选中段迷你旋钮（未锁定时显示——Pro-Q 式就近调节；U9n GEQ 退役后恒显）
+        // 阶段 3：选中段迷你旋钮（未锁定时显示——Pro-Q 式就近调节；U9n GEQ 退役后恒显）
         if (selectedBand >= 0 && !eqLocked) {
             Row(
             modifier = Modifier.fillMaxWidth(),

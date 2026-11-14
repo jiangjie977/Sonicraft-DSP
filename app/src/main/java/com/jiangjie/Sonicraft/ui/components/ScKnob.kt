@@ -71,18 +71,18 @@ fun ScKnob(
     onDoubleTap: (() -> Unit)? = null,
     textScale: Float = 1f,
     /**
-     * 过载阈值（2026-11-08）：value 超过它即进入「过载视觉」——外框转红并高斯模糊、
+     * 过载阈值：value 超过它即进入「过载视觉」——外框转红并高斯模糊、
      * 值弧在过载区逐级加浓红、LED 转红。默认 [Float.MAX_VALUE] = 不启用。
      * 用于湿声电平与输入/输出增益这类「>1.0 就可能削波」的旋钮。
      */
     overloadFrom: Float = Float.MAX_VALUE,
     /**
-     * 双击归位值（2026-11-08）。非 null 时双击盘面回到该值；null = 不响应双击。
+     * 双击归位值。非 null 时双击盘面回到该值；null = 不响应双击。
      * 若同时传了 [onDoubleTap]，以 onDoubleTap 优先（供声道平衡这类「回中 + 额外动作」场景）。
      */
     resetValue: Float? = null,
     /**
-     * 紧凑环模式（2026-11-08）。false = 原观感（22dp 粗弧 + 小盘面）；
+     * 紧凑环模式。false = 原观感（22dp 粗弧 + 小盘面）；
      * true = **3.5dp 细弧 + 大得多的盘面**，用于三段动态这类并排多个小旋钮的场景：
      * 粗弧在 40dp 级别会占掉一半直径、盘面被挤得很小，细线后同样的外径下盘面明显变大，
      * 观感更轻、更容易看清数值。
@@ -128,7 +128,7 @@ fun ScKnob(
     }
     // 过载红：越靠右越浓（0.55 → 1.0 alpha），并在 0→1 之间从青绿过渡到红
     val hotColor = Color(0xFFE5453A)
-    // 视觉映射加速（2026-11-08）：线性映射时 1.1（刚过线）只有 0.1，肉眼几乎看不出；
+    // 视觉映射加速：线性映射时 1.1（刚过线）只有 0.1，肉眼几乎看不出；
     // 取平方根后 0.1→0.32、0.3→0.55，刚过载就能得到明确提示。
     val overloadVis = kotlin.math.sqrt(overloadAmt)
     val ledColor = if (overloadAmt > 0.01f) {
@@ -142,7 +142,7 @@ fun ScKnob(
     // rememberUpdatedState，否则拖动到一半参数更新了，回调里读到的还是旧值。
     val changeValue by rememberUpdatedState(onValueChange)
     val resetTarget by rememberUpdatedState(resetValue)
-    // 长按输入（2026-11-08）：与拖动、双击均不冲突——长按有独立的 500ms 阈值，
+    // 长按输入：与拖动、双击均不冲突——长按有独立的 500ms 阈值，
     // 不参与双击判定；拖动超出 touch slop 会先消费事件，长按自然失效。
     var showInput by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
@@ -174,7 +174,7 @@ fun ScKnob(
                                 } else {
                                     (max - min).toDouble()
                                 }
-                                // 灵敏度（2026-11-08）：220px 走完全范围，对 72dp 旋钮来说
+                                // 灵敏度：220px 走完全范围，对 72dp 旋钮来说
                                 // 拖过整个旋钮（约 180px）只走到 82%，微调手感发滞；compact 提到 160px
                                 val sens = if (compact) 160.0 else 220.0
                                 val delta = (-dragAmount / sens) * span
@@ -390,7 +390,7 @@ fun ScKnob(
                 center = Offset(cx, cy),
                 style = Stroke(width = 1.2f),
             )
-            // LED 尺寸（2026-11-08）：compact 模式放大到 5%（原 3.5% 在 72dp 旋钮上只有 2.5dp，
+            // LED 尺寸：compact 模式放大到 5%（原 3.5% 在 72dp 旋钮上只有 2.5dp，
             // 拖动时几乎看不见它在转）
             val ledR = size.width * if (compact) 0.05f else 0.035f
             if (steps > 0) {
@@ -484,7 +484,7 @@ fun ScKnob(
                 Modifier
             },
         )
-        // 长按输入框（2026-11-08）：Dialog 独立浮层，不参与 Column 布局。
+        // 长按输入框：Dialog 独立浮层，不参与 Column 布局。
         // 输入越界自动钳到 [min, max]，非法文本直接忽略（不改变原值）。
         if (showInput) {
             AlertDialog(

@@ -21,7 +21,7 @@ import java.util.Locale
  * logcat 输出。
  *
  * 文件可被 `adb pull` 取出（无需 root）。
- * 真实目录在此注入 [DiagDirs.crashDir]，core 层统一从那里读（P0-③ 去硬编码）。
+ * 真实目录在此注入 [DiagDirs.crashDir]，core 层统一从那里读（去硬编码）。
  */
 object CrashCapture {
 

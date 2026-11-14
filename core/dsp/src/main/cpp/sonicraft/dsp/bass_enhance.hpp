@@ -186,7 +186,7 @@ class BassEnhanceNode : public DspNode {
 
     // ---- 经典模式 ----
     //
-    // **L1 修复（2026-11-11）**：原来是 `out = in + LP(fc,Q)(in) × gain`，
+    // **L1 修复**：原来是 `out = in + LP(fc,Q)(in) × gain`，
     // 直接把低通信号加回原信号。LP 在截止点以上相位滞后约 −146°，与原信号相消，
     // 实测 160/200Hz 出现 −5.6/−5.0dB 凹陷（专业验收发现）。
     //
@@ -347,7 +347,7 @@ class BassEnhanceNode : public DspNode {
         classic_gain_ = std::clamp(value, 0.0f, kClassicGainMax);
         break;
       case kParamClassicQ: {
-        // 2026-11-12：用户要求 Q 实现功能（不可移除）。
+        // 用户要求 Q 实现功能（不可移除）。
         // LR4 分频的 Q 仍固定，这个 Q 控制低频带内共振峰的宽度与高度。
         const float v = std::clamp(value, kClassicQMin, kClassicQMax);
         if (v != classic_q_) {

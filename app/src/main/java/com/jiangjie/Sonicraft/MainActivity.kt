@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             SonicraftTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    // 合规门控（2026-11-08）：未同意隐私政策前**不进入 MainScreen**。
+                    // 合规门控：未同意隐私政策前**不进入 MainScreen**。
                     // MainScreen 一旦组合就会创建 MainViewModel → autoStartCaptureIfNeeded()
                     // → 检查/申请录音权限并建链。挡在这一层才能保证「同意前零动作」。
                     // 用 remember（**非** saveable）：用户点「撤回同意」后调用 Activity.recreate()，

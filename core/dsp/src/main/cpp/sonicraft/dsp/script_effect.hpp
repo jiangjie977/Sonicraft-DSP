@@ -414,7 +414,7 @@ class ScriptEffectNode : public DspNode {
   }
 
   /**
-   * 槽位拓扑（2026-11-13）：
+   * 槽位拓扑：
    *  - 串联槽位：就地处理，输入 = 上一级串联槽位的输出（第一级 = 机架输入）；
    *  - 并联槽位：从**机架输入（OutputGain 输出）的干声副本**处理，结果按 wet 累加；
    *  - 输出 = 主链输出 + Σ(并联输出 × wet)，随后交给 Limiter 节点。
@@ -569,7 +569,7 @@ class ScriptEffectNode : public DspNode {
 
   /** 主链整体延后 n 个样本（环形缓冲，音频线程零分配）。
    *  注意：必须"写入当前位、读回 n 位之前"，不能读写同一槽位——
-   *  那样实际延迟恒等于缓冲长度（2048），与请求的 n 无关（2026-11-14 修正）。 */
+   * 那样实际延迟恒等于缓冲长度（2048），与请求的 n 无关。 */
   void ApplyAlignDelay(float* const* channels, int frames, int n) {
     if (alignL_.empty()) return;
     const int size = static_cast<int>(alignL_.size());
@@ -658,7 +658,7 @@ class ScriptEffectNode : public DspNode {
    * 越界忽略；**未启用的 lane 只缓存不丢弃**。
    * 原因：params_ 初值全 0，而 Lane::Process 每块用 ApplyParams 把缓存写进 gmem。
    * 若关闭态丢弃推送，启用后 slider 仍为 0 —— gain 类脚本乘 0 就变成静音
-   * （2026-11-14 定位的「总闸一开就静音」）。
+   * 。
    */
   void SetParam(int param_id, float value) override {
     if (param_id < 0) return;
@@ -722,7 +722,7 @@ class ScriptEffectNode : public DspNode {
     if (on && !was) {
       lanes_[i].set_channel_count(channels_);
       // 只有节点已 Prepare（采样率有效）时才补 Prepare；
-      // 否则用 0 采样率 Prepare 会重建 VM 并丢掉已推送的参数（2026-11-13 定位）
+      // 否则用 0 采样率 Prepare 会重建 VM 并丢掉已推送的参数
       if (sample_rate_ > 0 && max_frames_ > 0) {
         lanes_[i].Prepare(sample_rate_, max_frames_);
       }
@@ -777,7 +777,7 @@ class ScriptEffectNode : public DspNode {
   std::atomic<float> rack_wet_{1.0f};
   std::vector<float> mixL_, mixR_;  // 湿声混音用的输入快照
   int order_[kLanes] = {0, 1, 2};  // 处理顺序（槽位位置 -> lane 索引）
-  // ---- RMS 探针（2026-11-13）：供后台读取，不暴露到 UI ----
+  // ---- RMS 探针：供后台读取，不暴露到 UI ----
   // in = 机架输入，out = 机架输出；laneIn/laneOut = 各槽位进/出
   std::atomic<float> rms_in_{0.0f};
   std::atomic<float> rms_out_{0.0f};

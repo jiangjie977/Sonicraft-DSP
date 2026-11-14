@@ -14,7 +14,7 @@ namespace sonicraft::dsp {
  * 单生产者单消费者浮点环形缓冲（帧粒度）。
  *
  * 用途：内录接管模式（Mode B）中桥接 capture 线程与 AAudio 回调线程两个时钟域，
- * 由水位控制器配合异步重采样吸收时钟漂移（M2 实现）。
+ * 由水位控制器配合异步重采样吸收时钟漂移（实现）。
  * 契约：仅一个线程调 PushFrames，仅一个线程调 PopFrames。
  */
 class SpscRingBuffer {

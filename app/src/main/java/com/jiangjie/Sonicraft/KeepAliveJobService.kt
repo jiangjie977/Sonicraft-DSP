@@ -20,7 +20,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 /**
- * 夜间保活兜底（2026-10-28 立项）：持久化周期 job——跨 system_server 软重启存活
+ * 夜间保活兜底：持久化周期 job——跨 system_server 软重启存活
  * （persisted job 存 /data/system/job/；STICKY service / BOOT 广播 / alarm 在软重
  * 启场景全部失效，昨晚取证实锤）。
  *

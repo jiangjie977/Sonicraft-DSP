@@ -4,7 +4,7 @@ import android.content.SharedPreferences
 import com.jiangjie.Sonicraft.core.engine.AudioEngine
 
 /**
- * 效果组描述表（2026-11-11）。
+ * 效果组描述表。
  *
  * ## 要解决的事
  * 「音效库一个卡片 → 点开详情页多个效果器」这套结构（压限器是第一个）后面会反复出现。

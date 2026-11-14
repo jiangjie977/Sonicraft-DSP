@@ -42,7 +42,7 @@ import com.jiangjie.Sonicraft.ui.theme.ScColors
 private enum class ComplianceDoc { POLICY, PERMISSION, LICENSE }
 
 /**
- * 「我的 → 隐私与合规」（2026-11-08）。
+ * 「我的 → 隐私与合规」。
  *
  * 合规依据：
  *  - 工信部要求隐私政策**随时可查阅**，不能只在首启弹一次（否则属「未提供查阅途径」）；

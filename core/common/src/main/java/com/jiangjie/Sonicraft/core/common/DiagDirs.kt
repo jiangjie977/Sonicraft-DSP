@@ -5,7 +5,7 @@
 package com.jiangjie.Sonicraft.core.common
 
 /**
- * 诊断文件目录单点（架构评估修复 P0-③）。
+ * 诊断文件目录单点（架构评估修复 ）。
  *
  * 历史问题：crash 路径 `/data/data/<pkg>/files/crash` 以字面量硬编码在
  * core 与 app 两层 10+ 处，锚定 applicationId——加 debug suffix、改包名、

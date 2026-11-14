@@ -24,7 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * 输出设备感知（M14a，2026-11-08）。
  *
  * 本批**只做感知与取证**：不改任何播放行为、不切配置、不动引擎。
- * 目的是先把「当前声音往哪出」这件事变成可观测事实，为 M14b 的按设备切换提供依据。
+ * 目的是先把「当前声音往哪出」这件事变成可观测事实，为 的按设备切换提供依据。
  *
  * 设计来源 = WEcho 已落地实现（`AudioDeviceMonitor.kt` / `ConfigApplier.kt`）：
  *  - `AudioDeviceCallback` 常驻 + **500ms debounce**（插拔/蓝牙握手会连发多次）

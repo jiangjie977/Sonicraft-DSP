@@ -188,7 +188,7 @@ Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeSetTailPartitionLim
   if (engine != nullptr) engine->SetTailPartitionLimit(static_cast<int>(max_parts));
 }
 
-// 多频段每段计量（2026-11-08）：out 长度须 >= 9，[band*3+0/1/2] = 入峰值 / GR(dB) / 出峰值。
+// 多频段每段计量：out 长度须 >= 9，[band*3+0/1/2] = 入峰值 / GR(dB) / 出峰值。
 // 返回 false = 引擎未就绪或无多频段节点，Kotlin 侧据此跳过本次刷新（不清零已有读数）。
 JNIEXPORT jboolean JNICALL
 Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeMultibandMeters(
@@ -202,7 +202,7 @@ Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeMultibandMeters(
   return JNI_TRUE;
 }
 
-// 单段压缩器计量（2026-11-09）：out 长度需 ≥ 3 = {输入峰值, 增益衰减 dB, 输出峰值}。
+// 单段压缩器计量：out 长度需 ≥ 3 = {输入峰值, 增益衰减 dB, 输出峰值}。
 // 返回 false = 引擎未就绪或无压缩器节点，Kotlin 侧跳过本次刷新（不清零已有读数）。
 JNIEXPORT jboolean JNICALL
 Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeCompressorMeters(
@@ -520,8 +520,8 @@ Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeStats(
     JNIEnv* env, jclass /*clazz*/, jlong handle) {
   auto* engine = reinterpret_cast<sonicraft::engine::NativeAudioEngine*>(handle);
   // 11 元素：原 9 元素时 native 的 n>=10 分支（xRun/旁路标志）永假——xRunBlocks
-  // 线上恒 0 的断档（2026-10-27 发现），M9 顺带扩到 11 修通
-  // 24 = 11 基础 + 3 卷积诊断 + 10 逐节点平均耗时（2026-11-06）
+  // 线上恒 0 的断档（2026-10-27 发现），顺带扩到 11 修通
+  // 24 = 11 基础 + 3 卷积诊断 + 10 逐节点平均耗时
   constexpr int kStatsLen = 24;
   jlongArray result = env->NewLongArray(kStatsLen);
   if (result == nullptr) return nullptr;

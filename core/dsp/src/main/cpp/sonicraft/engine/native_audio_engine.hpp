@@ -140,7 +140,7 @@ class NativeAudioEngine {
    * 返回 false = 引擎未就绪或无多频段节点。非实时线程调用（UI 轮询）。
    */
   bool GetMultibandMeters(float* out9);
-  /** 单段压缩器计量（2026-11-09）：out3 = {输入峰值, 增益衰减 dB, 输出峰值} */
+  /** 单段压缩器计量：out3 = {输入峰值, 增益衰减 dB, 输出峰值} */
   bool GetCompressorMeters(float* out3);
 
   /** 病态脏前置自动对齐开关（转发卷积节点；默认开，下次装载生效）。 */
@@ -210,7 +210,7 @@ class NativeAudioEngine {
   std::atomic<bool> running_{false};
 
   std::atomic<int> water_mark_frames_{0};
-  // 空载旁路状态机（M9 省电）：仅回调线程读写（OnData 内 Update/active）
+  // 空载旁路状态机（省电）：仅回调线程读写（OnData 内 Update/active）
   dsp::IdleBypass idle_bypass_;
   std::atomic<int> input_level_scaled_{0};  // RMS × 1e6
   std::atomic<int> ondata_max_frames_{0};   // AAudio 回调最大帧数（诊断）
@@ -230,7 +230,7 @@ class NativeAudioEngine {
   std::mutex restart_mutex_;
   std::atomic<bool> restarting_{false};
 
-  // 2026-11-03 审计 H2：错误回调原 spawn detached 线程（sleep 最长 20s 后解引用
+  // 审计 H2：错误回调原 spawn detached 线程（sleep 最长 20s 后解引用
   // self）——期间 Kotlin stop→nativeDestroy→delete 即 SIGSEGV（CAPTURE_DEAD 自动
   // 止损显著提高 stop 落在 backoff 窗口的概率）。改常驻 worker：构造启动、析构
   // join，生命周期与引擎同寿，self 悬空根除。回调线程仅置位+notify。
@@ -242,7 +242,7 @@ class NativeAudioEngine {
   // 错误回调线程写入、worker 读取的重建参数（回调线程禁止操作流/文件 IO）
   std::atomic<int> pending_error_{0};
   std::atomic<int> pending_streak_{0};
-  // 2026-11-08：默认 200→50ms（设备切换属正常单发事件，应最快恢复；连续失败另有退避阶梯）
+  // 默认 200→50ms（设备切换属正常单发事件，应最快恢复；连续失败另有退避阶梯）
   std::atomic<int> pending_backoff_ms_{50};
 
   // 连续错误退避（2026-11-01：capture 全零 → 引擎输出空流 → 系统省电 disconnect
