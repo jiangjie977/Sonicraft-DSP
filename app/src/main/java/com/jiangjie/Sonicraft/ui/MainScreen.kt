@@ -451,7 +451,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                     Text(
                         text = when (page) {
                             0 -> "音效库"
-                            1 -> "收藏"
+                            1 -> "预设与收藏"
                             else -> "我的"
                         },
                         fontSize = 22.sp,

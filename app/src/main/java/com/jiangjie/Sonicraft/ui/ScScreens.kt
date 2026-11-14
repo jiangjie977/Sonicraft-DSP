@@ -182,7 +182,7 @@ fun ScFavoritesScreen(viewModel: MainViewModel, onGoToLibrary: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ScCardHeader(
-            title = "收藏",
+            title = "预设与收藏",
             trailing = {
                 Text(
                     // 统计口径：内置场景也算"组合"（否则有 4 个内置时仍显示 "0 个组合"），
@@ -198,6 +198,9 @@ fun ScFavoritesScreen(viewModel: MainViewModel, onGoToLibrary: () -> Unit) {
         // ---- 场景组合：整组效果参数快照（内置 + 用户自定义），青绿渐变卡 ----
         var showSaveDialog by remember { mutableStateOf(false) }
         var presetName by remember { mutableStateOf("") }
+        // 内置场景默认**折叠**：它们只读、且 4 张大卡会占满首屏，
+        // 把用户自己的组合与下方 EQ 预设 / 收藏脉冲挤到很下面（2026-11-14 用户要求）
+        var builtinExpanded by rememberSaveable { mutableStateOf(false) }
         ScCard {
             Column(
                 modifier = Modifier.padding(14.dp),
@@ -218,9 +221,6 @@ fun ScFavoritesScreen(viewModel: MainViewModel, onGoToLibrary: () -> Unit) {
                         Text("＋保存当前", fontSize = 12.sp)
                     }
                 }
-                viewModel.builtinPresets.forEach { preset ->
-                    ScSceneCard(preset = preset, isUser = false, onApply = { viewModel.applyPreset(preset) })
-                }
                 userPresets.forEach { preset ->
                     ScSceneCard(
                         preset = preset,
@@ -237,6 +237,41 @@ fun ScFavoritesScreen(viewModel: MainViewModel, onGoToLibrary: () -> Unit) {
                         fontSize = 11.sp,
                         color = ScColors.TextSub,
                     )
+                }
+                // ---- 内置场景：折叠条（默认收起），点整行展开 ----
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { builtinExpanded = !builtinExpanded }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "内置场景 ×${viewModel.builtinPresets.size}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ScColors.TextMain,
+                    )
+                    Text(
+                        text = "  只读预设，可一键套用",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = if (builtinExpanded) "收起 ▴" else "展开 ▾",
+                        fontSize = 12.sp,
+                        color = ScColors.Primary,
+                    )
+                }
+                if (builtinExpanded) {
+                    viewModel.builtinPresets.forEach { preset ->
+                        ScSceneCard(
+                            preset = preset,
+                            isUser = false,
+                            onApply = { viewModel.applyPreset(preset) },
+                        )
+                    }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),

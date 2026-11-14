@@ -692,7 +692,7 @@ fun ScTabBar(
     // U8k：搜索 Tab 退役（脉冲库迁入卷积详情页），三页导航
     val tabs = listOf(
         Triple("音效库", ScTabIconKind.GRID, "效果开关与信号链"),
-        Triple("收藏", ScTabIconKind.HEART, "场景与收藏"),
+        Triple("预设", ScTabIconKind.HEART, "场景 · 预设 · 收藏"),
         Triple("我的", ScTabIconKind.PERSON, "设备与设置"),
     )
     val shape = RoundedCornerShape(ScRadius.Float)
