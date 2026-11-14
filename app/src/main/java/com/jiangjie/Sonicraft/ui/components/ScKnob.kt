@@ -5,6 +5,12 @@
 
 package com.jiangjie.Sonicraft.ui.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -131,6 +137,23 @@ fun ScKnob(
     // 视觉映射加速：线性映射时 1.1（刚过线）只有 0.1，肉眼几乎看不出；
     // 取平方根后 0.1→0.32、0.3→0.55，刚过载就能得到明确提示。
     val overloadVis = kotlin.math.sqrt(overloadAmt)
+    // 过载光晕呼吸：只在真正过载时创建动画（不过载的旋钮不占帧循环）。
+    // 在 draw 阶段读 .value，因此只触发重绘、不触发重组。
+    val glowBreath = if (overloadAmt > 0.01f) {
+        rememberInfiniteTransition(label = "knobGlow").animateFloat(
+            initialValue = 1f,
+            targetValue = 0.42f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "knobGlowBreath",
+        )
+    } else {
+        null
+    }
+    // 在组合阶段读取：赋值给普通 Float，重绘由重组驱动（过载旋钮数量极少，代价可忽略）
+    val glowPulse = glowBreath?.value ?: 1f
     val ledColor = if (overloadAmt > 0.01f) {
         androidx.compose.ui.graphics.lerp(Color(0xFF2AA0A0), hotColor, overloadVis)
     } else {
@@ -286,11 +309,13 @@ fun ScKnob(
             // 现在改成 FILL 实心圆 + 大半径模糊：中心被随后绘制的盘面整块遮住，露出来的
             // 只有盘面边缘向外自然扩散的一圈柔光，内外都没有硬边。
             if (overloadAmt > 0.01f) {
+                // 呼吸系数：0.42 ~ 1.0 往返，驱动红光强度与弥散范围
+                val breath = glowPulse
                 drawIntoCanvas { cv ->
                     // 外层：半径大、模糊大、透明度低 —— 负责远处的弥散
                     val outer = android.graphics.Paint().apply {
                         color = android.graphics.Color.argb(
-                            (55 + 95 * overloadVis).toInt(), 229, 69, 58,
+                            ((55 + 95 * overloadVis) * breath).toInt(), 229, 69, 58,
                         )
                         style = android.graphics.Paint.Style.FILL
                         maskFilter = android.graphics.BlurMaskFilter(
@@ -299,11 +324,12 @@ fun ScKnob(
                         )
                         isAntiAlias = true
                     }
-                    cv.nativeCanvas.drawCircle(cx, cy, discR + 2f, outer)
+                    // 褪光时半径略收，亮时向外推 —— 呼吸不只是明暗，还有扩散感
+                    cv.nativeCanvas.drawCircle(cx, cy, discR + 2f + 4f * (1f - breath), outer)
                     // 内层：贴住盘面边缘，透明度高一点 —— 让轮廓处有实感而不发灰
                     val inner = android.graphics.Paint().apply {
                         color = android.graphics.Color.argb(
-                            (45 + 75 * overloadVis).toInt(), 229, 69, 58,
+                            ((45 + 75 * overloadVis) * breath).toInt(), 229, 69, 58,
                         )
                         style = android.graphics.Paint.Style.FILL
                         maskFilter = android.graphics.BlurMaskFilter(
