@@ -219,7 +219,13 @@ object AutoEqParser {
      * [skipped] 统计被丢弃的滤波器行（LP/HP/None/OFF）—— 导入后要告诉用户"少了 N 段"，
      * 否则用户以为导入完整，实际低切/高切被静默吞掉。
      */
-    data class Result(val preampDb: Float, val bands: List<Band>, val skipped: Int = 0)
+    data class Result(
+        val preampDb: Float,
+        val bands: List<Band>,
+        val skipped: Int = 0,
+        /** 超范围被钳位的段数（频率 20~20k / 增益 ±12 dB / Q 0.3~8） */
+        val clamped: Int = 0,
+    )
 
     // 兼容写法（2026-11-14 放宽）：
     //   · ON 可省略（部分工具导出 `Filter 1: PK Fc 100 Hz Gain 3 dB Q 1.4`）
@@ -242,6 +248,7 @@ object AutoEqParser {
         preampRe.findAll(text).lastOrNull()?.let { m -> preamp = m.groupValues[1].toFloatOrNull() ?: 0f }
         val bands = ArrayList<Band>(16)
         var skipped = 0
+        var clamped = 0
         for (raw in text.lineSequence()) {
             val m = filterRe.find(raw)
             if (m == null) {
@@ -262,8 +269,94 @@ object AutoEqParser {
             val qRaw = m.groupValues[5].toFloatOrNull()
             val q = if (qLabel == "Q" && qRaw != null) qRaw else 0.707f
             if (bands.size >= 31) { skipped++; continue }
-            bands.add(Band(f.coerceIn(20f, 20000f), g.coerceIn(-12f, 12f), q.coerceIn(0.3f, 8f), type))
+            val fc = f.coerceIn(20f, 20000f)
+            val gc = g.coerceIn(-12f, 12f)
+            val qc = q.coerceIn(0.3f, 8f)
+            if (fc != f || gc != g || qc != q) clamped++
+            bands.add(Band(fc, gc, qc, type))
         }
-        return if (bands.isEmpty()) null else Result(preamp, bands, skipped)
+        return if (bands.isEmpty()) null else Result(preamp, bands, skipped, clamped)
     }
+
+    // ---------------------------------------------------------------- 曲线类格式
+    //
+    // AutoEq 同一副耳机会导出三种文件，除了参数化（Filter 行）还有：
+    //   · `… GraphicEQ.txt`：单行 `GraphicEQ: 20 -0.2; 21 -0.2; …`（约 120 个频点）
+    //   · `… .csv`：AutoEq 结果表，含 `equalization` 列（已算好的补偿曲线）
+    // 这两类都是"连续曲线"，无法直接变成滤波器，需要按目标段频率取值（定 Q 近似）。
+
+    private val graphicRe = Regex("GraphicEQ:\\s*(.+)", RegexOption.IGNORE_CASE)
+    private val pointRe = Regex("([\\d.]+)\\s+(-?[\\d.]+)")
+
+    /** 解析 `GraphicEQ:` 行 → 升序 (频率, 增益) 点列；无该行返回 null */
+    fun parseGraphic(text: String): List<Pair<Float, Float>>? {
+        val m = graphicRe.find(text) ?: return null
+        val pts = pointRe.findAll(m.groupValues[1])
+            .mapNotNull { mm ->
+                val f = mm.groupValues[1].toFloatOrNull()
+                val g = mm.groupValues[2].toFloatOrNull()
+                if (f != null && g != null && f > 0f) f to g else null
+            }
+            .toList()
+        return if (pts.size >= 5) pts.sortedBy { it.first } else null
+    }
+
+    /**
+     * 解析 AutoEq 结果 CSV → 取补偿曲线。
+     *
+     * 列优先级：`equalization`（AutoEq 已算好的补偿）> `error_smoothed` 取反 > 最后一列。
+     * 首行是表头（含 `frequency`），非表头/非数字行自动跳过。
+     */
+    fun parseCsvCurve(text: String): List<Pair<Float, Float>>? {
+        val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        if (lines.size < 6) return null
+        val header = lines.firstOrNull { it.lowercase().contains("frequency") } ?: return null
+        val cols = header.split(',').map { it.trim().lowercase() }
+        val freqIdx = cols.indexOfFirst { it.contains("frequenc") }
+        if (freqIdx < 0) return null
+        var valIdx = cols.indexOf("equalization")
+        var negate = false
+        if (valIdx < 0) {
+            valIdx = cols.indexOf("error_smoothed")
+            negate = valIdx >= 0
+        }
+        if (valIdx < 0) valIdx = cols.lastIndex
+
+        val pts = ArrayList<Pair<Float, Float>>(lines.size)
+        var headerSeen = false
+        for (ln in lines) {
+            if (!headerSeen) {
+                if (ln == header) headerSeen = true
+                continue
+            }
+            val cells = ln.split(',')
+            if (cells.size <= maxOf(freqIdx, valIdx)) continue
+            val f = cells[freqIdx].trim().toFloatOrNull() ?: continue
+            val v = cells[valIdx].trim().toFloatOrNull() ?: continue
+            if (f <= 0f) continue
+            pts.add(f to if (negate) -v else v)
+        }
+        return if (pts.size >= 5) pts.sortedBy { it.first } else null
+    }
+
+    /**
+     * 把连续曲线映射成"定 Q 峰值段"（用于 GraphicEQ / CSV）。
+     *
+     * 每条目标频率上取曲线值作为该段增益（对数插值），Q 用 1.41（与 AutoEq FixedBandEQ 一致）。
+     * 这不是最优拟合，但**保形、可解释**：曲线在哪抬就抬、在哪削就削。
+     */
+    fun curveToBands(
+        curve: List<Pair<Float, Float>>,
+        freqs: List<Float>,
+        q: Float = 1.41f,
+    ): List<Band> = freqs.map { f ->
+        val raw = EqMath.interpLog(curve, f)
+        Band(
+            freq = f.coerceIn(20f, 20000f),
+            gain = raw.coerceIn(-12f, 12f),
+            q = q,
+            type = 0,
+        )
+    }
+
 }

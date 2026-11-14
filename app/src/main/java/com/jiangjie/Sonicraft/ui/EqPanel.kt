@@ -492,7 +492,16 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             Text(text = "AutoEq \u8033\u673a\u4fee\u6b63", fontSize = 13.sp)
             Spacer(modifier = Modifier.weight(1f))
             TextButton(onClick = {
-                pickAutoEqFile.launch(arrayOf("text/plain", "application/octet-stream"))
+                // CSV 的 MIME 是 text/csv（部分文件管理器报 text/comma-separated-values），
+                // 只写 text/plain 会把结果 CSV 挡在选择器外
+                pickAutoEqFile.launch(
+                    arrayOf(
+                        "text/plain",
+                        "text/csv",
+                        "text/comma-separated-values",
+                        "application/octet-stream",
+                    ),
+                )
             }) {
                 Text(text = "\u4ece\u6587\u4ef6\u5bfc\u5165", fontSize = 12.sp)
             }
@@ -551,7 +560,10 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         onValueChange = { autoEqText = it },
                         placeholder = {
                             Text(
-                                text = "Preamp: -6.8 dB\nFilter 1: ON PK Fc 31 Hz Gain 2.5 dB Q 0.70\nFilter 2: ON LSC Fc 105 Hz Gain 5.0 dB Q 0.70\n...",
+                                text = "支持三种 AutoEq 导出：\n" +
+                                    "· ParametricEQ.txt —— Filter 1: ON PK Fc 31 Hz Gain 2.5 dB Q 0.70\n" +
+                                    "· GraphicEQ.txt —— GraphicEQ: 20 -0.2; 21 -0.2; …\n" +
+                                    "· 结果 CSV —— 取其中 equalization 列",
                                 fontSize = 11.sp,
                             )
                         },
@@ -561,14 +573,30 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     )
                     // 频响曲线预览：把解析出的 PK/LSC/HSC 段按真实双二阶算成响应曲线，
                     // 应用前就能看出形状（AutoEq 图上那条曲线在我们 EQ 里的等效结果）。
-                    val parsedPreview = remember(autoEqText) {
-                        com.jiangjie.Sonicraft.AutoEqParser.parse(autoEqText)
+                    // 三种格式都试：参数化 / GraphicEQ / 结果 CSV（CSV 与 GraphicEQ 会按当前段频率映射）
+                    val previewInfo = remember(autoEqText, eqBandFreqs) {
+                        val p = com.jiangjie.Sonicraft.AutoEqParser.parse(autoEqText)
+                        if (p != null) {
+                            "预览：${p.bands.size} 段（参数化）" +
+                                " · preamp ${"%+.1f".format(p.preampDb)} dB" +
+                                if (p.skipped > 0) " · 跳过 ${p.skipped} 段" else ""
+                        } else {
+                            val curve = com.jiangjie.Sonicraft.AutoEqParser.parseGraphic(autoEqText)
+                                ?: com.jiangjie.Sonicraft.AutoEqParser.parseCsvCurve(autoEqText)
+                            if (curve == null) {
+                                null
+                            } else {
+                                val bands = com.jiangjie.Sonicraft.AutoEqParser.curveToBands(curve, eqBandFreqs)
+                                val peak = curve.maxOfOrNull { it.second } ?: 0f
+                                val pre = if (peak > 0f) -peak else 0f
+                                "预览：曲线映射到 ${bands.size} 段（Q=1.41）" +
+                                    " · preamp ${"%+.1f".format(pre)} dB"
+                            }
+                        }
                     }
-                    if (parsedPreview != null) {
+                    if (previewInfo != null) {
                         Text(
-                            text = "预览：${parsedPreview.bands.size} 段" +
-                                " · preamp ${"%+.1f".format(parsedPreview.preampDb)} dB" +
-                                if (parsedPreview.skipped > 0) " · 跳过 ${parsedPreview.skipped} 段" else "",
+                            text = previewInfo,
                             fontSize = 11.sp,
                             color = ScColors.TextSub,
                         )
@@ -579,7 +607,7 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         )
                     } else if (autoEqText.isNotBlank()) {
                         Text(
-                            text = "暂无可识别的滤波器行（需 Filter N: ON PK/LSC/HSC Fc … Hz Gain … dB Q …）",
+                            text = "未识别到 AutoEq 格式 —— 支持 ParametricEQ.txt、GraphicEQ.txt 与结果 CSV",
                             fontSize = 11.sp,
                             color = Color(0xFFB00020),
                         )

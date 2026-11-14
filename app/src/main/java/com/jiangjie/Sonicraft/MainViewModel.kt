@@ -3002,17 +3002,41 @@ class MainViewModel @Inject constructor(
      *   让「我的 EQ 预设」成为曲线的统一入口）；粘贴导入传 null，不污染预设库。
      */
     fun applyAutoEq(text: String, saveAsPreset: String? = null): AutoEqOutcome {
-        val r = AutoEqParser.parse(text)
-            ?: return AutoEqOutcome(
-                false,
-                "未识别到 AutoEq 滤波器行（应为 Filter N: ON PK/LSC/HSC Fc … Hz Gain … dB Q …）",
-            )
-        val m = r.bands.size
+        // 三种格式依次尝试：参数化（Filter 行）→ GraphicEQ 单行 → 结果 CSV（equalization 列）
+        val parsed = AutoEqParser.parse(text)
+        val bands: List<AutoEqParser.Band>
+        val preampDb: Float
+        val formatNote: String
+        var skipped = 0
+        var clamped = 0
+        if (parsed != null) {
+            bands = parsed.bands
+            preampDb = parsed.preampDb
+            skipped = parsed.skipped
+            clamped = parsed.clamped
+            formatNote = ""
+        } else {
+            val curve = AutoEqParser.parseGraphic(text) ?: AutoEqParser.parseCsvCurve(text)
+            if (curve == null) {
+                return AutoEqOutcome(
+                    false,
+                    "未识别到 AutoEq 格式 —— 支持 ParametricEQ.txt（Filter 行）、" +
+                        "GraphicEQ.txt（GraphicEQ: 频点…）与结果 CSV（含 equalization 列）",
+                )
+            }
+            // 曲线按**当前段频率**取值（定 Q=1.41），所以段数与位置保持用户设定
+            bands = AutoEqParser.curveToBands(curve, _eqBandFreqs.value)
+            // 曲线是补偿量：峰值为正时需要预衰减，避免叠加后削波
+            val peak = curve.maxOfOrNull { it.second } ?: 0f
+            preampDb = if (peak > 0f) -peak else 0f
+            formatNote = "（曲线映射到 ${bands.size} 段 · Q=1.41）"
+        }
+        val m = bands.size
         if (m != _eqMode.value) setEqBandCountCustom(m)
-        val gains = MutableList(m) { i -> r.bands[i].gain }
-        val qs = MutableList(m) { i -> r.bands[i].q }
-        val freqs = MutableList(m) { i -> r.bands[i].freq }
-        val types = MutableList(m) { i -> r.bands[i].type }
+        val gains = MutableList(m) { i -> bands[i].gain }
+        val qs = MutableList(m) { i -> bands[i].q }
+        val freqs = MutableList(m) { i -> bands[i].freq }
+        val types = MutableList(m) { i -> bands[i].type }
         for (i in 0 until m) {
             engine.setParam(AudioEngine.EQ_NODE_INDEX, i, gains[i])
             engine.setParam(AudioEngine.EQ_NODE_INDEX, AudioEngine.EQ_Q_BASE + i, qs[i])
@@ -3023,7 +3047,7 @@ class MainViewModel @Inject constructor(
         _eqBandQs.value = qs
         _eqBandFreqs.value = freqs
         _eqBandTypes.value = types
-        setEqPreGainDb(r.preampDb)
+        setEqPreGainDb(preampDb)
         persistEqBands(m, gains)
         persistEqQs(m, qs)
         persistEqTypes(m, types)
@@ -3033,14 +3057,17 @@ class MainViewModel @Inject constructor(
         // 预设名带来源前缀：用户自己手调的曲线与导入曲线在同一列表里时能一眼分开
         val prefixed = saveAsPreset?.takeIf { it.isNotBlank() }?.let { "AutoEq · $it" }
         if (prefixed != null) saveEqUserPreset(prefixed)
-        val skipNote = if (r.skipped > 0) "，跳过 ${r.skipped} 段（LP/HP/None 不支持）" else ""
+        val skipNote = if (skipped > 0) "，跳过 $skipped 段（LP/HP/None 不支持）" else ""
+        // 超范围钳位提示：AutoEq 偶尔给出 ±12 dB 之外的增益，我们按硬件范围截断
+        val clampNote = if (clamped > 0) "，$clamped 处超范围已截断" else ""
         val presetNote = if (prefixed != null) "，已存为预设「$prefixed」" else ""
         // 语境提示：AutoEq 曲线是按耳机（Harman 等目标）拟合的，外放上用通常不理想
         val ctxNote = if (!outputDeviceMonitor.isSpeakerOutput()) "" else
             "；当前是扬声器输出 —— AutoEq 曲线为耳机设计，外放效果通常不佳"
         return AutoEqOutcome(
             true,
-            "已应用 $m 段（preamp ${"%.1f".format(r.preampDb)} dB）$skipNote$presetNote$ctxNote",
+            "已应用 $m 段$formatNote（preamp ${"%.1f".format(preampDb)} dB）" +
+                "$skipNote$clampNote$presetNote$ctxNote",
         )
     }
 
