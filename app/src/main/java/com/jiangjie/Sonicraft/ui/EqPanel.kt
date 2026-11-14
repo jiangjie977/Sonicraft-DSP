@@ -850,6 +850,8 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
     var autoEqMsg by remember { mutableStateOf<String?>(null) }
     var autoEqOk by remember { mutableStateOf<Boolean?>(null) }
     var autoEqFileName by remember { mutableStateOf<String?>(null) }
+    // 库折叠：默认展开；条目多时限高滚动，不拉长页面
+    var libExpanded by remember { mutableStateOf(true) }
     // 库多选（对齐机架脚本库：长按进选择，顶部出现删除/完成）
     // 折叠默认跟随开关：开=展开、关=收起；点标题行可手动展开/收起
     val autoEqExpanded = rememberExpandedFollowing(enabled, "autoeq_card_expanded")
@@ -997,12 +999,26 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = if (libSelectMode) "已选 ${libSelected.size} 项" else
-                            "库 · ${library.size} 条 · 点按装载 / 长按多选",
-                        fontSize = 11.sp,
-                        color = ScColors.TextSub,
-                    )
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { libExpanded = !libExpanded }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = if (libSelectMode) "已选 ${libSelected.size} 项" else
+                                "库 · ${library.size}/${viewModel.autoEqLibraryMax} 条" +
+                                    " · 点按装载 / 长按多选",
+                            fontSize = 11.sp,
+                            color = ScColors.TextSub,
+                        )
+                        Text(
+                            text = if (libExpanded) " ▾" else " ▸",
+                            fontSize = 11.sp,
+                            color = ScColors.TextSub,
+                        )
+                    }
                     Spacer(Modifier.weight(1f))
                     if (libSelectMode) {
                         Text(
@@ -1042,6 +1058,15 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                         )
                     }
                 }
+                if (libExpanded) {
+                    // 库列表限高 + 内部滚动：条目变多时不允许无限拉长整页
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 216.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
                 library.forEach { item ->
                     val checked = item.name in libSelected
                     Row(
@@ -1102,6 +1127,8 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                             )
                         }
                     }
+                    }
+                }
                 }
             }
             if (showAutoEqDialog) {
