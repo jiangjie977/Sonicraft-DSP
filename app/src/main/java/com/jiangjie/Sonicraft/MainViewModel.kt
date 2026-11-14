@@ -2026,6 +2026,30 @@ class MainViewModel @Inject constructor(
             "fdn_wet" -> setFdnWet(v)
             "fdn_dry" -> setFdnDry(v)
             "fdn_mode" -> setFdnMode(v)
+            // ---- 低频管家 / 组总闸（2026-11-14 补：设备切换时整组不跟随）----
+            "lowfreq_section" -> setLowfreqSectionEnabled(v > 0.5f)
+            "dynamic_bass_enabled" -> setDynamicBassEnabled(v > 0.5f)
+            "dynamic_bass_amount" -> setDynamicBassAmount(v)
+            "dynamic_bass_subsonic_hz" -> setDynamicBassSubsonic(v)
+            "dynamic_bass_focus_hz" -> setDynamicBassFocus(v)
+            "dynamic_bass_boost_depth" -> setDynamicBassBoostDepth(v)
+            "dynamic_bass_protect_level" -> setDynamicBassProtect(v)
+            "bass_enhance_enabled" -> setBassEnhanceEnabled(v > 0.5f)
+            "bass_enhance_amount" -> setBassEnhanceAmount(v)
+            "bass_enhance_deep" -> setBassEnhanceDeep(v)
+            "bass_enhance_punch" -> setBassEnhancePunch(v)
+            "bass_enhance_mode" -> setBassEnhanceMode(v.toInt())
+            "bass_enhance_classic_gain" -> setBassEnhanceClassicGain(v)
+            "bass_enhance_classic_q" -> setBassEnhanceClassicQ(v)
+            "bass_enhance_classic_center" -> setBassEnhanceClassicCenter(v)
+            "virtual_bass_enabled" -> setVirtualBassEnabled(v > 0.5f)
+            "virtual_bass_amount" -> setVirtualBassAmount(v)
+            "virtual_bass_harmonic" -> setVirtualBassHarmonic(v)
+            "virtual_bass_mid_gain" -> setVirtualBassMidGain(v)
+            "virtual_bass_high_gain" -> setVirtualBassHighGain(v)
+            "virtual_bass_envelope_rate" -> setVirtualBassEnvelopeRate(v)
+            "compressor_section" -> setCompressorSectionEnabled(v > 0.5f)
+            "reverb_section" -> setReverbSectionEnabled(v > 0.5f)
         }
     }
 
@@ -2066,6 +2090,31 @@ class MainViewModel @Inject constructor(
         "fdn_wet" to _fdnWet.value,
         "fdn_dry" to _fdnDry.value,
         "fdn_mode" to _fdnMode.value,
+        // ---- 低频管家（此前缺失：设备切换时整组不跟随）----
+        "lowfreq_section" to if (_lowfreqSectionEnabled.value) 1f else 0f,
+        "dynamic_bass_enabled" to if (_dynamicBassEnabled.value) 1f else 0f,
+        "dynamic_bass_amount" to _dynamicBassAmount.value,
+        "dynamic_bass_subsonic_hz" to _dynamicBassSubsonic.value,
+        "dynamic_bass_focus_hz" to _dynamicBassFocus.value,
+        "dynamic_bass_boost_depth" to _dynamicBassBoostDepth.value,
+        "dynamic_bass_protect_level" to _dynamicBassProtect.value,
+        "bass_enhance_enabled" to if (_bassEnhanceEnabled.value) 1f else 0f,
+        "bass_enhance_amount" to _bassEnhanceAmount.value,
+        "bass_enhance_deep" to _bassEnhanceDeep.value,
+        "bass_enhance_punch" to _bassEnhancePunch.value,
+        "bass_enhance_mode" to _bassEnhanceMode.value.toFloat(),
+        "bass_enhance_classic_gain" to _bassEnhanceClassicGain.value,
+        "bass_enhance_classic_q" to _bassEnhanceClassicQ.value,
+        "bass_enhance_classic_center" to _bassEnhanceClassicCenter.value,
+        "virtual_bass_enabled" to if (_virtualBassEnabled.value) 1f else 0f,
+        "virtual_bass_amount" to _virtualBassAmount.value,
+        "virtual_bass_harmonic" to _virtualBassHarmonic.value,
+        "virtual_bass_mid_gain" to _virtualBassMidGain.value,
+        "virtual_bass_high_gain" to _virtualBassHighGain.value,
+        "virtual_bass_envelope_rate" to _virtualBassEnvelopeRate.value,
+        // ---- 组总闸（子效果的启用受它门控，必须跟着设备走）----
+        "compressor_section" to if (_compressorSectionEnabled.value) 1f else 0f,
+        "reverb_section" to if (_reverbSectionEnabled.value) 1f else 0f,
     )
 
     /** 保存当前参数为用户预设（同名覆盖） */
@@ -2419,7 +2468,9 @@ class MainViewModel @Inject constructor(
                 writeDiag("设备切换: $key 等引擎 ready 超时（${engineState.value}），放弃本次应用")
                 return
             }
-            for ((k, v) in params) applyParam(k, v)
+            // 组总闸先下发：子效果的 setter 受总闸门控，顺序颠倒会丢参数
+            val ordered = params.entries.sortedBy { if (it.key.contains("section")) 0 else 1 }
+            for ((k, v) in ordered) applyParam(k, v)
             if (engineUsableNow()) {
                 writeDiag("设备切换: 已应用 $key 的预设（${params.size} 项，第 $attempt 次）")
                 applied = true
