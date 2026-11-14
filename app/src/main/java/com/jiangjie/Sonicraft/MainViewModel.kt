@@ -2984,6 +2984,105 @@ class MainViewModel @Inject constructor(
         // 立刻把「已启用」写进**当前设备**的配置：设备配置是 10s 周期快照 + 切换时回放，
         // 若不立即落盘，导入后紧接着的一次设备回放会把 enabled 覆盖成旧值（实测复现过）。
         runCatching { saveLiveConfig(outputDeviceMonitor.current.value.key) }
+        // 导入即入库（同名覆盖）：库就是"我装过的耳机校正"，与机架脚本库同构
+        if (sourceName.isNotBlank()) saveCurrentAutoEqToLibrary(sourceName)
+    }
+
+    // ---- AutoEq 库（多副耳机）----
+    /** 一条校正曲线：名字 + 段数 + 逐段参数 + preamp */
+    data class AutoEqCurve(
+        val name: String,
+        val mode: Int,
+        val gains: List<Float>,
+        val qs: List<Float>,
+        val freqs: List<Float>,
+        val types: List<Int>,
+        val preampDb: Float,
+    )
+
+    private val _autoEqLibrary = MutableStateFlow(readAutoEqLibrary())
+    val autoEqLibrary: StateFlow<List<AutoEqCurve>> = _autoEqLibrary.asStateFlow()
+
+    private fun readAutoEqLibrary(): List<AutoEqCurve> = runCatching {
+        val raw = prefs.getString(KEY_AUTOEQ_LIBRARY, null) ?: return emptyList()
+        val arr = org.json.JSONArray(raw)
+        List(arr.length()) { i ->
+            val o = arr.getJSONObject(i)
+            fun floats(k: String): List<Float> {
+                val a = o.optJSONArray(k) ?: return emptyList()
+                return List(a.length()) { j -> a.getDouble(j).toFloat() }
+            }
+            fun ints(k: String): List<Int> {
+                val a = o.optJSONArray(k) ?: return emptyList()
+                return List(a.length()) { j -> a.getInt(j) }
+            }
+            AutoEqCurve(
+                name = o.optString("name", "未命名"),
+                mode = o.optInt("mode", 10),
+                gains = floats("gains"),
+                qs = floats("qs"),
+                freqs = floats("freqs"),
+                types = ints("types"),
+                preampDb = o.optDouble("preamp", 0.0).toFloat(),
+            )
+        }
+    }.getOrDefault(emptyList())
+
+    private fun persistAutoEqLibrary(list: List<AutoEqCurve>) {
+        runCatching {
+            val arr = org.json.JSONArray()
+            list.forEach { c ->
+                val o = org.json.JSONObject()
+                o.put("name", c.name)
+                o.put("mode", c.mode)
+                o.put("preamp", c.preampDb.toDouble())
+                o.put("gains", org.json.JSONArray(c.gains.map { it.toDouble() }))
+                o.put("qs", org.json.JSONArray(c.qs.map { it.toDouble() }))
+                o.put("freqs", org.json.JSONArray(c.freqs.map { it.toDouble() }))
+                o.put("types", org.json.JSONArray(c.types))
+                arr.put(o)
+            }
+            prefs.edit().putString(KEY_AUTOEQ_LIBRARY, arr.toString()).apply()
+        }
+    }
+
+    /** 把当前 AutoEq 状态存进库（同名覆盖）；无来源名时用「校正 N」 */
+    fun saveCurrentAutoEqToLibrary(name: String? = null) {
+        val n = name?.trim()?.takeIf { it.isNotEmpty() }
+            ?: _autoEqSource.value.takeIf { it.isNotBlank() }
+            ?: "校正 ${_autoEqLibrary.value.size + 1}"
+        val curve = AutoEqCurve(
+            name = n,
+            mode = _autoEqMode.value,
+            gains = _autoEqGains.value,
+            qs = _autoEqQs.value,
+            freqs = _autoEqFreqs.value,
+            types = _autoEqTypes.value,
+            preampDb = _autoEqPreGain.value,
+        )
+        _autoEqLibrary.value = _autoEqLibrary.value.filter { it.name != n } + curve
+        persistAutoEqLibrary(_autoEqLibrary.value)
+        _autoEqSource.value = n
+        prefs.edit().putString(KEY_AUTOEQ_SOURCE, n).apply()
+    }
+
+    /** 从库装载一条曲线（只改 AutoEq，不动 PEQ） */
+    fun applyAutoEqCurve(name: String) {
+        val c = _autoEqLibrary.value.firstOrNull { it.name == name } ?: return
+        writeAutoEq(
+            mode = c.mode,
+            gains = c.gains,
+            qs = c.qs,
+            freqs = c.freqs,
+            types = c.types,
+            preGainDb = c.preampDb,
+            sourceName = c.name,
+        )
+    }
+
+    fun deleteAutoEqCurve(name: String) {
+        _autoEqLibrary.value = _autoEqLibrary.value.filter { it.name != name }
+        persistAutoEqLibrary(_autoEqLibrary.value)
     }
 
     private val _eqBandFreqs = MutableStateFlow(readEqFreqs(_eqMode.value))
@@ -5316,6 +5415,8 @@ class MainViewModel @Inject constructor(
     const val KEY_AUTOEQ_PREGAIN = "auto_eq_pregain"
     /** 最近一次导入的来源名（文件名），用于在卡片上显示"当前：HD600" */
     const val KEY_AUTOEQ_SOURCE = "auto_eq_source"
+    /** AutoEq 库（多副耳机校正曲线）：JSON 数组，结构与机架脚本库一致（名字 + 全套段参数） */
+    const val KEY_AUTOEQ_LIBRARY = "auto_eq_library_json"
     private const val AUTOEQ_GAINS_PREFIX = "auto_eq_gains_"
     private const val AUTOEQ_QS_PREFIX = "auto_eq_qs_"
     private const val AUTOEQ_FREQS_PREFIX = "auto_eq_freqs_"

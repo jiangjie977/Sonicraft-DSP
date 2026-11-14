@@ -2534,9 +2534,9 @@ internal fun ScEqDetailContent(viewModel: MainViewModel) {
         ScCard(modifier = Modifier.fillMaxWidth()) {
             MultiBandEqPanel(viewModel = viewModel, modifier = Modifier.padding(14.dp))
         }
-        // AutoEq 与 PEQ 解耦后独立成卡：自带开关、自带段、自己驱动 AUTO_EQ 节点
+        // AutoEq 与 PEQ 解耦后独立成卡：自带开关、自带段、自己驱动 AUTO_EQ 节点；
+        // 频响曲线已并入该卡（不再单独成卡，避免页面过长）
         ScAutoEqCard(viewModel = viewModel)
-        ScEqResponseCard(viewModel = viewModel)
     }
 }
 

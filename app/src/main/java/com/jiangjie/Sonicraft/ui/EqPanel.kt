@@ -14,6 +14,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
@@ -811,22 +812,25 @@ private fun EqResponseChart(
  * 放进面板里会形成"卡中卡"，阴影叠加、层级含混。
  * 曲线按段类型/频率/Q 用 [EqMath.responseAt] 精算，随参数实时更新。
  */
+
 @Composable
-internal fun ScEqResponseCard(viewModel: MainViewModel) {
-    val eqMode by viewModel.eqMode.collectAsStateWithLifecycle()
-    val gains by viewModel.eqBandGains.collectAsStateWithLifecycle()
-    val qs by viewModel.eqBandQs.collectAsStateWithLifecycle()
-    val freqs by viewModel.eqBandFreqs.collectAsStateWithLifecycle()
-    val types by viewModel.eqBandTypes.collectAsStateWithLifecycle()
-    val preGain by viewModel.eqPreGainDb.collectAsStateWithLifecycle()
-    // AutoEq 独立节点的曲线：开启时叠加显示（这才是实际听到的总响应）
-    val autoEqOn by viewModel.autoEqEnabled.collectAsStateWithLifecycle()
+internal fun ScAutoEqCard(viewModel: MainViewModel) {
+    val enabled by viewModel.autoEqEnabled.collectAsStateWithLifecycle()
+    val mode by viewModel.autoEqMode.collectAsStateWithLifecycle()
+    val preGain by viewModel.autoEqPreGain.collectAsStateWithLifecycle()
+    val source by viewModel.autoEqSource.collectAsStateWithLifecycle()
+    val autoEqFreqs by viewModel.autoEqFreqs.collectAsStateWithLifecycle()
     val autoEqGains by viewModel.autoEqGains.collectAsStateWithLifecycle()
     val autoEqQs by viewModel.autoEqQs.collectAsStateWithLifecycle()
-    val autoEqFreqs by viewModel.autoEqFreqs.collectAsStateWithLifecycle()
     val autoEqTypes by viewModel.autoEqTypes.collectAsStateWithLifecycle()
-    val extraBands = remember(autoEqOn, autoEqGains, autoEqQs, autoEqFreqs, autoEqTypes) {
-        if (!autoEqOn) emptyList() else autoEqFreqs.indices.map { i ->
+    val library by viewModel.autoEqLibrary.collectAsStateWithLifecycle()
+    // 卡片内曲线 = PEQ + AutoEq 合成响应（实际听到的总响应）
+    val peqFreqs by viewModel.eqBandFreqs.collectAsStateWithLifecycle()
+    val peqGains by viewModel.eqBandGains.collectAsStateWithLifecycle()
+    val peqQs by viewModel.eqBandQs.collectAsStateWithLifecycle()
+    val peqTypes by viewModel.eqBandTypes.collectAsStateWithLifecycle()
+    val autoEqBands = remember(enabled, autoEqGains, autoEqQs, autoEqFreqs, autoEqTypes) {
+        if (!enabled) emptyList() else autoEqFreqs.indices.map { i ->
             com.jiangjie.Sonicraft.AutoEqParser.Band(
                 freq = autoEqFreqs[i],
                 gain = autoEqGains.getOrElse(i) { 0f },
@@ -835,63 +839,6 @@ internal fun ScEqResponseCard(viewModel: MainViewModel) {
             )
         }
     }
-
-    com.jiangjie.Sonicraft.ui.components.ScCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "实际频响曲线",
-                    fontSize = 13.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                    color = ScColors.TextMain,
-                )
-                Text(
-                    text = "$eqMode 段 · 总增益 ${"%+.1f".format(preGain)} dB" +
-                    if (extraBands.isEmpty()) "" else " · 含 AutoEq",
-                    fontSize = 11.sp,
-                    color = ScColors.TextSub,
-                )
-            }
-            EqResponseChart(
-                freqs = freqs,
-                gains = gains,
-                qs = qs,
-                types = types,
-                extra = extraBands,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(158.dp),
-            )
-            Text(
-                text = "20 Hz — 20 kHz · 按段类型与 Q 精算",
-                fontSize = 10.sp,
-                color = ScColors.TextSub,
-            )
-        }
-    }
-}
-
-/**
- * AutoEq 校正卡片（2026-11-14，与参量均衡**解耦**）。
- *
- * 为什么独立：AutoEq 是"耳机型号校正"，用户 PEQ 是"个人偏好"，两者语义不同。
- * 曾经导入 AutoEq 会直接改写 PEQ 的 31 段 —— 用户手调曲线被覆盖、且无法单独关闭。
- * 现在它有自己的 DSP 节点（AUTO_EQ_NODE_INDEX）、自己的段、自己的开关。
- */
-@Composable
-internal fun ScAutoEqCard(viewModel: MainViewModel) {
-    val enabled by viewModel.autoEqEnabled.collectAsStateWithLifecycle()
-    val mode by viewModel.autoEqMode.collectAsStateWithLifecycle()
-    val preGain by viewModel.autoEqPreGain.collectAsStateWithLifecycle()
-    val source by viewModel.autoEqSource.collectAsStateWithLifecycle()
-    val autoEqFreqs by viewModel.autoEqFreqs.collectAsStateWithLifecycle()
 
     var showAutoEqDialog by remember { mutableStateOf(false) }
     var autoEqText by remember { mutableStateOf("") }
@@ -993,6 +940,98 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                     fontSize = 12.sp,
                     color = if (autoEqOk == false) Color(0xFFB00020) else ScColors.Primary,
                 )
+            }
+
+            // ---- 实际频响曲线（从独立卡并入本卡）：PEQ + AutoEq 合成响应 ----
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "实际频响曲线",
+                    fontSize = 12.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = ScColors.TextMain,
+                )
+                Text(
+                    text = if (enabled) "PEQ + AutoEq" else "仅 PEQ（AutoEq 关）",
+                    fontSize = 10.sp,
+                    color = ScColors.TextSub,
+                )
+            }
+            EqResponseChart(
+                freqs = peqFreqs,
+                gains = peqGains,
+                qs = peqQs,
+                types = peqTypes,
+                extra = autoEqBands,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp),
+            )
+            Text(
+                text = "20 Hz — 20 kHz · PEQ 与 AutoEq 两级串联（dB 相加）· 不含预增益",
+                fontSize = 10.sp,
+                color = ScColors.TextSub,
+            )
+
+            // ---- 库（与「机架脚本库」同构：计数 + 列表 + 点按装载 + 删除）----
+            if (library.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "库 · ${library.size} 条 · 点按装载",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = "存当前入库",
+                        fontSize = 11.sp,
+                        color = ScColors.Primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { viewModel.saveCurrentAutoEqToLibrary() }
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+                library.forEach { item ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(ScColors.Inset)
+                            .clickable { viewModel.applyAutoEqCurve(item.name) }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = item.name,
+                                fontSize = 12.sp,
+                                color = ScColors.TextMain,
+                            )
+                            Text(
+                                text = "${item.mode} 段 · preamp ${"%+.1f".format(item.preampDb)} dB" +
+                                    if (item.name == source) " · 当前" else "",
+                                fontSize = 10.sp,
+                                color = ScColors.TextSub,
+                            )
+                        }
+                        Text(
+                            text = "删除",
+                            fontSize = 11.sp,
+                            color = Color(0xFFE5484D),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { viewModel.deleteAutoEqCurve(item.name) }
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                }
             }
             if (showAutoEqDialog) {
                 androidx.compose.material3.AlertDialog(
