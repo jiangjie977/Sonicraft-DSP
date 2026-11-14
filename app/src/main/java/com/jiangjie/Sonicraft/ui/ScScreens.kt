@@ -89,7 +89,9 @@ import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.runtime.setValue
@@ -2146,6 +2148,19 @@ private fun ScTinySwitch(
  *
  * @param switchEnabled 传组总闸；false 时开关置灰
  */
+/**
+ * 折叠状态默认跟随开关：开 -> 展开，关 -> 收起。
+ *
+ * 用户手动点标题行折叠/展开仍然生效；只有开关值变化时才重新同步 ——
+ * 所以"关掉开关 → 卡片自动收起"是成立的，而"展开着看参数时不会被无端重置"。
+ */
+@Composable
+private fun rememberExpandedFollowing(checked: Boolean, key: String): MutableState<Boolean> {
+    val state = rememberSaveable(key) { mutableStateOf(checked) }
+    LaunchedEffect(checked) { state.value = checked }
+    return state
+}
+
 @Composable
 internal fun ScSlotHeader(
     title: String,
@@ -2491,8 +2506,11 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
     // 折叠状态：两张卡片点标题行展开/收回。
     // 单段压缩器**默认收起**（用户要求）——它默认关闭、且与三段互斥，平时不需要看；
     // 三段动态是主界面，默认展开。
-    var compressorExpanded by remember { mutableStateOf(false) }
-    var multibandExpanded by remember { mutableStateOf(true) }
+    // 折叠默认跟随各自开关：开 -> 展开，关 -> 收起
+    val multibandGate = multibandEnabled && sectionEnabled
+    val compressorGate = compressorEnabled && sectionEnabled
+    var multibandExpanded by rememberExpandedFollowing(multibandGate, "mb")
+    var compressorExpanded by rememberExpandedFollowing(compressorGate, "comp")
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ScCard(
             modifier = Modifier
@@ -3961,10 +3979,13 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
     val sectionEnabled by viewModel.lowfreqSectionEnabled.collectAsStateWithLifecycle()
     val bassEnhanceEnabled by viewModel.bassEnhanceEnabled.collectAsStateWithLifecycle()
 
-    // 槽1 默认展开（最常用）；槽2/槽3 默认收起
-    var dynExpanded by remember { mutableStateOf(true) }
-    var beExpanded by remember { mutableStateOf(false) }
-    var vbExpanded by remember { mutableStateOf(false) }
+    // 折叠默认跟随各自开关：开 -> 展开，关 -> 收起
+    val dynGate = dynamicBassEnabled && sectionEnabled
+    val beGate = bassEnhanceEnabled && sectionEnabled
+    val vbGate = virtualBassEnabled && sectionEnabled
+    var dynExpanded by rememberExpandedFollowing(dynGate, "dyn")
+    var beExpanded by rememberExpandedFollowing(beGate, "be")
+    var vbExpanded by rememberExpandedFollowing(vbGate, "vb")
     var showHeadphoneWarning by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -4211,9 +4232,11 @@ internal fun ScReverbGroupDetail(viewModel: MainViewModel) {
     val reverbEnabled by viewModel.reverbEnabled.collectAsStateWithLifecycle()
     val fdnEnabled by viewModel.fdnEnabled.collectAsStateWithLifecycle()
     val sectionEnabled by viewModel.reverbSectionEnabled.collectAsStateWithLifecycle()
-    // 卷积是主混响、默认展开；算法混响是补充、默认收起
-    var convExpanded by remember { mutableStateOf(true) }
-    var fdnExpanded by remember { mutableStateOf(false) }
+    // 折叠默认跟随各自开关：开 -> 展开，关 -> 收起
+    val convGate = reverbEnabled && sectionEnabled
+    val fdnGate = fdnEnabled && sectionEnabled
+    var convExpanded by rememberExpandedFollowing(convGate, "conv")
+    var fdnExpanded by rememberExpandedFollowing(fdnGate, "fdn")
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ScCard(
