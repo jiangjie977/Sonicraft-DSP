@@ -2051,6 +2051,25 @@ class MainViewModel @Inject constructor(
             "virtual_bass_envelope_rate" -> setVirtualBassEnvelopeRate(v)
             "compressor_section_enabled" -> setCompressorSectionEnabled(v > 0.5f)
             "reverb_section_enabled" -> setReverbSectionEnabled(v > 0.5f)
+            // 逐段曲线：键名带索引，用前缀解析（EQ 与 AutoEq 各一套）
+            else -> when {
+                key.startsWith("eq_gain_") ->
+                    key.removePrefix("eq_gain_").toIntOrNull()?.let { setEqBandGain(it, v) }
+                key.startsWith("eq_q_") ->
+                    key.removePrefix("eq_q_").toIntOrNull()?.let { setEqBandQ(it, v) }
+                key.startsWith("eq_fq_") ->
+                    key.removePrefix("eq_fq_").toIntOrNull()?.let { setEqBandFreq(it, v) }
+                key.startsWith("eq_ty_") ->
+                    key.removePrefix("eq_ty_").toIntOrNull()?.let { setEqBandType(it, v.toInt()) }
+                key.startsWith("autoeq_gain_") ->
+                    key.removePrefix("autoeq_gain_").toIntOrNull()?.let { setAutoEqBandValue("gain", it, v) }
+                key.startsWith("autoeq_q_") ->
+                    key.removePrefix("autoeq_q_").toIntOrNull()?.let { setAutoEqBandValue("q", it, v) }
+                key.startsWith("autoeq_fq_") ->
+                    key.removePrefix("autoeq_fq_").toIntOrNull()?.let { setAutoEqBandValue("freq", it, v) }
+                key.startsWith("autoeq_ty_") ->
+                    key.removePrefix("autoeq_ty_").toIntOrNull()?.let { setAutoEqBandValue("type", it, v) }
+            }
         }
     }
 
@@ -2065,8 +2084,25 @@ class MainViewModel @Inject constructor(
         "balance" to _balance.value,
         "eq_enabled" to if (_eqEnabled.value) 1f else 0f,
         "auto_eq_enabled" to if (_autoEqEnabled.value) 1f else 0f,
-        "bass_gain" to _bassGain.value,
-        "treble_gain" to _trebleGain.value,
+        // EQ 与 AutoEq 的逐段曲线：之前只存三段快捷增益，切设备后整条曲线丢失
+        *buildList {
+            for (i in 0 until _eqMode.value) {
+                add("eq_gain_$i" to _eqBandGains.value.getOrElse(i) { 0f })
+                add("eq_q_$i" to _eqBandQs.value.getOrElse(i) { 0.707f })
+                add("eq_fq_$i" to _eqBandFreqs.value.getOrElse(i) { 1000f })
+                add("eq_ty_$i" to _eqBandTypes.value.getOrElse(i) { 0 }.toFloat())
+            }
+            for (i in 0 until _autoEqMode.value) {
+                add("autoeq_gain_$i" to _autoEqGains.value.getOrElse(i) { 0f })
+                add("autoeq_q_$i" to _autoEqQs.value.getOrElse(i) { 0.707f })
+                add("autoeq_fq_$i" to _autoEqFreqs.value.getOrElse(i) { 1000f })
+                add("autoeq_ty_$i" to _autoEqTypes.value.getOrElse(i) { 0 }.toFloat())
+            }
+        }.toTypedArray(),
+        // bass_gain / treble_gain 是 band0 / 末段的"快捷镜像"，且回放时 setBassGain 会再写一次段值。
+        // 若存独立变量，用 EQ 面板改过 band0 之后就会与曲线不同步 —— 所以直接由段值派生。
+        "bass_gain" to _eqBandGains.value.getOrElse(0) { 0f },
+        "treble_gain" to _eqBandGains.value.getOrElse((_eqMode.value - 1).coerceAtLeast(0)) { 0f },
         "compressor_enabled" to if (_compressorEnabled.value) 1f else 0f,
         "compressor_threshold" to _compressorThreshold.value,
         "compressor_ratio" to _compressorRatio.value,
@@ -3044,6 +3080,46 @@ class MainViewModel @Inject constructor(
             }
             prefs.edit().putString(KEY_AUTOEQ_LIBRARY, arr.toString()).apply()
         }
+    }
+
+    /** 设备回放用：逐段改 AutoEq（与 writeAutoEq 的整体替换区分开） */
+    private fun setAutoEqBandValue(kind: String, i: Int, v: Float) {
+        if (i !in 0 until _autoEqMode.value) return
+        val n = AudioEngine.AUTO_EQ_NODE_INDEX
+        val gains = _autoEqGains.value.toMutableList()
+        val qs = _autoEqQs.value.toMutableList()
+        val freqs = _autoEqFreqs.value.toMutableList()
+        val types = _autoEqTypes.value.toMutableList()
+        if (i !in gains.indices || i !in qs.indices || i !in freqs.indices || i !in types.indices) return
+        when (kind) {
+            "gain" -> {
+                gains[i] = v.coerceIn(-12f, 12f)
+                engine.setParam(n, i, gains[i])
+            }
+            "q" -> {
+                qs[i] = v.coerceIn(0.3f, 8f)
+                engine.setParam(n, AudioEngine.EQ_Q_BASE + i, qs[i])
+            }
+            "freq" -> {
+                freqs[i] = v.coerceIn(20f, 20000f)
+                engine.setParam(n, AudioEngine.EQ_FREQ_BASE + i, freqs[i])
+            }
+            "type" -> {
+                types[i] = v.toInt().coerceIn(0, 2)
+                engine.setParam(n, AudioEngine.EQ_TYPE_BASE + i, types[i].toFloat())
+            }
+        }
+        _autoEqGains.value = gains
+        _autoEqQs.value = qs
+        _autoEqFreqs.value = freqs
+        _autoEqTypes.value = types
+        val m = _autoEqMode.value
+        prefs.edit()
+            .putString(AUTOEQ_GAINS_PREFIX + m, gains.joinToString(",") { "%.2f".format(it) })
+            .putString(AUTOEQ_QS_PREFIX + m, qs.joinToString(",") { "%.3f".format(it) })
+            .putString(AUTOEQ_FREQS_PREFIX + m, freqs.joinToString(",") { "%.1f".format(it) })
+            .putString(AUTOEQ_TYPES_PREFIX + m, types.joinToString(","))
+            .apply()
     }
 
     /** 把当前 AutoEq 状态存进库（同名覆盖）；无来源名时用「校正 N」 */

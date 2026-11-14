@@ -11,7 +11,9 @@ package com.jiangjie.Sonicraft.ui
 import com.jiangjie.Sonicraft.ui.components.ScKnob
 import com.jiangjie.Sonicraft.ui.theme.ScColors
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
@@ -28,8 +30,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement
 import androidx.compose.material3.MaterialTheme
@@ -813,6 +817,7 @@ private fun EqResponseChart(
  * 曲线按段类型/频率/Q 用 [EqMath.responseAt] 精算，随参数实时更新。
  */
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 internal fun ScAutoEqCard(viewModel: MainViewModel) {
     val enabled by viewModel.autoEqEnabled.collectAsStateWithLifecycle()
@@ -845,6 +850,9 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
     var autoEqMsg by remember { mutableStateOf<String?>(null) }
     var autoEqOk by remember { mutableStateOf<Boolean?>(null) }
     var autoEqFileName by remember { mutableStateOf<String?>(null) }
+    // 库多选（对齐机架脚本库：长按进选择，顶部出现删除/完成）
+    var libSelectMode by remember { mutableStateOf(false) }
+    var libSelected by remember { mutableStateOf(setOf<String>()) }
 
     val autoEqCtx = androidx.compose.ui.platform.LocalContext.current
     val pickAutoEqFile = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -886,7 +894,7 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "AutoEq 校正",
                         fontSize = 13.sp,
@@ -900,6 +908,13 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                         color = ScColors.TextSub,
                     )
                 }
+                // 开关 + 状态文字：校正是否在生效必须一眼可见
+                Text(
+                    text = if (enabled) "已启用" else "已关闭",
+                    fontSize = 11.sp,
+                    color = if (enabled) ScColors.Primary else ScColors.TextSub,
+                )
+                Spacer(Modifier.width(6.dp))
                 com.jiangjie.Sonicraft.ui.components.ScSwitch(
                     checked = enabled,
                     // ScSwitch 的回调无参：用当前值取反（与其它页面写法一致）
@@ -983,31 +998,85 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "库 · ${library.size} 条 · 点按装载",
+                        text = if (libSelectMode) "已选 ${libSelected.size} 项" else
+                            "库 · ${library.size} 条 · 点按装载 / 长按多选",
                         fontSize = 11.sp,
                         color = ScColors.TextSub,
                     )
                     Spacer(Modifier.weight(1f))
-                    Text(
-                        text = "存当前入库",
-                        fontSize = 11.sp,
-                        color = ScColors.Primary,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .clickable { viewModel.saveCurrentAutoEqToLibrary() }
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                    )
+                    if (libSelectMode) {
+                        Text(
+                            text = "删除所选",
+                            fontSize = 11.sp,
+                            color = Color(0xFFE5484D),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    libSelected.forEach { viewModel.deleteAutoEqCurve(it) }
+                                    libSelected = emptySet()
+                                    libSelectMode = false
+                                }
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                        Text(
+                            text = "完成",
+                            fontSize = 11.sp,
+                            color = ScColors.Primary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    libSelected = emptySet()
+                                    libSelectMode = false
+                                }
+                                .padding(start = 8.dp, end = 4.dp, top = 3.dp, bottom = 3.dp),
+                        )
+                    } else {
+                        Text(
+                            text = "存当前入库",
+                            fontSize = 11.sp,
+                            color = ScColors.Primary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { viewModel.saveCurrentAutoEqToLibrary() }
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
                 }
                 library.forEach { item ->
+                    val checked = item.name in libSelected
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
-                            .background(ScColors.Inset)
-                            .clickable { viewModel.applyAutoEqCurve(item.name) }
+                            .background(if (checked) Color(0xFFE6F4F4) else ScColors.Inset)
+                            .combinedClickable(
+                                onClick = {
+                                    if (libSelectMode) {
+                                        libSelected = if (checked) libSelected - item.name
+                                        else libSelected + item.name
+                                    } else {
+                                        viewModel.applyAutoEqCurve(item.name)
+                                    }
+                                },
+                                onLongClick = {
+                                    libSelectMode = true
+                                    libSelected = libSelected + item.name
+                                },
+                            )
                             .padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                     ) {
+                        // 缩略曲线：一眼认出是哪副耳机（点按装载前先看形状）
+                        EqResponseChart(
+                            freqs = item.freqs,
+                            gains = item.gains,
+                            qs = item.qs,
+                            types = item.types,
+                            modifier = Modifier
+                                .width(64.dp)
+                                .height(34.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = item.name,
@@ -1021,15 +1090,17 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                                 color = ScColors.TextSub,
                             )
                         }
-                        Text(
-                            text = "删除",
-                            fontSize = 11.sp,
-                            color = Color(0xFFE5484D),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable { viewModel.deleteAutoEqCurve(item.name) }
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
+                        if (!libSelectMode) {
+                            Text(
+                                text = "删除",
+                                fontSize = 11.sp,
+                                color = Color(0xFFE5484D),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { viewModel.deleteAutoEqCurve(item.name) }
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
                     }
                 }
             }
