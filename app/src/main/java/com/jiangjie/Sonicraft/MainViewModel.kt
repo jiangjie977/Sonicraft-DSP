@@ -3029,7 +3029,7 @@ class MainViewModel @Inject constructor(
             // 曲线是补偿量：峰值为正时需要预衰减，避免叠加后削波
             val peak = curve.maxOfOrNull { it.second } ?: 0f
             preampDb = if (peak > 0f) -peak else 0f
-            formatNote = "（曲线映射到 ${bands.size} 段 · Q=1.41）"
+            formatNote = "，曲线映射 · Q=1.41"
         }
         val m = bands.size
         if (m != _eqMode.value) setEqBandCountCustom(m)
@@ -3066,7 +3066,7 @@ class MainViewModel @Inject constructor(
             "；当前是扬声器输出 —— AutoEq 曲线为耳机设计，外放效果通常不佳"
         return AutoEqOutcome(
             true,
-            "已应用 $m 段$formatNote（preamp ${"%.1f".format(preampDb)} dB）" +
+            "已应用 $m 段（preamp ${"%.1f".format(preampDb)} dB$formatNote）" +
                 "$skipNote$clampNote$presetNote$ctxNote",
         )
     }
