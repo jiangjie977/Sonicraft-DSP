@@ -2617,8 +2617,9 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                 // 245px vs 210px（12.7dp）。改成同一套规则后只差行高，行高由下面的
                 // heightIn(32dp) 锁定 → 两卡折叠高度一致。
                 modifier = Modifier.padding(
-                    horizontal = 20.dp,
-                    vertical = 0.dp,
+                    start = 20.dp,
+                    end = 20.dp,
+                    bottom = if (multibandExpanded) 20.dp else 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -3307,12 +3308,11 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                 // 收起时压缩纵向内边距（2026-11-08 用户要求「高度太高」）：
                 // 展开时保持 14dp 的舒展留白；收起时卡片里只剩标题行和开关，
                 // 14dp 上下留白占掉了整卡高度近一半，故收到 6dp。
+                // 只留展开态底边距：收起时卡内只有标题行，不需要额外留白
                 modifier = Modifier.padding(
-                    horizontal = 20.dp,
-                    // 收起 6 → **10dp**（2026-11-11 统一两卡折叠高度）：
-                    // 6dp 是当初为了「卡片太高」单独压的，结果比三段卡矮 12.7dp。
-                    // 现在两卡收起都用 10dp + 32dp 行高 → 折叠高度完全一致。
-                    vertical = 0.dp,
+                    start = 20.dp,
+                    end = 20.dp,
+                    bottom = if (compressorExpanded) 20.dp else 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -4106,8 +4106,9 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
         ) {
             Column(
                 modifier = Modifier.padding(
-                    horizontal = 20.dp,
-                    vertical = 0.dp,
+                    start = 20.dp,
+                    end = 20.dp,
+                    bottom = if (dynExpanded) 20.dp else 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -4154,8 +4155,9 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
         ) {
             Column(
                 modifier = Modifier.padding(
-                    horizontal = 20.dp,
-                    vertical = 0.dp,
+                    start = 20.dp,
+                    end = 20.dp,
+                    bottom = if (beExpanded) 20.dp else 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -4195,8 +4197,9 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
         ) {
             Column(
                 modifier = Modifier.padding(
-                    horizontal = 20.dp,
-                    vertical = 0.dp,
+                    start = 20.dp,
+                    end = 20.dp,
+                    bottom = if (vbExpanded) 20.dp else 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -4372,8 +4375,9 @@ internal fun ScReverbGroupDetail(viewModel: MainViewModel) {
                 modifier = Modifier.padding(
                     // 左右 14 → 4dp（2026-11-11 用户要求收窄）：
                     // ScCard 自带 16dp，再叠 14dp 会让内层卡片的可用宽度少掉 30dp/侧
-                    horizontal = 20.dp,
-                    vertical = 0.dp,
+                    start = 20.dp,
+                    end = 20.dp,
+                    bottom = if (convExpanded) 20.dp else 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -4414,8 +4418,9 @@ internal fun ScReverbGroupDetail(viewModel: MainViewModel) {
                 modifier = Modifier.padding(
                     // 左右 14 → 4dp（2026-11-11 用户要求收窄）：
                     // ScCard 自带 16dp，再叠 14dp 会让内层卡片的可用宽度少掉 30dp/侧
-                    horizontal = 20.dp,
-                    vertical = 0.dp,
+                    start = 20.dp,
+                    end = 20.dp,
+                    bottom = if (fdnExpanded) 20.dp else 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
