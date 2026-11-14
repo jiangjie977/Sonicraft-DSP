@@ -3835,7 +3835,7 @@ internal fun ScBassEnhanceDetailContent(viewModel: MainViewModel) {
                     label = "强度",
                     value = amount * 100f,
                     min = 0f, max = 100f,
-                    signed = false, sizeDp = 76, textScale = 0.5f, labelSize = 14f,
+                    signed = false, sizeDp = 83, textScale = 0.5f, labelSize = 14f,
                     compact = true, resetValue = 50f,
                     format = { "%.0f%%".format(it) },
                     onValueChange = { viewModel.setBassEnhanceAmount(it / 100f) },
@@ -3896,7 +3896,7 @@ internal fun ScVirtualBassDetailContent(viewModel: MainViewModel) {
             Column(verticalArrangement = Arrangement.spacedBy(26.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     ScKnob(
                         label = "强度",
@@ -3907,11 +3907,14 @@ internal fun ScVirtualBassDetailContent(viewModel: MainViewModel) {
                         format = { "%.0f%%".format(it) },
                         onValueChange = { viewModel.setVirtualBassAmount(it / 100f) },
                     )
+                    // 三等分占位（宽度 = 旋钮宽度）：三槽等宽 + SpaceEvenly，
+                    // 于是左/右列中心精确落在 1/6 与 5/6，与上方三旋钮的第 1、3 只对齐
+                    Spacer(Modifier.width(83.dp))
                     ScKnob(
                         label = "谐波量",
                         value = harmonic * 100f,
                         min = 0f, max = 200f,
-                        signed = false, sizeDp = 76, textScale = 0.5f, labelSize = 14f,
+                        signed = false, sizeDp = 83, textScale = 0.5f, labelSize = 14f,
                         compact = true, resetValue = 100f,
                         format = { "%.0f%%".format(it) },
                         onValueChange = { viewModel.setVirtualBassHarmonic(it / 100f) },
@@ -3919,22 +3922,23 @@ internal fun ScVirtualBassDetailContent(viewModel: MainViewModel) {
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     ScKnob(
                         label = "中频直通",
                         value = midGain * 100f,
                         min = 0f, max = 100f,
-                        signed = false, sizeDp = 76, textScale = 0.5f, labelSize = 14f,
+                        signed = false, sizeDp = 83, textScale = 0.5f, labelSize = 14f,
                         compact = true, resetValue = 8f,
                         format = { "%.0f%%".format(it) },
                         onValueChange = { viewModel.setVirtualBassMidGain(it / 100f) },
                     )
+                    Spacer(Modifier.width(83.dp))
                     ScKnob(
                         label = "高频直通",
                         value = highGain * 100f,
                         min = 0f, max = 100f,
-                        signed = false, sizeDp = 76, textScale = 0.5f, labelSize = 14f,
+                        signed = false, sizeDp = 83, textScale = 0.5f, labelSize = 14f,
                         compact = true, resetValue = 16f,
                         format = { "%.0f%%".format(it) },
                         onValueChange = { viewModel.setVirtualBassHighGain(it / 100f) },
