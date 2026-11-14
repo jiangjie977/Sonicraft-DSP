@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    云备份/设备迁移规则（API 31+ 生效，与 backup_rules.xml 按系统版本二选一生效）。
+    策略：备份全部用户 DSP 配置（eq/卷积/限幅器/接管清单等），排除两类——
+    1) 运行态标志：session_was_running/system_killed_unacked 是「上次会话在跑」的
+       进程内事实，云备份回灌会让 BOOT/STICKY/alarm 哨兵误判「会话运行中」；
+    2) 大体积非配置数据：内部 files/crash 诊断日志 + 外部 app-specific 目录
+       （diag/脉冲 zip 库，几十 MB 级，脉冲源文件由用户 zip 自留）。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="sonicraft_settings.xml" key="session_was_running" />
+        <exclude domain="sharedpref" path="sonicraft_settings.xml" key="system_killed_unacked" />
+        <exclude domain="file" path="crash" />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="sonicraft_settings.xml" key="session_was_running" />
+        <exclude domain="sharedpref" path="sonicraft_settings.xml" key="system_killed_unacked" />
+        <exclude domain="file" path="crash" />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 单色层：与前景同 6 根柱同位置（108 视口），纯白由系统着色 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:pathData="M36.5,50.6 L36.5,57.4"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.13"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M43.8,44.4 L43.8,63.6"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.13"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M50.6,38.6 L50.6,69.4"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.13"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M57.4,47.5 L57.4,60.5"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.13"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M64.2,43.3 L64.2,64.7"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.13"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M71.0,49.6 L71.0,58.4"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.13"
+        android:strokeLineCap="round" />
+</vector>

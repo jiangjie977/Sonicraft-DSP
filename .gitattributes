@@ -1,0 +1,26 @@
+# 统一换行，避免跨平台把 .bat/.ps1 写成 LF 导致 cmd/PowerShell 解析失败
+# （2026-11-14 洗仓时踩过：LF 让 build_host.bat 的 if 块失效）
+* text=auto
+
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+*.sh    text eol=lf
+
+*.kt    text eol=lf
+*.java  text eol=lf
+*.kts   text eol=lf
+*.cpp   text eol=lf
+*.hpp   text eol=lf
+*.c     text eol=lf
+*.h     text eol=lf
+*.md    text eol=lf
+*.py    text eol=lf
+*.xml   text eol=lf
+
+*.png   binary
+*.jpg   binary
+*.webp  binary
+*.jar   binary
+*.so    binary
+*.apk   binary

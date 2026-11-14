@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 内录所需录音权限 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- 前台服务：内录接管需要常驻。Android 14+ 内录走 MediaProjection 捕获音频，
+         前台服务类型必须声明为 mediaProjection，否则 startForeground 抛 SecurityException 闪退 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- Loopback 模式的保活前台服务类型（2026-11-07 方案 C：双类型位，可实测切换） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- Stellar 特权框架（优先）：基础 API 权限 + 跟随服务启动 -->
+    <uses-permission android:name="stellar" />
+    <uses-permission android:name="follow_stellar_startup" />
+
+    <!-- 夜间保活短期方案：开机自启（恢复警示通知）+ 电池优化豁免一键申请 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- 夜间保活 alarm 哨兵：API 31/32 用 SCHEDULE_EXACT_ALARM（默认授予），33+ 用
+         USE_EXACT_ALARM（sideload 安装即授）——exact alarm 触发才享有「从 alarm 拉
+         FGS」的后台启动豁免（Android 12+ BG-FGS-start 限制） -->
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- 诊断页「Capture 策略」需遍历全机所有 APP（Android 11+ 包可见性：只有 queries
+         命中的包才会出现在 getInstalledPackages 里；只靠 LAUNCHER intent 会漏掉无启动
+         入口但会播音频的包。自用 sideload 无 Play 政策限制） -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <queries>
+        <package android:name="roro.stellar.manager" />
+        <package android:name="moe.shizuku.privileged.api" />
+        <!-- 接管/排除清单需要列出所有有启动器的应用（Android 11+ 包可见性过滤，
+             无此声明时 getInstalledPackages 只返回上面显式声明的包） -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".SonicraftApplication"
+        android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Sonicraft"
+        tools:targetApi="35">
+
+        <!-- Stellar 兼容应用声明（缺这一行会同时导致两个问题，实测）：
+             1) Stellar Manager「授权应用」列表按此 meta-data 筛选，不声明则本应用永不出现在列表中；
+             2) Stellar 用户服务开机启动时会扫描带此 meta-data 的包重建授权条目，未声明则
+                重启后本应用授权被清除（服务侧时序缺陷：PMS 未完成扫描时会删权限条目），
+                表现为重启后 newProcess 报 Permission Denial、必须手动重新授权。 -->
+        <meta-data
+            android:name="roro.stellar.permissions"
+            android:value="stellar,follow_stellar_startup" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Sonicraft">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            Stellar 接入契约（不可改）：
+            - authorities 必须为 ${applicationId}.stellar
+            - exported 必须为 true，multiprocess 必须为 false
+            - permission 限定只有 Shell/系统与应用自身可访问
+        -->
+        <provider
+            android:name="roro.stellar.StellarProvider"
+            android:authorities="${applicationId}.stellar"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <service
+            android:name=".ForegroundDspService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection|mediaPlayback|specialUse">
+            <!-- specialUse 必须声明用途（Android 14+ 要求；Play 上架需申报） -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="持续音频处理：将系统播放流接入本地 DSP 音效链并输出，息屏后仍需保持" />
+        </service>
+
+        <!-- 夜间保活：开机后恢复警示通知（上次会话运行中被关机/重启时）。
+             BOOT_COMPLETED 是受保护系统广播，exported=false 即可接收。 -->
+        <receiver
+            android:name=".BootCompletedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 夜间保活兜底：持久化周期 job（跨 system_server 软重启存活，昨晚取证
+             锤 STICKY/BOOT/alarm 全失效场景），重挂警示通知引导恢复 -->
+        <service
+            android:name=".KeepAliveJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!-- 夜间保活 alarm 哨兵：Doze 深睡下准点触发（persisted job 在 Doze 被
+             defer 到维护窗口是触发盲区），跨 kill 级进程回收存活；软重启场景由
+             job + service 启动时补 schedule 重建链条 -->
+        <receiver
+            android:name=".AlarmSentryReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.jiangjie.Sonicraft.ACTION_ALARM_SENTRY" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
