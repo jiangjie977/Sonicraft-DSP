@@ -500,6 +500,48 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 color = if (autoEqOk == false) Color(0xFFB00020) else ScColors.Primary,
             )
         }
+
+        // ---- 实际频响曲线：独立卡片（放在参量均衡面板下方）----
+        // 与上方手绘曲线不同：那张画的是「段值」，这张是段类型/频率/Q 叠加后的**真实响应**，
+        // 也是 AutoEq 导入后实际听到的曲线。
+        com.jiangjie.Sonicraft.ui.components.ScCard {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "实际频响曲线",
+                        fontSize = 13.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = ScColors.TextMain,
+                    )
+                    Text(
+                        text = "${eqMode} 段 · 总增益 ${"%+.1f".format(eqPreGainDb)} dB",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                    )
+                }
+                EqResponseChart(
+                    freqs = eqBandFreqs,
+                    gains = eqBandGains,
+                    qs = eqBandQs,
+                    types = eqBandTypes,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(158.dp),
+                )
+                Text(
+                    text = "20 Hz — 20 kHz · 按段类型与 Q 精算",
+                    fontSize = 10.sp,
+                    color = ScColors.TextSub,
+                )
+            }
+        }
         if (showAutoEqDialog) {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showAutoEqDialog = false },
@@ -559,11 +601,10 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                             fontSize = 11.sp,
                             color = ScColors.TextSub,
                         )
-                        AutoEqPreview(
-                            parsed = parsedPreview,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(112.dp),
+                        Text(
+                            text = "应用后可在下方「实际频响曲线」卡片查看叠加结果",
+                            fontSize = 11.sp,
+                            color = ScColors.TextSub,
                         )
                     } else if (autoEqText.isNotBlank()) {
                         Text(
@@ -866,16 +907,14 @@ private fun DrawScope.drawEqEditor(
  * 横轴 20 Hz–20 kHz 对数、纵轴按峰值对称取 6 dB 网格 —— 形状可直接与 AutoEq 网页上的图对照。
  */
 @Composable
-private fun AutoEqPreview(
-    parsed: com.jiangjie.Sonicraft.AutoEqParser.Result,
+private fun EqResponseChart(
+    freqs: List<Float>,
+    gains: List<Float>,
+    qs: List<Float>,
+    types: List<Int>,
     modifier: Modifier = Modifier,
 ) {
-    val freqs = parsed.bands.map { it.freq }
-    val gains = parsed.bands.map { it.gain }
-    val qs = parsed.bands.map { it.q }
-    val types = parsed.bands.map { it.type }
-
-    val samples = remember(parsed) {
+    val samples = remember(freqs, gains, qs, types) {
         val n = 120
         val lo = kotlin.math.ln(20.0)
         val hi = kotlin.math.ln(20000.0)
