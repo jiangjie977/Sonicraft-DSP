@@ -3030,12 +3030,17 @@ class MainViewModel @Inject constructor(
         prefs.edit().putString("eq_freq_$m", freqs.joinToString(",") { "%.1f".format(it) }).apply()
         _bassGain.value = gains.firstOrNull() ?: 0f
         _trebleGain.value = gains.lastOrNull() ?: 0f
-        if (!saveAsPreset.isNullOrBlank()) saveEqUserPreset(saveAsPreset)
+        // 预设名带来源前缀：用户自己手调的曲线与导入曲线在同一列表里时能一眼分开
+        val prefixed = saveAsPreset?.takeIf { it.isNotBlank() }?.let { "AutoEq · $it" }
+        if (prefixed != null) saveEqUserPreset(prefixed)
         val skipNote = if (r.skipped > 0) "，跳过 ${r.skipped} 段（LP/HP/None 不支持）" else ""
-        val presetNote = if (!saveAsPreset.isNullOrBlank()) "，已存为预设「$saveAsPreset」" else ""
+        val presetNote = if (prefixed != null) "，已存为预设「$prefixed」" else ""
+        // 语境提示：AutoEq 曲线是按耳机（Harman 等目标）拟合的，外放上用通常不理想
+        val ctxNote = if (!outputDeviceMonitor.isSpeakerOutput()) "" else
+            "；当前是扬声器输出 —— AutoEq 曲线为耳机设计，外放效果通常不佳"
         return AutoEqOutcome(
             true,
-            "已应用 $m 段（preamp ${"%.1f".format(r.preampDb)} dB）$skipNote$presetNote",
+            "已应用 $m 段（preamp ${"%.1f".format(r.preampDb)} dB）$skipNote$presetNote$ctxNote",
         )
     }
 
