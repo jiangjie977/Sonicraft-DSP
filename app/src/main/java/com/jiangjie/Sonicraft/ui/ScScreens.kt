@@ -2528,8 +2528,12 @@ internal fun ScEffectDetailPage(
  */
 @Composable
 internal fun ScEqDetailContent(viewModel: MainViewModel) {
-    ScCard(modifier = Modifier.fillMaxWidth()) {
-        MultiBandEqPanel(viewModel = viewModel, modifier = Modifier.padding(14.dp))
+    // 两张**同级**卡：EQ 面板 + 实际频响曲线（不要把曲线塞进面板卡里，会变成卡中卡）
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        ScCard(modifier = Modifier.fillMaxWidth()) {
+            MultiBandEqPanel(viewModel = viewModel, modifier = Modifier.padding(14.dp))
+        }
+        ScEqResponseCard(viewModel = viewModel)
     }
 }
 

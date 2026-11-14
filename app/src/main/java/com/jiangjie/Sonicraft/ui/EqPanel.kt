@@ -501,47 +501,6 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             )
         }
 
-        // ---- 实际频响曲线：独立卡片（放在参量均衡面板下方）----
-        // 与上方手绘曲线不同：那张画的是「段值」，这张是段类型/频率/Q 叠加后的**真实响应**，
-        // 也是 AutoEq 导入后实际听到的曲线。
-        com.jiangjie.Sonicraft.ui.components.ScCard {
-            Column(
-                modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "实际频响曲线",
-                        fontSize = 13.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                        color = ScColors.TextMain,
-                    )
-                    Text(
-                        text = "${eqMode} 段 · 总增益 ${"%+.1f".format(eqPreGainDb)} dB",
-                        fontSize = 11.sp,
-                        color = ScColors.TextSub,
-                    )
-                }
-                EqResponseChart(
-                    freqs = eqBandFreqs,
-                    gains = eqBandGains,
-                    qs = eqBandQs,
-                    types = eqBandTypes,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(158.dp),
-                )
-                Text(
-                    text = "20 Hz — 20 kHz · 按段类型与 Q 精算",
-                    fontSize = 10.sp,
-                    color = ScColors.TextSub,
-                )
-            }
-        }
         if (showAutoEqDialog) {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showAutoEqDialog = false },
@@ -964,5 +923,62 @@ private fun EqResponseChart(
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
         drawPath(path = path, color = ScColors.Primary, style = Stroke(width = 2f, cap = StrokeCap.Round))
+    }
+}
+
+
+/**
+ * 参量均衡的「实际频响曲线」卡片（2026-11-14）。
+ *
+ * 单独成卡、放在 EQ 面板卡**外面**（由 `ScEqDetailContent` 同级渲染）——
+ * 放进面板里会形成"卡中卡"，阴影叠加、层级含混。
+ * 曲线按段类型/频率/Q 用 [EqMath.responseAt] 精算，随参数实时更新。
+ */
+@Composable
+internal fun ScEqResponseCard(viewModel: MainViewModel) {
+    val eqMode by viewModel.eqMode.collectAsStateWithLifecycle()
+    val gains by viewModel.eqBandGains.collectAsStateWithLifecycle()
+    val qs by viewModel.eqBandQs.collectAsStateWithLifecycle()
+    val freqs by viewModel.eqBandFreqs.collectAsStateWithLifecycle()
+    val types by viewModel.eqBandTypes.collectAsStateWithLifecycle()
+    val preGain by viewModel.eqPreGainDb.collectAsStateWithLifecycle()
+
+    com.jiangjie.Sonicraft.ui.components.ScCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "实际频响曲线",
+                    fontSize = 13.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = ScColors.TextMain,
+                )
+                Text(
+                    text = "$eqMode 段 · 总增益 ${"%+.1f".format(preGain)} dB",
+                    fontSize = 11.sp,
+                    color = ScColors.TextSub,
+                )
+            }
+            EqResponseChart(
+                freqs = freqs,
+                gains = gains,
+                qs = qs,
+                types = types,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(158.dp),
+            )
+            Text(
+                text = "20 Hz — 20 kHz · 按段类型与 Q 精算",
+                fontSize = 10.sp,
+                color = ScColors.TextSub,
+            )
+        }
     }
 }
