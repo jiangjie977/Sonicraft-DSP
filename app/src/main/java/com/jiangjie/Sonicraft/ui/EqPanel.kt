@@ -898,6 +898,7 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 56.dp)
                     .scNoRippleClick { autoEqExpanded.value = !autoEqExpanded.value }
                     .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,

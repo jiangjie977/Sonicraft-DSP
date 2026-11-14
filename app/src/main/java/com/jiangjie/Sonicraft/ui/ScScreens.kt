@@ -153,7 +153,6 @@ import com.jiangjie.Sonicraft.ui.components.ScPillVariant
 import com.jiangjie.Sonicraft.ui.components.ScPowerIcon
 import com.jiangjie.Sonicraft.ui.components.ScSoftButton
 import com.jiangjie.Sonicraft.ui.components.ScSwitch
-import com.jiangjie.Sonicraft.ui.components.scFullBleedHorizontal
 import com.jiangjie.Sonicraft.ui.components.scNoRippleClick
 import com.jiangjie.Sonicraft.ui.components.ScTextOneLine
 import com.jiangjie.Sonicraft.ui.components.ScCompactBreakpoint
@@ -2231,14 +2230,11 @@ internal fun ScSlotHeader(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            // 头部**通长可点**：向左右各出血 16dp 吃掉卡片内边距（ScCard 16dp），
-            // 再用等量 padding 把内容推回原位 —— 视觉不变、命中区贴到卡片边缘。
-            // 上方再吃 16dp（卡片内边距），并在内部补回等量 padding —— 标题位置不变，
-            // 但"卡头带"变高：标题上方那片空白现在也能点。
-            .scFullBleedHorizontal(16.dp, top = 16.dp)
+            // 左右内边距由外层 Column 的 20dp 提供，这里只留纵向 —— 保证与
+            // 均衡器页卡头「标题距卡片左 20dp、卡头高 56dp」完全一致。
             .heightIn(min = 56.dp)
             .scNoRippleClick { onToggleExpand() }
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 10.dp),
+            .padding(vertical = 18.dp),
     ) {
         Text(
             text = title,
@@ -2548,7 +2544,8 @@ internal fun ScEqDetailContent(viewModel: MainViewModel) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .scNoRippleClick { eqExpanded.value = !eqExpanded.value }
+                        .heightIn(min = 56.dp)
+                    .scNoRippleClick { eqExpanded.value = !eqExpanded.value }
                         // 标题离边框留足呼吸位（16dp 太贴），热区随之变高
                         .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -2616,6 +2613,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
     var compressorExpanded by rememberExpandedFollowing(compressorGate, "comp")
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ScCard(
+            padded = false,
             modifier = Modifier
                 .fillMaxWidth()
                 // 折叠态**整卡可点**（2026-11-11 用户要求「点卡片上就能动作」）：
@@ -2633,8 +2631,8 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                 // 245px vs 210px（12.7dp）。改成同一套规则后只差行高，行高由下面的
                 // heightIn(32dp) 锁定 → 两卡折叠高度一致。
                 modifier = Modifier.padding(
-                    horizontal = 14.dp,
-                    vertical = if (multibandExpanded) 14.dp else 10.dp,
+                    horizontal = 20.dp,
+                    vertical = 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -3309,6 +3307,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
         // 之前展开时整卡铺浅灰 #E8EEF4，白色陶瓷旋钮压在上面显得突兀；
         // 现在与「三段动态」卡片一致，都是标准 ScCard 白底。
         ScCard(
+            padded = false,
             modifier = Modifier
                 .fillMaxWidth()
                 // 折叠态整卡可点（2026-11-11 用户要求「点卡片上就能动作」）：
@@ -3323,11 +3322,11 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                 // 展开时保持 14dp 的舒展留白；收起时卡片里只剩标题行和开关，
                 // 14dp 上下留白占掉了整卡高度近一半，故收到 6dp。
                 modifier = Modifier.padding(
-                    horizontal = 14.dp,
+                    horizontal = 20.dp,
                     // 收起 6 → **10dp**（2026-11-11 统一两卡折叠高度）：
                     // 6dp 是当初为了「卡片太高」单独压的，结果比三段卡矮 12.7dp。
                     // 现在两卡收起都用 10dp + 32dp 行高 → 折叠高度完全一致。
-                    vertical = if (compressorExpanded) 14.dp else 10.dp,
+                    vertical = 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -3689,6 +3688,7 @@ internal fun ScWidthDetailContent(viewModel: MainViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 56.dp)
                     .scNoRippleClick { widthExpanded.value = !widthExpanded.value }
                     .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -4125,14 +4125,15 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // ---- 槽 1：动态低音（耳机）----
         ScCard(
+            padded = false,
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (!dynExpanded) Modifier.clickable { dynExpanded = true } else Modifier),
         ) {
             Column(
                 modifier = Modifier.padding(
-                    horizontal = 4.dp,
-                    vertical = if (dynExpanded) 14.dp else 10.dp,
+                    horizontal = 20.dp,
+                    vertical = 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -4172,14 +4173,15 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
 
         // ---- 槽 2：低音增强（设备无关，移植自 wecho「低频质感」）----
         ScCard(
+            padded = false,
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (!beExpanded) Modifier.clickable { beExpanded = true } else Modifier),
         ) {
             Column(
                 modifier = Modifier.padding(
-                    horizontal = 4.dp,
-                    vertical = if (beExpanded) 14.dp else 10.dp,
+                    horizontal = 20.dp,
+                    vertical = 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -4212,14 +4214,15 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
 
         // ---- 槽 3：虚拟低音（外放）----
         ScCard(
+            padded = false,
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (!vbExpanded) Modifier.clickable { vbExpanded = true } else Modifier),
         ) {
             Column(
                 modifier = Modifier.padding(
-                    horizontal = 4.dp,
-                    vertical = if (vbExpanded) 14.dp else 10.dp,
+                    horizontal = 20.dp,
+                    vertical = 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -4312,6 +4315,7 @@ internal fun ScLimiterDetailContent(viewModel: MainViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 56.dp)
                     .scNoRippleClick { ceilingExpanded.value = !ceilingExpanded.value }
                     .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -4396,6 +4400,7 @@ internal fun ScReverbGroupDetail(viewModel: MainViewModel) {
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ScCard(
+            padded = false,
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (!convExpanded) Modifier.clickable { convExpanded = true } else Modifier),
@@ -4404,8 +4409,8 @@ internal fun ScReverbGroupDetail(viewModel: MainViewModel) {
                 modifier = Modifier.padding(
                     // 左右 14 → 4dp（2026-11-11 用户要求收窄）：
                     // ScCard 自带 16dp，再叠 14dp 会让内层卡片的可用宽度少掉 30dp/侧
-                    horizontal = 4.dp,
-                    vertical = if (convExpanded) 14.dp else 10.dp,
+                    horizontal = 20.dp,
+                    vertical = 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -4437,6 +4442,7 @@ internal fun ScReverbGroupDetail(viewModel: MainViewModel) {
             }
         }
         ScCard(
+            padded = false,
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (!fdnExpanded) Modifier.clickable { fdnExpanded = true } else Modifier),
@@ -4445,8 +4451,8 @@ internal fun ScReverbGroupDetail(viewModel: MainViewModel) {
                 modifier = Modifier.padding(
                     // 左右 14 → 4dp（2026-11-11 用户要求收窄）：
                     // ScCard 自带 16dp，再叠 14dp 会让内层卡片的可用宽度少掉 30dp/侧
-                    horizontal = 4.dp,
-                    vertical = if (fdnExpanded) 14.dp else 10.dp,
+                    horizontal = 20.dp,
+                    vertical = 0.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
