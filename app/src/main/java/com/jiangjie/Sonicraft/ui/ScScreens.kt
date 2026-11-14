@@ -3835,7 +3835,7 @@ internal fun ScBassEnhanceDetailContent(viewModel: MainViewModel) {
                     label = "强度",
                     value = amount * 100f,
                     min = 0f, max = 100f,
-                    signed = false, sizeDp = 83, textScale = 0.5f, labelSize = 14f,
+                    signed = false, sizeDp = 76, textScale = 0.5f, labelSize = 14f,
                     compact = true, resetValue = 50f,
                     format = { "%.0f%%".format(it) },
                     onValueChange = { viewModel.setBassEnhanceAmount(it / 100f) },
@@ -3889,63 +3889,67 @@ internal fun ScVirtualBassDetailContent(viewModel: MainViewModel) {
         modifier = Modifier.padding(horizontal = 4.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            ScKnob(
-                label = "强度",
-                value = amount * 100f,
-                min = 0f, max = 100f,
-                signed = false, sizeDp = 83, textScale = 0.5f, labelSize = 14f,
-                compact = true, resetValue = 100f,
-                format = { "%.0f%%".format(it) },
-                onValueChange = { viewModel.setVirtualBassAmount(it / 100f) },
-            )
-            ScKnob(
-                label = "谐波量",
-                value = harmonic * 100f,
-                min = 0f, max = 200f,
-                signed = false, sizeDp = 83, textScale = 0.5f, labelSize = 14f,
-                compact = true, resetValue = 100f,
-                format = { "%.0f%%".format(it) },
-                onValueChange = { viewModel.setVirtualBassHarmonic(it / 100f) },
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            ScKnob(
-                label = "中频直通",
-                value = midGain * 100f,
-                min = 0f, max = 100f,
-                signed = false, sizeDp = 83, textScale = 0.5f, labelSize = 14f,
-                compact = true, resetValue = 8f,
-                format = { "%.0f%%".format(it) },
-                onValueChange = { viewModel.setVirtualBassMidGain(it / 100f) },
-            )
-            ScKnob(
-                label = "高频直通",
-                value = highGain * 100f,
-                min = 0f, max = 100f,
-                signed = false, sizeDp = 83, textScale = 0.5f, labelSize = 14f,
-                compact = true, resetValue = 16f,
-                format = { "%.0f%%".format(it) },
-                onValueChange = { viewModel.setVirtualBassHighGain(it / 100f) },
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
+        // 梅花五点布局：四个塑形旋钮占四角，跟随速度居中心。
+        // 为什么用 Box 叠放而不是两行 Row：中心旋钮要落在两行之间的空隙里，
+        // 用 Column 排两行 + Box 居中对齐即可自然形成五点结构，不需要手算偏移。
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(26.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    ScKnob(
+                        label = "强度",
+                        value = amount * 100f,
+                        min = 0f, max = 100f,
+                        signed = false, sizeDp = 83, textScale = 0.5f, labelSize = 14f,
+                        compact = true, resetValue = 100f,
+                        format = { "%.0f%%".format(it) },
+                        onValueChange = { viewModel.setVirtualBassAmount(it / 100f) },
+                    )
+                    ScKnob(
+                        label = "谐波量",
+                        value = harmonic * 100f,
+                        min = 0f, max = 200f,
+                        signed = false, sizeDp = 76, textScale = 0.5f, labelSize = 14f,
+                        compact = true, resetValue = 100f,
+                        format = { "%.0f%%".format(it) },
+                        onValueChange = { viewModel.setVirtualBassHarmonic(it / 100f) },
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    ScKnob(
+                        label = "中频直通",
+                        value = midGain * 100f,
+                        min = 0f, max = 100f,
+                        signed = false, sizeDp = 76, textScale = 0.5f, labelSize = 14f,
+                        compact = true, resetValue = 8f,
+                        format = { "%.0f%%".format(it) },
+                        onValueChange = { viewModel.setVirtualBassMidGain(it / 100f) },
+                    )
+                    ScKnob(
+                        label = "高频直通",
+                        value = highGain * 100f,
+                        min = 0f, max = 100f,
+                        signed = false, sizeDp = 76, textScale = 0.5f, labelSize = 14f,
+                        compact = true, resetValue = 16f,
+                        format = { "%.0f%%".format(it) },
+                        onValueChange = { viewModel.setVirtualBassHighGain(it / 100f) },
+                    )
+                }
+            }
+            // 中心：跟随速度（速率参数，视觉上作为这一组的枢纽）
             ScKnob(
                 label = "跟随速度",
                 value = envRate,
                 min = 5f, max = 150f,
-                signed = false, sizeDp = 83, textScale = 0.5f, labelSize = 14f,
+                signed = false, sizeDp = 86, textScale = 0.5f, labelSize = 14f,
                 compact = true, resetValue = 50f,
                 format = { "%.0f".format(it) },
+                modifier = Modifier.align(Alignment.Center),
                 onValueChange = { viewModel.setVirtualBassEnvelopeRate(it) },
             )
         }
