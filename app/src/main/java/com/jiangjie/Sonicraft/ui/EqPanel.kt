@@ -899,7 +899,7 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .scNoRippleClick { autoEqExpanded.value = !autoEqExpanded.value }
-                    .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
+                    .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             ) {
@@ -924,7 +924,7 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
             }
             if (autoEqExpanded.value) {
             Column(
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
             Row(

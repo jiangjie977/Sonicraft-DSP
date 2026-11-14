@@ -768,12 +768,21 @@ fun Modifier.scNoRippleClick(onClick: () -> Unit): Modifier = composed {
  *
  * 注意：子项尺寸会超出父约束，父级若带 `clip` 只裁剪绘制，不影响命中测试。
  */
-fun Modifier.scFullBleedHorizontal(expand: Dp): Modifier = layout { measurable, constraints ->
+fun Modifier.scFullBleedHorizontal(
+    expand: Dp,
+    /** 同时向上扩展多少（用于把卡片顶部 16dp 内边距也纳入命中区） */
+    top: Dp = 0.dp,
+): Modifier = layout { measurable, constraints ->
     val extra = expand.roundToPx() * 2
+    val up = top.roundToPx()
     val placeable = measurable.measure(
-        constraints.copy(maxWidth = constraints.maxWidth + extra),
+        constraints.copy(
+            maxWidth = constraints.maxWidth + extra,
+            maxHeight = if (constraints.hasBoundedHeight) constraints.maxHeight + up
+            else constraints.maxHeight,
+        ),
     )
     layout(placeable.width, placeable.height) {
-        placeable.place(-expand.roundToPx(), 0)
+        placeable.place(-expand.roundToPx(), -up)
     }
 }

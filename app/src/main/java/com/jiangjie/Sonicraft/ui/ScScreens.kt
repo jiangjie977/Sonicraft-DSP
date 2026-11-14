@@ -2233,10 +2233,12 @@ internal fun ScSlotHeader(
             .fillMaxWidth()
             // 头部**通长可点**：向左右各出血 16dp 吃掉卡片内边距（ScCard 16dp），
             // 再用等量 padding 把内容推回原位 —— 视觉不变、命中区贴到卡片边缘。
-            .scFullBleedHorizontal(16.dp)
-            .heightIn(min = 44.dp)
+            // 上方再吃 16dp（卡片内边距），并在内部补回等量 padding —— 标题位置不变，
+            // 但"卡头带"变高：标题上方那片空白现在也能点。
+            .scFullBleedHorizontal(16.dp, top = 16.dp)
+            .heightIn(min = 56.dp)
             .scNoRippleClick { onToggleExpand() }
-            .padding(horizontal = 16.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 10.dp),
     ) {
         Text(
             text = title,
@@ -2547,7 +2549,8 @@ internal fun ScEqDetailContent(viewModel: MainViewModel) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .scNoRippleClick { eqExpanded.value = !eqExpanded.value }
-                        .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
+                        // 标题离边框留足呼吸位（16dp 太贴），热区随之变高
+                        .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -2571,7 +2574,7 @@ internal fun ScEqDetailContent(viewModel: MainViewModel) {
                 if (eqExpanded.value) {
                     MultiBandEqPanel(
                         viewModel = viewModel,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
                     )
                 }
             }
@@ -3687,7 +3690,7 @@ internal fun ScWidthDetailContent(viewModel: MainViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .scNoRippleClick { widthExpanded.value = !widthExpanded.value }
-                    .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
+                    .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -3704,7 +3707,7 @@ internal fun ScWidthDetailContent(viewModel: MainViewModel) {
             }
             if (widthExpanded.value) {
                 Column(
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Slider(
@@ -4310,7 +4313,7 @@ internal fun ScLimiterDetailContent(viewModel: MainViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .scNoRippleClick { ceilingExpanded.value = !ceilingExpanded.value }
-                    .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
+                    .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
