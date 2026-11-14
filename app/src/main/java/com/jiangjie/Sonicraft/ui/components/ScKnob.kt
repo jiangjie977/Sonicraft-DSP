@@ -144,7 +144,7 @@ fun ScKnob(
             initialValue = 1f,
             targetValue = 0.42f,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
+                animation = tween(durationMillis = 2400, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "knobGlowBreath",
