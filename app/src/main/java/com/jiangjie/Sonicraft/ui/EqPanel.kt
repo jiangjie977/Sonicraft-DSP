@@ -18,6 +18,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement
@@ -91,6 +93,8 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     var autoEqMsg by remember { mutableStateOf<String?>(null) }
     // 成功提示用品牌色、失败用红：此前所有提示都是红色，成功也像报错（2026-11-14 修）
     var autoEqOk by remember { mutableStateOf<Boolean?>(null) }
+    // 文件导入来源名：非空时应用成功后自动存为该名字的预设（粘贴导入为 null，不污染预设库）
+    var autoEqFileName by remember { mutableStateOf<String?>(null) }
     var draggingBand by remember { mutableStateOf(-1) }
     var selectedBand by remember { mutableStateOf(0) }
     // 手绘防误触锁（参照 wecho GraphicEqPanel 的锁定思路）：锁定后曲线区禁用
@@ -461,12 +465,14 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     autoEqOk = false
                     autoEqMsg = "读取文件失败（可能不是文本文件或编码不支持）"
                 } else {
-                    // 文件名即预设名：导出的 ParametricEQ.txt 通常带耳机型号，正好当预设名
+                    // 文件名即预设名：导出的 ParametricEQ.txt 通常带耳机型号，正好当预设名。
+                    // 先填进对话框让用户看频响曲线预览，确认后再应用（避免选错文件直接改掉 EQ）。
                     val rawName = uri.lastPathSegment?.substringAfterLast('/') ?: "AutoEq"
-                    val name = rawName.substringBeforeLast('.').ifBlank { "AutoEq" }
-                    val res = viewModel.applyAutoEq(txt, saveAsPreset = name)
-                    autoEqOk = res.ok
-                    autoEqMsg = res.message
+                    autoEqFileName = rawName.substringBeforeLast('.').ifBlank { "AutoEq" }
+                    autoEqText = txt
+                    autoEqMsg = null
+                    autoEqOk = null
+                    showAutoEqDialog = true
                 }
             }
         }
@@ -478,7 +484,12 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             }) {
                 Text(text = "\u4ece\u6587\u4ef6\u5bfc\u5165", fontSize = 12.sp)
             }
-            TextButton(onClick = { autoEqText = ""; autoEqMsg = null; showAutoEqDialog = true }) {
+            TextButton(onClick = {
+                autoEqText = ""
+                autoEqMsg = null
+                autoEqFileName = null
+                showAutoEqDialog = true
+            }) {
                 Text(text = "\u7c98\u8d34\u5bfc\u5165", fontSize = 12.sp)
             }
         }
@@ -494,17 +505,34 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 onDismissRequest = { showAutoEqDialog = false },
                 confirmButton = {
                     TextButton(onClick = {
-                        val res = viewModel.applyAutoEq(autoEqText)
+                        val res = viewModel.applyAutoEq(autoEqText, saveAsPreset = autoEqFileName)
                         autoEqOk = res.ok
                         autoEqMsg = res.message
-                        if (res.ok) showAutoEqDialog = false
+                        if (res.ok) {
+                            showAutoEqDialog = false
+                            autoEqFileName = null
+                        }
                     }) { Text(text = "\u5e94\u7528") }
                 },
                 dismissButton = {
                     TextButton(onClick = { showAutoEqDialog = false }) { Text(text = "\u53d6\u6d88") }
                 },
-                title = { Text(text = "\u7c98\u8d34 AutoEq ParametricEQ.txt") },
+                title = {
+                    Text(
+                        text = autoEqFileName?.let { "AutoEq 导入 · $it" }
+                            ?: "\u7c98\u8d34 AutoEq ParametricEQ.txt",
+                        fontSize = 15.sp,
+                    )
+                },
                 text = {
+                    // 键盘弹出后对话框可用高度会缩水：输入框 + 曲线预览必须可滚动，
+                    // 否则预览会把输入框挤成一条缝（真机实测）。
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 340.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                     androidx.compose.material3.OutlinedTextField(
                         value = autoEqText,
                         onValueChange = { autoEqText = it },
@@ -514,9 +542,37 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                 fontSize = 11.sp,
                             )
                         },
-                        minLines = 4,
-                        maxLines = 8,
+                        minLines = 3,
+                        maxLines = 5,
+                        modifier = Modifier.fillMaxWidth(),
                     )
+                    // 频响曲线预览：把解析出的 PK/LSC/HSC 段按真实双二阶算成响应曲线，
+                    // 应用前就能看出形状（AutoEq 图上那条曲线在我们 EQ 里的等效结果）。
+                    val parsedPreview = remember(autoEqText) {
+                        com.jiangjie.Sonicraft.AutoEqParser.parse(autoEqText)
+                    }
+                    if (parsedPreview != null) {
+                        Text(
+                            text = "预览：${parsedPreview.bands.size} 段" +
+                                " · preamp ${"%+.1f".format(parsedPreview.preampDb)} dB" +
+                                if (parsedPreview.skipped > 0) " · 跳过 ${parsedPreview.skipped} 段" else "",
+                            fontSize = 11.sp,
+                            color = ScColors.TextSub,
+                        )
+                        AutoEqPreview(
+                            parsed = parsedPreview,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(112.dp),
+                        )
+                    } else if (autoEqText.isNotBlank()) {
+                        Text(
+                            text = "暂无可识别的滤波器行（需 Filter N: ON PK/LSC/HSC Fc … Hz Gain … dB Q …）",
+                            fontSize = 11.sp,
+                            color = Color(0xFFB00020),
+                        )
+                    }
+                    }
                 },
             )
         }
@@ -803,5 +859,71 @@ private fun DrawScope.drawEqEditor(
     }
 }
 
+/**
+ * AutoEq 参数导入预览曲线。
+ *
+ * 用 [EqMath.responseAt] 按真实双二阶算 PK/LSC/HSC 各段叠加后的幅频响应，
+ * 横轴 20 Hz–20 kHz 对数、纵轴按峰值对称取 6 dB 网格 —— 形状可直接与 AutoEq 网页上的图对照。
+ */
+@Composable
+private fun AutoEqPreview(
+    parsed: com.jiangjie.Sonicraft.AutoEqParser.Result,
+    modifier: Modifier = Modifier,
+) {
+    val freqs = parsed.bands.map { it.freq }
+    val gains = parsed.bands.map { it.gain }
+    val qs = parsed.bands.map { it.q }
+    val types = parsed.bands.map { it.type }
 
+    val samples = remember(parsed) {
+        val n = 120
+        val lo = kotlin.math.ln(20.0)
+        val hi = kotlin.math.ln(20000.0)
+        List(n) { i ->
+            val f = kotlin.math.exp(lo + (hi - lo) * i / (n - 1)).toFloat()
+            EqMath.responseAt(freqs, gains, f, qs = qs, types = types)
+        }
+    }
+    val peak = samples.maxOrNull() ?: 0f
+    val dip = samples.minOrNull() ?: 0f
+    // 纵向范围：至少 ±6 dB，向上取 6 的倍数，保证上下对称好看
+    val span = maxOf(6f, kotlin.math.ceil(maxOf(kotlin.math.abs(peak), kotlin.math.abs(dip)) / 6f) * 6f)
 
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val padV = 8.dp.toPx()
+
+        // 背景
+        drawRoundRect(
+            color = ScColors.Inset,
+            cornerRadius = CornerRadius(8.dp.toPx()),
+        )
+        // 水平网格（-span, -span/2, 0, +span/2, +span）
+        val gridColor = Color(0x1A000000)
+        for (i in 0..4) {
+            val y = padV + (h - padV * 2) * i / 4f
+            drawLine(
+                color = if (i == 2) Color(0x33000000) else gridColor,
+                start = Offset(0f, y),
+                end = Offset(w, y),
+                strokeWidth = if (i == 2) 1.2f else 0.8f,
+            )
+        }
+        // 垂直网格（100 / 1k / 10k）
+        for (f in listOf(100f, 1000f, 10000f)) {
+            val t = (kotlin.math.ln(f.toDouble()) - kotlin.math.ln(20.0)) /
+                (kotlin.math.ln(20000.0) - kotlin.math.ln(20.0))
+            val x = (w * t).toFloat()
+            drawLine(color = gridColor, start = Offset(x, 0f), end = Offset(x, h), strokeWidth = 0.8f)
+        }
+        // 曲线
+        val path = androidx.compose.ui.graphics.Path()
+        samples.forEachIndexed { i, db ->
+            val x = w * i / (samples.size - 1).toFloat()
+            val y = padV + (h - padV * 2) * (1f - ((db + span) / (2 * span))).coerceIn(0f, 1f)
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        drawPath(path = path, color = ScColors.Primary, style = Stroke(width = 2f, cap = StrokeCap.Round))
+    }
+}
