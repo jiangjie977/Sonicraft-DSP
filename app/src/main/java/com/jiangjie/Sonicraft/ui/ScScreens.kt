@@ -2223,6 +2223,8 @@ internal fun ScSlotHeader(
     switchEnabled: Boolean,
     expanded: Boolean,
     onToggleExpand: () -> Unit,
+    /** false = 本卡不显示开关（开关在页头，例如立体声宽度/限幅器） */
+    showSwitch: Boolean = true,
     modifier: Modifier = Modifier,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
@@ -2244,11 +2246,13 @@ internal fun ScSlotHeader(
             modifier = Modifier.weight(1f),
         )
         trailing()
-        ScTinySwitch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            enabled = switchEnabled,
-        )
+        if (showSwitch) {
+            ScTinySwitch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                enabled = switchEnabled,
+            )
+        }
         Text(
             text = if (expanded) "▾" else "▸",
             fontSize = 13.sp,
@@ -2540,38 +2544,20 @@ internal fun ScEqDetailContent(viewModel: MainViewModel) {
     val eqExpanded = rememberExpandedFollowing(eqEnabled, "eq_panel_expanded")
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
-            Column {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 56.dp)
-                    .scNoRippleClick { eqExpanded.value = !eqExpanded.value }
-                        // 标题离边框留足呼吸位（16dp 太贴），热区随之变高
-                        .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "均衡器",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = ScColors.TextMain,
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    ScSwitch(
-                        checked = eqEnabled,
-                        onCheckedChange = { viewModel.setEqEnabled(!eqEnabled) },
-                    )
-                    Text(
-                        text = if (eqExpanded.value) "▾" else "▸",
-                        fontSize = 13.sp,
-                        color = ScColors.TextSub,
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                // 与其他详情页共用同一个卡头组件 —— 标题/开关/箭头的位置与尺寸必然一致
+                ScSlotHeader(
+                    title = "均衡器",
+                    checked = eqEnabled,
+                    onCheckedChange = { viewModel.setEqEnabled(!eqEnabled) },
+                    switchEnabled = true,
+                    expanded = eqExpanded.value,
+                    onToggleExpand = { eqExpanded.value = !eqExpanded.value },
+                )
                 if (eqExpanded.value) {
                     MultiBandEqPanel(
                         viewModel = viewModel,
-                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+                        modifier = Modifier.padding(bottom = 20.dp),
                     )
                 }
             }
@@ -3683,31 +3669,19 @@ internal fun ScWidthDetailContent(viewModel: MainViewModel) {
     val stereoWidth by viewModel.stereoWidth.collectAsStateWithLifecycle()
     val widthExpanded = rememberExpandedFollowing(stereoWidthEnabled, "width_card")
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
-        Column {
-            // 头部整行可点（不依赖点标题文字；卡片不再加 16dp 死区）
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp)
-                    .scNoRippleClick { widthExpanded.value = !widthExpanded.value }
-                    .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "宽度：${"%.2f".format(stereoWidth)}×",
-                    fontSize = 12.sp,
-                    color = ScColors.TextMain,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = if (widthExpanded.value) "▾" else "▸",
-                    fontSize = 13.sp,
-                    color = ScColors.TextSub,
-                )
-            }
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            ScSlotHeader(
+                title = "宽度：${"%.2f".format(stereoWidth)}×",
+                checked = stereoWidthEnabled,
+                onCheckedChange = { viewModel.setStereoWidthEnabled(!stereoWidthEnabled) },
+                switchEnabled = true,
+                expanded = widthExpanded.value,
+                onToggleExpand = { widthExpanded.value = !widthExpanded.value },
+                showSwitch = false,
+            )
             if (widthExpanded.value) {
                 Column(
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+                    modifier = Modifier.padding(bottom = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Slider(
@@ -4311,30 +4285,19 @@ internal fun ScLimiterDetailContent(viewModel: MainViewModel) {
     val limiterCeiling by viewModel.limiterCeiling.collectAsStateWithLifecycle()
     val ceilingExpanded = rememberExpandedFollowing(limiterEnabled, "limiter_card")
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp)
-                    .scNoRippleClick { ceilingExpanded.value = !ceilingExpanded.value }
-                    .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "输出上限：${"%.1f".format(limiterCeiling)} dBFS",
-                    fontSize = 12.sp,
-                    color = ScColors.TextMain,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = if (ceilingExpanded.value) "▾" else "▸",
-                    fontSize = 13.sp,
-                    color = ScColors.TextSub,
-                )
-            }
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            ScSlotHeader(
+                title = "输出上限：${"%.1f".format(limiterCeiling)} dBFS",
+                checked = limiterEnabled,
+                onCheckedChange = { viewModel.setLimiterEnabled(!limiterEnabled) },
+                switchEnabled = true,
+                expanded = ceilingExpanded.value,
+                onToggleExpand = { ceilingExpanded.value = !ceilingExpanded.value },
+                showSwitch = false,
+            )
             if (ceilingExpanded.value) {
                 Column(
-                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                    modifier = Modifier.padding(bottom = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Slider(

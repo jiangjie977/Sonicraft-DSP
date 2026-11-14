@@ -893,39 +893,19 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
         modifier = Modifier.fillMaxWidth(),
         padded = false,
     ) {
-        Column {
-            // 头部**贴到卡片边缘**（无 16dp 死区），整行空白处都能点
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp)
-                    .scNoRippleClick { autoEqExpanded.value = !autoEqExpanded.value }
-                    .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "AutoEq 校正",
-                    fontSize = 13.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                    color = ScColors.TextMain,
-                )
-                Spacer(Modifier.weight(1f))
-                com.jiangjie.Sonicraft.ui.components.ScSwitch(
-                    checked = enabled,
-                    // ScSwitch 的回调无参：用当前值取反（与其它页面写法一致）
-                    onCheckedChange = { viewModel.setAutoEqEnabled(!enabled) },
-                )
-                Text(
-                    text = if (autoEqExpanded.value) "▾" else "▸",
-                    fontSize = 13.sp,
-                    color = ScColors.TextSub,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            // 与其他详情页共用同一个卡头组件
+            ScSlotHeader(
+                title = "AutoEq 校正",
+                checked = enabled,
+                onCheckedChange = { viewModel.setAutoEqEnabled(!enabled) },
+                switchEnabled = true,
+                expanded = autoEqExpanded.value,
+                onToggleExpand = { autoEqExpanded.value = !autoEqExpanded.value },
+            )
             if (autoEqExpanded.value) {
             Column(
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+                modifier = Modifier.padding(bottom = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
             Row(
@@ -1014,9 +994,7 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                         Text(
                             text = if (libSelectMode) "已选 ${libSelected.size} 项" else
                                 "库 · ${library.size}/${viewModel.autoEqLibraryMax} 条 · 点按装载" +
-                                    // 超过约 4 条才需要滚动，提示一下，否则用户会以为列表不能滑
-                                    (if (library.size > 4) " · 上下滑动" else "") +
-                                    " · 长按多选",
+                                    (if (library.size > 4) " · 上下滑动" else ""),
                             fontSize = 11.sp,
                             color = ScColors.TextSub,
                         )
@@ -1055,6 +1033,18 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                         )
                     } else {
                         Text(
+                            text = "多选",
+                            fontSize = 11.sp,
+                            color = ScColors.TextSub,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    libSelectMode = true
+                                    libSelected = emptySet()
+                                }
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                        Text(
                             text = "存当前入库",
                             fontSize = 11.sp,
                             color = ScColors.Primary,
@@ -1081,20 +1071,17 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
                             .background(if (checked) Color(0xFFE6F4F4) else ScColors.Inset)
-                            .combinedClickable(
-                                onClick = {
-                                    if (libSelectMode) {
-                                        libSelected = if (checked) libSelected - item.name
-                                        else libSelected + item.name
-                                    } else {
-                                        viewModel.applyAutoEqCurve(item.name)
-                                    }
-                                },
-                                onLongClick = {
-                                    libSelectMode = true
-                                    libSelected = libSelected + item.name
-                                },
-                            )
+                            // 只用 clickable：**不要** combinedClickable 的长按——
+                            // 长按判定会把"慢速拖动"吃掉，用户表现为"列表滑不动"。
+                            // 多选改由标题行的「多选」按钮进入。
+                            .clickable {
+                                if (libSelectMode) {
+                                    libSelected = if (checked) libSelected - item.name
+                                    else libSelected + item.name
+                                } else {
+                                    viewModel.applyAutoEqCurve(item.name)
+                                }
+                            }
                             .padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                     ) {
