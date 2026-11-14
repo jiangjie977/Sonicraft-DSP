@@ -2265,6 +2265,20 @@ class MainViewModel @Inject constructor(
     }
 
     /**
+     * 耳机输出时虚拟低音**默认关闭**（只关闭、不禁止；用户手动开仍可，UI 每次弹风险提示）。
+     *
+     * **调用时机是硬约束**：必须在「保存上一个设备的配置」**之后**调用，
+     * 否则关闭动作会把上一台设备的快照改成 false —— 切回去时用户看到状态丢失
+     * （2026-11-14 实测：`device_last_speaker.virtual_bass_enabled` 被写成 0）。
+     */
+    private fun enforceVirtualBassOnHeadphone(key: String) {
+        if (outputDeviceMonitor.isSpeakerOutput()) return
+        if (!_virtualBassEnabled.value) return
+        setVirtualBassEnabled(false)
+        writeDiag("设备=$key 为耳机类：虚拟低音自动关闭（耳机下默认关）")
+    }
+
+    /**
      * 设备变化处理（M14b）。
      *
      * 顺序不可颠倒：判等 → 自适应开关 → 抢锁 → 等引擎 ready → 下发。
@@ -2297,13 +2311,11 @@ class MainViewModel @Inject constructor(
         // 否则上次在外放上开着、这次插着耳机启动，会带着一个明显不适合
         // 耳机的效果器开工。
         // **只关闭、不禁止**：用户手动开仍然可以（UI 每次都会弹风险提示）。
-        if (!outputDeviceMonitor.isSpeakerOutput() && _virtualBassEnabled.value) {
-            setVirtualBassEnabled(false)
-            writeDiag("设备=$key 为耳机类：虚拟低音自动关闭（耳机下默认关）")
-        }
         if (!deviceKeySeen) {
             deviceKeySeen = true
             lastDeviceKey = key
+            // 首帧没有「上一个设备」可保存，规则直接落
+            enforceVirtualBassOnHeadphone(key)
             writeDiag("设备切换: 首帧 $key（只记录，不应用预设）")
             return
         }
@@ -2316,6 +2328,8 @@ class MainViewModel @Inject constructor(
         saveLiveConfig(from, force = true)
         if (!_deviceAdaptive.value) {
             writeDiag("设备切换: 聚合模式，保持当前配置")
+            // 此时旧设备配置已保存，规则不会再污染它
+            enforceVirtualBassOnHeadphone(key)
             // 聚合模式只是「不换参数」，与「路由是否需要善后」无关：设备切换本身照样让
             // APM 重算路由、把已重路由的 track 打回物理设备。漏掉这步会让 loopbackRerouted
             // 残留 true（该状态为 true 时整条链路不挂静音）→ 原声直出叠加 DSP = 双声。
@@ -2341,6 +2355,9 @@ class MainViewModel @Inject constructor(
         } finally {
             deviceSwitchMutex.unlock()
         }
+        // 先应用新设备的配置，再落「耳机默认关」规则：
+        // 顺序颠倒会让规则的结果被新设备预设覆盖（或反过来污染旧设备快照）
+        enforceVirtualBassOnHeadphone(key)
         // 与是否绑定预设无关：设备变化本身就会威胁 Loop 重路由
         recoverLoopRoutingAfterDeviceChange()
     }
