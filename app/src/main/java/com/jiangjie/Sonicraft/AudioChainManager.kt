@@ -241,6 +241,36 @@ class AudioChainManager @Inject constructor(
             )
             engine.setParam(
                 AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_CENTER_MODE,
+                f("vs_center_mode", 1f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_DIALOG,
+                f("vs_dialog", 0f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_BASS_ENHANCER,
+                f("vs_bass_enh", 0f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_BASS_ENHANCER_MODE,
+                f("vs_bass_enh_mode", 0f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_REAR_CENTER_ENABLED,
+                f("vs_rear_center", 0f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_REAR_CENTER_DELAY_MS,
+                f("vs_rear_delay", 5f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
                 AudioEngine.VS_PARAM_ENABLED,
                 if (b("vs_enabled", false)) 1f else 0f,
             )

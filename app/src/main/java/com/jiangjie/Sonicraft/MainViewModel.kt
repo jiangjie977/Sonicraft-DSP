@@ -1594,6 +1594,70 @@ class MainViewModel @Inject constructor(
         )
     }
 
+    // 后处理参数（算法已实现，这里补状态与下发）
+    private val _vsCenterMode = MutableStateFlow(prefs.getInt(KEY_VS_CENTER_MODE, 1))
+    val vsCenterMode: StateFlow<Int> = _vsCenterMode.asStateFlow()
+
+    private val _vsDialog = MutableStateFlow(prefs.getFloat(KEY_VS_DIALOG, 0f))
+    val vsDialog: StateFlow<Float> = _vsDialog.asStateFlow()
+
+    private val _vsBassEnh = MutableStateFlow(prefs.getFloat(KEY_VS_BASS_ENH, 0f))
+    val vsBassEnh: StateFlow<Float> = _vsBassEnh.asStateFlow()
+
+    private val _vsBassEnhMode = MutableStateFlow(prefs.getInt(KEY_VS_BASS_ENH_MODE, 0))
+    val vsBassEnhMode: StateFlow<Int> = _vsBassEnhMode.asStateFlow()
+
+    private val _vsRearCenter = MutableStateFlow(prefs.getBoolean(KEY_VS_REAR_CENTER, false))
+    val vsRearCenter: StateFlow<Boolean> = _vsRearCenter.asStateFlow()
+
+    private val _vsRearDelay = MutableStateFlow(prefs.getFloat(KEY_VS_REAR_DELAY, 5f))
+    val vsRearDelay: StateFlow<Float> = _vsRearDelay.asStateFlow()
+
+    fun setVsCenterMode(mode: Int) {
+        val v = mode.coerceIn(0, 2)
+        _vsCenterMode.value = v
+        prefs.edit().putInt(KEY_VS_CENTER_MODE, v).apply()
+        engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_CENTER_MODE, v.toFloat())
+    }
+
+    fun setVsDialog(db: Float) {
+        val v = db.coerceIn(-6f, 6f)
+        _vsDialog.value = v
+        prefs.edit().putFloat(KEY_VS_DIALOG, v).apply()
+        engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_DIALOG, v)
+    }
+
+    fun setVsBassEnh(amount: Float) {
+        val v = amount.coerceIn(0f, 1f)
+        _vsBassEnh.value = v
+        prefs.edit().putFloat(KEY_VS_BASS_ENH, v).apply()
+        engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_BASS_ENHANCER, v)
+    }
+
+    fun setVsBassEnhMode(mode: Int) {
+        val v = mode.coerceIn(0, 1)
+        _vsBassEnhMode.value = v
+        prefs.edit().putInt(KEY_VS_BASS_ENH_MODE, v).apply()
+        engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_BASS_ENHANCER_MODE, v.toFloat())
+    }
+
+    fun setVsRearCenter(enabled: Boolean) {
+        _vsRearCenter.value = enabled
+        prefs.edit().putBoolean(KEY_VS_REAR_CENTER, enabled).apply()
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_REAR_CENTER_ENABLED,
+            if (enabled) 1f else 0f,
+        )
+    }
+
+    fun setVsRearDelay(ms: Float) {
+        val v = ms.coerceIn(0f, 15f)
+        _vsRearDelay.value = v
+        prefs.edit().putFloat(KEY_VS_REAR_DELAY, v).apply()
+        engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_REAR_CENTER_DELAY_MS, v)
+    }
+
     fun setVsFrontGain(db: Float) {
         val v = db.coerceIn(-12f, 12f)
         _vsFrontGain.value = v
@@ -2122,6 +2186,12 @@ class MainViewModel @Inject constructor(
             "vs_surround_gain" -> setVsSurroundGain(v)
             "vs_center_gain" -> setVsCenterGain(v)
             "vs_front_gain" -> setVsFrontGain(v)
+            "vs_center_mode" -> setVsCenterMode(v.toInt())
+            "vs_dialog" -> setVsDialog(v)
+            "vs_bass_enh" -> setVsBassEnh(v)
+            "vs_bass_enh_mode" -> setVsBassEnhMode(v.toInt())
+            "vs_rear_center" -> setVsRearCenter(v > 0.5f)
+            "vs_rear_delay" -> setVsRearDelay(v)
             "output_gain" -> setOutputGain(v)
             "fdn_enabled" -> setFdnEnabled(v > 0.5f)
             "fdn_room_size" -> setFdnRoomSize(v)
@@ -2263,6 +2333,12 @@ class MainViewModel @Inject constructor(
         "vs_surround_gain" to _vsSurroundGain.value,
         "vs_center_gain" to _vsCenterGain.value,
         "vs_front_gain" to _vsFrontGain.value,
+        "vs_center_mode" to _vsCenterMode.value.toFloat(),
+        "vs_dialog" to _vsDialog.value,
+        "vs_bass_enh" to _vsBassEnh.value,
+        "vs_bass_enh_mode" to _vsBassEnhMode.value.toFloat(),
+        "vs_rear_center" to if (_vsRearCenter.value) 1f else 0f,
+        "vs_rear_delay" to _vsRearDelay.value,
         "output_gain" to _outputGain.value,
         "fdn_enabled" to if (_fdnEnabled.value) 1f else 0f,
         "fdn_room_size" to _fdnRoomSize.value,
@@ -5601,6 +5677,36 @@ class MainViewModel @Inject constructor(
             AudioEngine.VS_PARAM_FRONT_GAIN,
             _vsFrontGain.value,
         )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_CENTER_MODE,
+            _vsCenterMode.value.toFloat(),
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_DIALOG,
+            _vsDialog.value,
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_BASS_ENHANCER,
+            _vsBassEnh.value,
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_BASS_ENHANCER_MODE,
+            _vsBassEnhMode.value.toFloat(),
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_REAR_CENTER_ENABLED,
+            if (_vsRearCenter.value) 1f else 0f,
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_REAR_CENTER_DELAY_MS,
+            _vsRearDelay.value,
+        )
         engine.setBypass(AudioEngine.STEREO_WIDTH_NODE_INDEX, !_stereoWidthEnabled.value)
         engine.setParam(
             AudioEngine.STEREO_WIDTH_NODE_INDEX,
@@ -5805,6 +5911,12 @@ class MainViewModel @Inject constructor(
     const val KEY_VS_SURROUND_GAIN = "vs_surround_gain"
     const val KEY_VS_CENTER_GAIN = "vs_center_gain"
     const val KEY_VS_FRONT_GAIN = "vs_front_gain"
+    const val KEY_VS_CENTER_MODE = "vs_center_mode"
+    const val KEY_VS_DIALOG = "vs_dialog"
+    const val KEY_VS_BASS_ENH = "vs_bass_enh"
+    const val KEY_VS_BASS_ENH_MODE = "vs_bass_enh_mode"
+    const val KEY_VS_REAR_CENTER = "vs_rear_center"
+    const val KEY_VS_REAR_DELAY = "vs_rear_delay"
 
     // ---- 动态低音----
     /**

@@ -3796,6 +3796,12 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsSurroundGain by viewModel.vsSurroundGain.collectAsStateWithLifecycle()
     val vsCenterGain by viewModel.vsCenterGain.collectAsStateWithLifecycle()
     val vsFrontGain by viewModel.vsFrontGain.collectAsStateWithLifecycle()
+    val vsCenterMode by viewModel.vsCenterMode.collectAsStateWithLifecycle()
+    val vsDialog by viewModel.vsDialog.collectAsStateWithLifecycle()
+    val vsBassEnh by viewModel.vsBassEnh.collectAsStateWithLifecycle()
+    val vsBassEnhMode by viewModel.vsBassEnhMode.collectAsStateWithLifecycle()
+    val vsRearCenter by viewModel.vsRearCenter.collectAsStateWithLifecycle()
+    val vsRearDelay by viewModel.vsRearDelay.collectAsStateWithLifecycle()
     val vsExpanded = rememberExpandedFollowing(vsEnabled, "vs_card")
     // 自检在后台线程跑（会分配内存、算 7 个方位 × 2 轮），结果写回 State 再弹窗
     var vsReport by remember { mutableStateOf<String?>(null) }
@@ -3851,6 +3857,66 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         onChange = viewModel::setVsFrontGain,
                     )
 
+                    // ---- 中置模式（关 / 直通 / 混入前置）----
+                    Text(text = "中置模式", fontSize = 12.sp, color = ScColors.TextMain)
+                    VsChoiceRow(
+                        options = listOf("关闭", "直通", "混入前置"),
+                        selected = vsCenterMode,
+                        enabled = vsEnabled,
+                        onSelect = viewModel::setVsCenterMode,
+                    )
+
+                    VsGainRow(
+                        label = "对话清晰度",
+                        value = vsDialog,
+                        range = -6f..6f,
+                        enabled = vsEnabled,
+                        onChange = viewModel::setVsDialog,
+                    )
+
+                    // ---- 低音增强（对数域谐波）----
+                    VsGainRow(
+                        label = "低音增强",
+                        value = vsBassEnh,
+                        range = 0f..1f,
+                        suffix = "",
+                        enabled = vsEnabled,
+                        onChange = viewModel::setVsBassEnh,
+                    )
+                    VsChoiceRow(
+                        options = listOf("取自 LFE", "取自前置"),
+                        selected = vsBassEnhMode,
+                        enabled = vsEnabled,
+                        onSelect = viewModel::setVsBassEnhMode,
+                    )
+
+                    // ---- 后中置 ----
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "后中置（延迟 + 全通）",
+                            fontSize = 12.sp,
+                            color = ScColors.TextMain,
+                            modifier = Modifier.weight(1f),
+                        )
+                        ScTinySwitch(
+                            checked = vsRearCenter,
+                            onCheckedChange = { viewModel.setVsRearCenter(it) },
+                        )
+                    }
+                    if (vsRearCenter) {
+                        VsGainRow(
+                            label = "后中置延迟",
+                            value = vsRearDelay,
+                            range = 0f..15f,
+                            suffix = " ms",
+                            enabled = vsEnabled,
+                            onChange = viewModel::setVsRearDelay,
+                        )
+                    }
+
                     Text(
                         text = "立体声先解码成 7 声道虚拟布局（前左/前右/中置/侧左/侧右/后中/低频），" +
                             "再逐声道过双耳模型渲染到耳机。环绕增益决定后方包裹感，中置增益决定人声贴脸程度，" +
@@ -3900,13 +3966,15 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     }
 }
 
-/** 单个增益滑条：标签 + 数值 + 滑块 */
+/** 单个增益滑条：标签 + 数值 + 滑块（范围与单位可配，低音增强用 0~1） */
 @Composable
 private fun VsGainRow(
     label: String,
     value: Float,
     enabled: Boolean,
     onChange: (Float) -> Unit,
+    range: ClosedFloatingPointRange<Float> = -12f..12f,
+    suffix: String = " dB",
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -3915,7 +3983,7 @@ private fun VsGainRow(
         ) {
             Text(text = label, fontSize = 12.sp, color = ScColors.TextMain)
             Text(
-                text = "%+.1f dB".format(value),
+                text = if (suffix == " dB") "%+.1f dB".format(value) else "%.2f%s".format(value, suffix),
                 fontSize = 11.sp,
                 color = ScColors.TextSub,
             )
@@ -3923,9 +3991,39 @@ private fun VsGainRow(
         Slider(
             value = value,
             onValueChange = onChange,
-            valueRange = -12f..12f,
+            valueRange = range,
             enabled = enabled,
         )
+    }
+}
+
+/** 一行互斥选项（中置模式 / 低音增强来源） */
+@Composable
+private fun VsChoiceRow(
+    options: List<String>,
+    selected: Int,
+    enabled: Boolean,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        options.forEachIndexed { index, text ->
+            val active = index == selected
+            TextButton(
+                onClick = { onSelect(index) },
+                enabled = enabled,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = text,
+                    fontSize = 12.sp,
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                    color = if (active) ScColors.Primary else ScColors.TextSub,
+                )
+            }
+        }
     }
 }
 
