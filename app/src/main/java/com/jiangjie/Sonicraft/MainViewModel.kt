@@ -1601,6 +1601,75 @@ class MainViewModel @Inject constructor(
         return if (v.isFinite()) v.coerceIn(lo, hi) else def
     }
 
+    // 逐声道 trim：7 个值打包成一个数组，避免 14 个 StateFlow 各自拖一份状态。
+    // 顺序 FL/FR/C/SL/SR/CS/LFE（与 native 一致），落盘为逗号串。
+    private fun loadVsFloats(key: String, count: Int, def: Float, lo: Float, hi: Float): FloatArray {
+        val out = FloatArray(count) { def }
+        val s = prefs.getString(key, "") ?: ""
+        if (s.isNotBlank()) {
+            s.split(',').take(count).forEachIndexed { i, t ->
+                val v = t.toFloatOrNull()
+                if (v != null && v.isFinite()) out[i] = v.coerceIn(lo, hi)
+            }
+        }
+        return out
+    }
+
+    private fun saveVsFloats(key: String, arr: FloatArray) =
+        prefs.edit().putString(key, arr.joinToString(",")).apply()
+
+    private val _vsTrims = MutableStateFlow(loadVsFloats(KEY_VS_TRIMS, 7, 0f, -12f, 12f))
+    val vsTrims: StateFlow<FloatArray> = _vsTrims.asStateFlow()
+
+    private val _vsMutes = MutableStateFlow(loadVsFloats(KEY_VS_MUTES, 7, 0f, 0f, 1f))
+    val vsMutes: StateFlow<FloatArray> = _vsMutes.asStateFlow()
+
+    private val vsTrimIds = intArrayOf(
+        AudioEngine.VS_PARAM_TRIM_L, AudioEngine.VS_PARAM_TRIM_R, AudioEngine.VS_PARAM_TRIM_C,
+        AudioEngine.VS_PARAM_TRIM_SL, AudioEngine.VS_PARAM_TRIM_SR, AudioEngine.VS_PARAM_TRIM_CS,
+        AudioEngine.VS_PARAM_TRIM_LFE,
+    )
+    private val vsMuteIds = intArrayOf(
+        AudioEngine.VS_PARAM_MUTE_L, AudioEngine.VS_PARAM_MUTE_R, AudioEngine.VS_PARAM_MUTE_C,
+        AudioEngine.VS_PARAM_MUTE_SL, AudioEngine.VS_PARAM_MUTE_SR, AudioEngine.VS_PARAM_MUTE_CS,
+        AudioEngine.VS_PARAM_MUTE_LFE,
+    )
+
+    fun setVsTrim(ch: Int, db: Float) {
+        if (ch !in 0..6) return
+        val v = if (db.isFinite()) db.coerceIn(-12f, 12f) else 0f
+        val arr = _vsTrims.value.copyOf()
+        arr[ch] = v
+        _vsTrims.value = arr
+        saveVsFloats(KEY_VS_TRIMS, arr)
+        engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, vsTrimIds[ch], v)
+    }
+
+    fun setVsMute(ch: Int, muted: Boolean) {
+        if (ch !in 0..6) return
+        val arr = _vsMutes.value.copyOf()
+        arr[ch] = if (muted) 1f else 0f
+        _vsMutes.value = arr
+        saveVsFloats(KEY_VS_MUTES, arr)
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            vsMuteIds[ch],
+            if (muted) 1f else 0f,
+        )
+    }
+
+    /** 还原默认：全部 0 dB、全部解除静音 */
+    fun resetVsTrims() {
+        _vsTrims.value = FloatArray(7)
+        _vsMutes.value = FloatArray(7)
+        saveVsFloats(KEY_VS_TRIMS, FloatArray(7))
+        saveVsFloats(KEY_VS_MUTES, FloatArray(7))
+        for (i in 0..6) {
+            engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, vsTrimIds[i], 0f)
+            engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, vsMuteIds[i], 0f)
+        }
+    }
+
     private val _vsRearSpace = MutableStateFlow(saneFloat(KEY_VS_REAR_SPACE, 0.5f, 0f, 1f))
     val vsRearSpace: StateFlow<Float> = _vsRearSpace.asStateFlow()
 
@@ -5743,6 +5812,18 @@ class MainViewModel @Inject constructor(
             AudioEngine.VS_PARAM_FRONT_GAIN,
             _vsFrontGain.value,
         )
+        for (i in 0..6) {
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                vsTrimIds[i],
+                _vsTrims.value[i],
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                vsMuteIds[i],
+                _vsMutes.value[i],
+            )
+        }
         engine.setParam(
             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
             AudioEngine.VS_PARAM_STEREO_EXPAND,
@@ -6004,6 +6085,8 @@ class MainViewModel @Inject constructor(
     const val KEY_VS_FRONT_GAIN = "vs_front_gain"
     const val KEY_VS_REAR_GAIN = "vs_rear_gain"
     const val KEY_VS_REAR_SPACE = "vs_rear_space"
+    const val KEY_VS_TRIMS = "vs_trims"
+    const val KEY_VS_MUTES = "vs_mutes"
     const val KEY_VS_ROOM_SIZE = "vs_room_size"
     const val KEY_VS_ROOM_WET = "vs_room_wet"
     const val KEY_VS_ENCODE_STRENGTH = "vs_encode_strength"

@@ -97,6 +97,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
@@ -3798,6 +3799,8 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsFrontGain by viewModel.vsFrontGain.collectAsStateWithLifecycle()
     val vsRearGain by viewModel.vsRearGain.collectAsStateWithLifecycle()
     val vsRearSpace by viewModel.vsRearSpace.collectAsStateWithLifecycle()
+    val vsTrims by viewModel.vsTrims.collectAsStateWithLifecycle()
+    val vsMutes by viewModel.vsMutes.collectAsStateWithLifecycle()
     val vsRoomSize by viewModel.vsRoomSize.collectAsStateWithLifecycle()
     val vsRoomWet by viewModel.vsRoomWet.collectAsStateWithLifecycle()
     val vsEncodeStrength by viewModel.vsEncodeStrength.collectAsStateWithLifecycle()
@@ -3982,6 +3985,58 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
         }
     }
 
+    // 声道 Trim：7 路独立增益 + 静音，用于确认"某一路是否真的在工作"
+    val trimExpanded = rememberExpandedFollowing(false, "vs_trim_card")
+    ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            ScSlotHeader(
+                title = "声道 Trim",
+                checked = false,
+                onCheckedChange = {},
+                switchEnabled = false,
+                expanded = trimExpanded.value,
+                onToggleExpand = { trimExpanded.value = !trimExpanded.value },
+                showSwitch = false,
+            )
+            if (trimExpanded.value) {
+                Column(modifier = Modifier.padding(bottom = 20.dp)) {
+                    Text(
+                        text = "逐声道校验：把某一路拉到 +12 dB 或静音，即可确认该声道是否真的在工作。" +
+                            "LFE 不走双耳渲染，直接混入双耳。",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        val names = listOf("L", "C", "R", "SL", "SR", "CS", "LFE")
+                        names.forEachIndexed { index, name ->
+                            VsTrimColumn(
+                                name = name,
+                                value = vsTrims.getOrElse(index) { 0f },
+                                muted = vsMutes.getOrElse(index) { 0f } > 0.5f,
+                                enabled = vsEnabled,
+                                onValue = { viewModel.setVsTrim(index, it) },
+                                onMute = { viewModel.setVsMute(index, it) },
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = { viewModel.resetVsTrims() }) {
+                            Text("还原默认值", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // 定位自检独立成卡（放最下方）：它是"验证工具"，不属于日常调音参数
     val testExpanded = rememberExpandedFollowing(true, "vs_selftest_card")
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
@@ -4075,6 +4130,50 @@ private fun VsGainRow(
             enabled = enabled,
             modifier = Modifier.fillMaxWidth(0.78f),
         )
+    }
+}
+
+/** 单路 Trim：竖滑条 + 数值 + 静音 */
+@Composable
+private fun VsTrimColumn(
+    name: String,
+    value: Float,
+    muted: Boolean,
+    enabled: Boolean,
+    onValue: (Float) -> Unit,
+    onMute: (Boolean) -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .width(36.dp)
+                .height(140.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            // 竖滑条：把标准 Slider 旋转 −90° 放进固定高度的盒子里
+            Slider(
+                value = value,
+                onValueChange = onValue,
+                valueRange = -12f..12f,
+                enabled = enabled && !muted,
+                modifier = Modifier
+                    .width(140.dp)
+                    .graphicsLayer { rotationZ = -90f },
+            )
+        }
+        Text(
+            text = if (muted) "静音" else "%.1f".format(value),
+            fontSize = 10.sp,
+            color = if (muted) ScColors.TextSub else ScColors.TextMain,
+        )
+        ScTinySwitch(
+            checked = muted,
+            onCheckedChange = onMute,
+        )
+        Text(text = name, fontSize = 11.sp, color = ScColors.TextSub)
     }
 }
 

@@ -249,6 +249,23 @@ interface AudioEngine {
         const val VS_PARAM_ROOM_SIZE = 23
         const val VS_PARAM_ROOM_WET_DRY = 24
 
+        // ---- 逐声道 trim（dB，−12~+12）与静音 ----
+        // 顺序固定 FL/FR/C/SL/SR/CS/LFE，与 native vs::Param 的 25~38 一一对应
+        const val VS_PARAM_TRIM_L = 25
+        const val VS_PARAM_TRIM_C = 26
+        const val VS_PARAM_TRIM_R = 27
+        const val VS_PARAM_TRIM_SL = 28
+        const val VS_PARAM_TRIM_SR = 29
+        const val VS_PARAM_TRIM_CS = 30
+        const val VS_PARAM_TRIM_LFE = 31
+        const val VS_PARAM_MUTE_L = 32
+        const val VS_PARAM_MUTE_C = 33
+        const val VS_PARAM_MUTE_R = 34
+        const val VS_PARAM_MUTE_SL = 35
+        const val VS_PARAM_MUTE_SR = 36
+        const val VS_PARAM_MUTE_CS = 37
+        const val VS_PARAM_MUTE_LFE = 38
+
         /**
          * 低音增强参数 id（与 native `BassEnhanceNode` 常量对齐）。
          * **跨语言契约**：任一侧改动都要同步。
