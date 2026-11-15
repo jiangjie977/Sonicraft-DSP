@@ -1726,6 +1726,19 @@ class MainViewModel @Inject constructor(
     private val _vsEncodeStrength = MutableStateFlow(prefs.getFloat(KEY_VS_ENCODE_STRENGTH, 0.5f))
     val vsEncodeStrength: StateFlow<Float> = _vsEncodeStrength.asStateFlow()
 
+    /**
+     * 二级解码开关：关 → 强度 0（信号只走一级解码），开 → 恢复上次强度。
+     * 强度 0 时节点内部整段跳过往返，等于一级解码直出。
+     */
+    fun setVsSecondDecodeEnabled(enabled: Boolean) {
+        if (enabled) {
+            val restore = if (_vsEncodeStrength.value > 0.01f) _vsEncodeStrength.value else 0.5f
+            setVsEncodeStrength(restore)
+        } else {
+            setVsEncodeStrength(0f)
+        }
+    }
+
     fun setVsEncodeStrength(v0: Float) {
         val v = v0.coerceIn(0f, 1f)
         _vsEncodeStrength.value = v

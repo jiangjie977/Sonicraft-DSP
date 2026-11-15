@@ -3875,15 +3875,32 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         )
                     }
 
-                    // 参数名沿用源码：encode_strength（Lt/Rt 往返强度）
-                    VsGainRow(
-                        label = "下混编码强度",
-                        value = vsEncodeStrength,
-                        range = 0f..1f,
-                        suffix = "",
-                        enabled = vsEnabled,
-                        onChange = viewModel::setVsEncodeStrength,
-                    )
+                    // 二级解码：7 声道 → Lt/Rt → 再解一次；关闭时只走一级解码
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "二级解码（Lt/Rt 往返）",
+                            fontSize = 12.sp,
+                            color = ScColors.TextMain,
+                            modifier = Modifier.weight(1f),
+                        )
+                        ScTinySwitch(
+                            checked = vsEncodeStrength > 0.01f,
+                            onCheckedChange = { viewModel.setVsSecondDecodeEnabled(it) },
+                        )
+                    }
+                    if (vsEncodeStrength > 0.01f) {
+                        VsGainRow(
+                            label = "下混编码强度",
+                            value = vsEncodeStrength,
+                            range = 0f..1f,
+                            suffix = "",
+                            enabled = vsEnabled,
+                            onChange = viewModel::setVsEncodeStrength,
+                        )
+                    }
 
                     // ---- 中置模式（关 / 直通 / 混入前置）----
                     Text(text = "中置模式", fontSize = 12.sp, color = ScColors.TextMain)
