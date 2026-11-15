@@ -2321,12 +2321,8 @@ class MainViewModel @Inject constructor(
             "stereo_width" -> setStereoWidth(v)
             "vs_enabled" -> setVsEnabled(v > 0.5f)
             "vs_mode" -> setVsMode(v.toInt())
-            "vs_surround_gain" -> setVsSurroundGain(v)
-            "vs_center_gain" -> setVsCenterGain(v)
-            "vs_front_gain" -> setVsFrontGain(v)
             "vs_encode_strength" -> setVsEncodeStrength(v)
             "vs_room_size" -> setVsRoomSize(v.toInt())
-            "vs_rear_gain" -> setVsRearGain(v)
             "vs_rear_space" -> setVsRearSpace(v)
             "vs_room_wet" -> setVsRoomWet(v)
             "vs_center_mode" -> setVsCenterMode(v.toInt())
@@ -2473,12 +2469,8 @@ class MainViewModel @Inject constructor(
         "stereo_width" to _stereoWidth.value,
         "vs_enabled" to if (_vsEnabled.value) 1f else 0f,
         "vs_mode" to _vsMode.value.toFloat(),
-        "vs_surround_gain" to _vsSurroundGain.value,
-        "vs_center_gain" to _vsCenterGain.value,
-        "vs_front_gain" to _vsFrontGain.value,
         "vs_encode_strength" to _vsEncodeStrength.value,
         "vs_room_size" to _vsRoomSize.value.toFloat(),
-        "vs_rear_gain" to _vsRearGain.value,
         "vs_rear_space" to _vsRearSpace.value,
         "vs_room_wet" to _vsRoomWet.value,
         "vs_center_mode" to _vsCenterMode.value.toFloat(),

@@ -3794,10 +3794,7 @@ internal fun ScWidthDetailContent(viewModel: MainViewModel) {
 internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsEnabled by viewModel.vsEnabled.collectAsStateWithLifecycle()
     val vsMode by viewModel.vsMode.collectAsStateWithLifecycle()
-    val vsSurroundGain by viewModel.vsSurroundGain.collectAsStateWithLifecycle()
-    val vsCenterGain by viewModel.vsCenterGain.collectAsStateWithLifecycle()
-    val vsFrontGain by viewModel.vsFrontGain.collectAsStateWithLifecycle()
-    val vsRearGain by viewModel.vsRearGain.collectAsStateWithLifecycle()
+
     val vsRearSpace by viewModel.vsRearSpace.collectAsStateWithLifecycle()
     val vsDebugRaw by viewModel.vsDebugRaw.collectAsStateWithLifecycle()
     val vsTrims by viewModel.vsTrims.collectAsStateWithLifecycle()
@@ -3847,31 +3844,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         )
                     }
 
-                    VsGainRow(
-                        label = "环绕增益",
-                        value = vsSurroundGain,
-                        enabled = vsEnabled,
-                        onChange = viewModel::setVsSurroundGain,
-                    )
-                    VsGainRow(
-                        label = "中置增益",
-                        value = vsCenterGain,
-                        enabled = vsEnabled,
-                        onChange = viewModel::setVsCenterGain,
-                    )
-                    VsGainRow(
-                        label = "前声道增益",
-                        value = vsFrontGain,
-                        enabled = vsEnabled,
-                        onChange = viewModel::setVsFrontGain,
-                    )
 
-                    VsGainRow(
-                        label = "后中置增益",
-                        value = vsRearGain,
-                        enabled = vsEnabled,
-                        onChange = viewModel::setVsRearGain,
-                    )
 
                     // ---- 后环绕空间感（环绕去相关深度 0~1）----
                     VsGainRow(

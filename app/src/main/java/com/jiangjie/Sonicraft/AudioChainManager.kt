@@ -224,31 +224,15 @@ class AudioChainManager @Inject constructor(
                 AudioEngine.VS_PARAM_MODE,
                 f("vs_mode", 0f),
             )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_SURROUND_GAIN,
-                f("vs_surround_gain", 0f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_CENTER_GAIN,
-                f("vs_center_gain", 0f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_FRONT_GAIN,
-                f("vs_front_gain", 0f),
-            )
+            engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_SURROUND_GAIN, 0f)
+            engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_CENTER_GAIN, 0f)
+            engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_FRONT_GAIN, 0f)
             engine.setParam(
                 AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
                 AudioEngine.VS_PARAM_STEREO_EXPAND,
                 f("vs_rear_space", 0.5f),
             )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_REAR_GAIN,
-                f("vs_rear_gain", -6f),
-            )
+            engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_REAR_GAIN, 0f)
             engine.setParam(
                 AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
                 AudioEngine.VS_PARAM_ROOM_SIZE,
