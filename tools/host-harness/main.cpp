@@ -34,6 +34,7 @@
 #include "sonicraft/dsp/stereo_width.hpp"
 #include "sonicraft/dsp/idle_bypass.hpp"
 #include "sonicraft/dsp/script_effect.hpp"
+#include "sonicraft/dsp/virtual_surround.hpp"
 
 namespace {
 
@@ -48,6 +49,29 @@ void Check(bool ok, const char* what) {
 
 int main(int argc, char** argv) {
     setvbuf(stdout, nullptr, _IONBF, 0);  // 无缓冲：崩溃时输出不丢（定位用）
+    // ---- 虚拟环绕：声像定位自检 + 自动校正 ----
+    // 判据：左右手性不接反 / 镜像对称 / ITD 与 ILD 相对模型理论值的偏差收敛
+    {
+        sonicraft::dsp::VirtualSurroundNode vs_node;
+        vs_node.Prepare(48000, 512);
+        const auto vs_rep = vs_node.RunLocalizationSelfTest(true);
+        Check(vs_rep.handedness_ok, "virtual surround: 左右手性正确（θ>0 右响且右耳早）");
+        Check(vs_rep.symmetric_ok, "virtual surround: 左右镜像对称");
+        Check(vs_rep.itd_rms_error_after <= 1.5f, "virtual surround: ITD 误差收敛（<=1.5 样本）");
+        Check(vs_rep.ild_rms_error_after <= 1.5f, "virtual surround: ILD 误差收敛（<=1.5 dB）");
+        Check(vs_rep.pass, "virtual surround: 声像定位自检总体通过");
+
+        // 旁路时必须逐样本透传（未实现 DSP 体前不允许改动声音）
+        std::vector<float> l(256, 0.25f), r(256, -0.25f);
+        float* ch[2] = {l.data(), r.data()};
+        vs_node.Process(ch, 256);
+        bool same = true;
+        for (int i = 0; i < 256; ++i) {
+            if (l[static_cast<size_t>(i)] != 0.25f || r[static_cast<size_t>(i)] != -0.25f) { same = false; break; }
+        }
+        Check(same, "virtual surround: 默认旁路时逐样本透传");
+    }
+
     // 独立 RBJ peaking + TDF2 验证：抛开节点/图，直接验证滤波器数学
     // （band0=31Hz, +12dB, 40Hz 信号经该 biquad 应被放大约 2.6x）
     {

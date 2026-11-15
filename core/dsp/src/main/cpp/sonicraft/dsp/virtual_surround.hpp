@@ -9,7 +9,9 @@
 #include <vector>
 
 #include "sonicraft/dsp/dsp_node.hpp"
+#include "sonicraft/dsp/vs_hrtf.hpp"
 #include "sonicraft/dsp/vs_params.hpp"
+#include "sonicraft/dsp/vs_selftest.hpp"
 
 namespace sonicraft::dsp {
 
@@ -45,6 +47,7 @@ class VirtualSurroundNode final : public DspNode {
     sample_rate_ = sample_rate > 0 ? sample_rate : 48000;
     max_frames_ = max_frames > 0 ? max_frames : 512;
     layout_.assign(static_cast<std::size_t>(vs::kChannelCount) * max_frames_, 0.0f);
+    hrtf_model_.Prepare(static_cast<float>(sample_rate_));
     Reset();
   }
 
@@ -60,6 +63,25 @@ class VirtualSurroundNode final : public DspNode {
 
   void SetBypass(bool bypass) override { bypass_ = bypass; }
   bool Bypassed() const override { return bypass_; }
+
+  /**
+   * 声像定位自检 + 自动校正（**非实时**，由 UI/JNI 在非音频线程触发）。
+   *
+   * 用带限噪声在 ±90° 范围内测 7 个方位，检查：
+   *   ① 左右不接反（θ>0 必须"右响 + 右耳早"）
+   *   ② 左右镜像对称
+   *   ③ ITD/ILD 与模型理论值的偏差（判据见 LocalizationSelfTest）
+   *
+   * apply_correction=true 时会把校正系数写回渲染器（ITD 缩放、ILD 修调），
+   * 再测一轮确认误差下降。返回完整报告供 UI 展示。
+   */
+  vs::LocalizationSelfTest::Report RunLocalizationSelfTest(bool apply_correction = true) {
+    last_report_ = vs::LocalizationSelfTest::Run(hrtf_model_, static_cast<float>(sample_rate_),
+                                                 apply_correction);
+    return last_report_;
+  }
+
+  const vs::LocalizationSelfTest::Report& last_self_test() const { return last_report_; }
 
   void SetParam(int param_id, float value) override {
     if (param_id < 0 || param_id >= vs::kParamCount) return;
@@ -110,6 +132,9 @@ class VirtualSurroundNode final : public DspNode {
     // 未实现前保持透传（render_gain_ 已保证开关无爆音）
     (void)l; (void)r; (void)frames;  // TODO HRTF + 早期反射 + 房间 RIR
   }
+
+  vs::ParametricHrtf hrtf_model_;
+  vs::LocalizationSelfTest::Report last_report_{};
 
   struct DecoderState { void Reset() {} } decoder_;
   struct HrtfState { void Reset() {} } hrtf_;
