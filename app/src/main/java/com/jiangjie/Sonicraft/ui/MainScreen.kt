@@ -897,27 +897,30 @@ private fun P1LibrarySection(
                 modifier = Modifier.weight(1f),
             )
         }
-        // 空间环绕：全宽卡片（输入是整条立体声总线，不是单点效果）
         val vsEnabled = viewModel.vsEnabled.collectAsStateWithLifecycle().value
-        ScEffectCard(
-            title = "空间环绕",
-            subtitle = "7 声道虚拟布局 · 双耳 HRTF 渲染",
-            icon = ScEffectIconKind.WAVE,
-            enabled = vsEnabled,
-            onClick = onOpenVs,
-            onToggle = { viewModel.setVsEnabled(!vsEnabled) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        // 机架：脚本机架自设置页迁来，全宽卡片；开关为整机总闸
-        ScEffectCard(
-            title = "机架",
-            subtitle = "脚本槽位 ×3 · SCVM 引擎",
-            icon = ScEffectIconKind.WAVE,
-            enabled = scriptEnabled,
-            onClick = onOpenRack,
-            onToggle = { viewModel.setScriptEffectEnabled(!scriptEnabled) },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // 空间环绕：与机架同行（两者都是"整条总线级"的处理，语义相近）
+            // 副标题压到 8 字以内：半宽卡放不下原来那句「7 声道虚拟布局 · 双耳 HRTF 渲染」
+            ScEffectCard(
+                title = "空间环绕",
+                subtitle = "耳机虚拟环绕",
+                icon = ScEffectIconKind.WAVE,
+                enabled = vsEnabled,
+                onClick = onOpenVs,
+                onToggle = { viewModel.setVsEnabled(!vsEnabled) },
+                modifier = Modifier.weight(1f),
+            )
+            // 机架：脚本机架自设置页迁来；开关为整机总闸
+            ScEffectCard(
+                title = "机架",
+                subtitle = "脚本槽位 ×3",
+                icon = ScEffectIconKind.WAVE,
+                enabled = scriptEnabled,
+                onClick = onOpenRack,
+                onToggle = { viewModel.setScriptEffectEnabled(!scriptEnabled) },
+                modifier = Modifier.weight(1f),
+            )
+        }
         // （输入增益/声道平衡/输出增益已迁引擎卡下旋钮卡，U8；限幅器已迁详情页，U7b）
         // （U9k：A/B 标尺说明迁各效果详情页头部、峰值保护说明迁限幅器详情——音效库列表底部小字清空）
 
