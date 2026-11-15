@@ -3102,9 +3102,6 @@ class MainViewModel @Inject constructor(
         val preampDb: Float,
     )
 
-    /** 库条目上限（供 UI 显示 N/上限；真实裁剪在 saveCurrentAutoEqToLibrary 里） */
-    val autoEqLibraryMax: Int = AUTOEQ_LIB_MAX
-
     private val _autoEqLibrary = MutableStateFlow(readAutoEqLibrary())
     val autoEqLibrary: StateFlow<List<AutoEqCurve>> = _autoEqLibrary.asStateFlow()
 
@@ -3205,10 +3202,8 @@ class MainViewModel @Inject constructor(
             types = _autoEqTypes.value,
             preampDb = _autoEqPreGain.value,
         )
-        val merged = _autoEqLibrary.value.filter { it.name != n } + curve
-        // 条目管控：保留最近 AUTOEQ_LIB_MAX 条（列表按插入顺序，先丢最旧的）
-        _autoEqLibrary.value =
-            if (merged.size > AUTOEQ_LIB_MAX) merged.takeLast(AUTOEQ_LIB_MAX) else merged
+        // 同名覆盖，其余全部保留（不设上限）
+        _autoEqLibrary.value = _autoEqLibrary.value.filter { it.name != n } + curve
         persistAutoEqLibrary(_autoEqLibrary.value)
         _autoEqSource.value = n
         prefs.edit().putString(KEY_AUTOEQ_SOURCE, n).apply()
@@ -5592,8 +5587,8 @@ class MainViewModel @Inject constructor(
     /** AutoEq 库（多副耳机校正曲线）：JSON 数组，结构与机架脚本库一致（名字 + 全套段参数） */
     const val KEY_AUTOEQ_LIBRARY = "auto_eq_library_json"
 
-    /** AutoEq 库条目上限：超出后丢最旧的，避免无限增长 */
-    const val AUTOEQ_LIB_MAX = 20
+    // AutoEq 库**不设条数上限**：条目多寡取决于用户导入的样本，
+    // 列表本身有限高 + 滚动 + 搜索，页长不会被撑开。
     private const val AUTOEQ_GAINS_PREFIX = "auto_eq_gains_"
     private const val AUTOEQ_QS_PREFIX = "auto_eq_qs_"
     private const val AUTOEQ_FREQS_PREFIX = "auto_eq_freqs_"

@@ -853,6 +853,13 @@ internal fun ScAutoEqCard(viewModel: MainViewModel, sectionEnabled: Boolean = tr
     var autoEqFileName by remember { mutableStateOf<String?>(null) }
     // 库折叠：默认展开；条目多时限高滚动，不拉长页面
     var libExpanded by remember { mutableStateOf(true) }
+    // 搜索框：条目不设上限，用关键字快速定位
+    var libQuery by rememberSaveable { mutableStateOf("") }
+    val libFiltered = remember(library, libQuery) {
+        val q = libQuery.trim()
+        if (q.isEmpty()) library
+        else library.filter { it.name.contains(q, ignoreCase = true) }
+    }
     // 库多选（对齐机架脚本库：长按进选择，顶部出现删除/完成）
     // 折叠默认跟随开关：开=展开、关=收起；点标题行可手动展开/收起
     // 子卡开关 = 记忆值 && 组总闸（与压限器/低频管家一致）
@@ -995,8 +1002,10 @@ internal fun ScAutoEqCard(viewModel: MainViewModel, sectionEnabled: Boolean = tr
                     ) {
                         Text(
                             text = if (libSelectMode) "已选 ${libSelected.size} 项" else
-                                "库 · ${library.size}/${viewModel.autoEqLibraryMax} 条 · 点按装载" +
-                                    (if (library.size > 2) " · 上下滑动" else ""),
+                                "库 · ${library.size} 条" +
+                                    (if (libQuery.isNotBlank()) " · 匹配 ${libFiltered.size}" else "") +
+                                    " · 点按装载" +
+                                    (if (libFiltered.size > 5) " · 上下滑动" else ""),
                             fontSize = 11.sp,
                             color = ScColors.TextSub,
                         )
@@ -1058,17 +1067,48 @@ internal fun ScAutoEqCard(viewModel: MainViewModel, sectionEnabled: Boolean = tr
                     }
                 }
                 if (libExpanded) {
-                    // 库列表限高 + 内部滚动：条目变多时不允许无限拉长整页。
-                    // 高度取 **168dp（约 2.3 行）** 而不是"刚好 3 行"——
-                    // 否则库里有 3 条时正好填满，用户拖动毫无反应，会以为列表不可滑动。
+                    // 搜索：条目不设上限，靠关键字快速定位（不区分大小写）
+                    androidx.compose.material3.OutlinedTextField(
+                        value = libQuery,
+                        onValueChange = { libQuery = it },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+                        placeholder = {
+                            Text("搜索耳机型号", fontSize = 12.sp, color = ScColors.TextSub)
+                        },
+                        trailingIcon = {
+                            if (libQuery.isNotEmpty()) {
+                                Text(
+                                    text = "✕",
+                                    fontSize = 13.sp,
+                                    color = ScColors.TextSub,
+                                    modifier = Modifier
+                                        .clickable { libQuery = "" }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                )
+                            }
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    // 库列表限高 + 内部滚动：**约 5 行**（行高 ≈ 65dp），
+                    // 条目再多也不拉长页面；超出部分手动滑动查看。
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 168.dp)
+                            .heightIn(max = 336.dp)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                library.forEach { item ->
+                if (libFiltered.isEmpty() && libQuery.isNotBlank()) {
+                    Text(
+                        text = "没有匹配「$libQuery」的条目",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                        modifier = Modifier.padding(vertical = 6.dp),
+                    )
+                }
+                libFiltered.forEach { item ->
                     val checked = item.name in libSelected
                     Row(
                         modifier = Modifier
