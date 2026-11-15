@@ -71,6 +71,53 @@ int main(int argc, char** argv) {
         }
         Check(same, "virtual surround: 默认旁路时逐样本透传");
 
+        // ---- 后处理级：中置三态 / 后中置延迟（直接测 PostStage，确定性最强）----
+        {
+            using sonicraft::dsp::vs::PostStage;
+            const int n = 64;
+            std::vector<std::vector<float>> buf(7, std::vector<float>(n, 0.0f));
+            float* ptr[7];
+            for (int c = 0; c < 7; ++c) ptr[c] = buf[c].data();
+
+            auto fill = [&]() {
+                for (int c = 0; c < 7; ++c) std::fill(buf[c].begin(), buf[c].end(), 0.0f);
+                std::fill(buf[sonicraft::dsp::vs::kC].begin(), buf[sonicraft::dsp::vs::kC].end(), 0.5f);
+                std::fill(buf[sonicraft::dsp::vs::kFL].begin(), buf[sonicraft::dsp::vs::kFL].end(), 0.1f);
+                std::fill(buf[sonicraft::dsp::vs::kFR].begin(), buf[sonicraft::dsp::vs::kFR].end(), 0.1f);
+                std::fill(buf[sonicraft::dsp::vs::kCS].begin(), buf[sonicraft::dsp::vs::kCS].end(), 0.3f);
+            };
+
+            PostStage post;
+            post.Prepare(48000.0f);
+            PostStage::Params pp;
+            pp.dialog_enabled = 0.0f;
+            pp.rear_center_enabled = 0.0f;
+
+            // 模式 0：中置静音（平滑收敛后应接近 0）
+            pp.center_mode = 0.0f;
+            for (int b = 0; b < 300; ++b) { fill(); post.Process(ptr, n, pp); }
+            Check(std::fabs(buf[sonicraft::dsp::vs::kC][0]) < 1e-3f,
+                  "post: 中置模式 0 时中置静音");
+
+            // 模式 2：中置按 −3 dB 混入前置（0.5*0.707 ≈ 0.354）
+            post.Reset();
+            pp.center_mode = 2.0f;
+            for (int b = 0; b < 300; ++b) { fill(); post.Process(ptr, n, pp); }
+            Check(std::fabs(buf[sonicraft::dsp::vs::kFL][0] - (0.1f + 0.3536f)) < 0.02f,
+                  "post: 中置模式 2 时前置收到 −3 dB 中置");
+
+            // 后中置 5 ms 延迟：首块输出应接近 0（48000*0.005 = 240 > 64）
+            post.Reset();
+            pp.center_mode = 1.0f;
+            pp.rear_center_enabled = 1.0f;
+            pp.rear_delay_ms = 5.0f;
+            fill();
+            post.Process(ptr, n, pp);
+            float cs_energy = 0.0f;
+            for (int i = 0; i < n; ++i) cs_energy += std::fabs(buf[sonicraft::dsp::vs::kCS][i]);
+            Check(cs_energy < 0.05f, "post: 后中置 5ms 延迟首块无声（延迟生效）");
+        }
+
         // ---- 解码 + 渲染：开启后必须真的改变信号，且定位方向正确 ----
         vs_node.SetBypass(false);
         vs_node.SetParam(sonicraft::dsp::vs::kParamEnabled, 1.0f);

@@ -12,6 +12,7 @@
 #include "sonicraft/dsp/vs_decoder.hpp"
 #include "sonicraft/dsp/vs_hrtf.hpp"
 #include "sonicraft/dsp/vs_params.hpp"
+#include "sonicraft/dsp/vs_post.hpp"
 #include "sonicraft/dsp/vs_selftest.hpp"
 
 namespace sonicraft::dsp {
@@ -51,6 +52,11 @@ class VirtualSurroundNode final : public DspNode {
       hrtf_ch_[static_cast<std::size_t>(c)].Configure(vs::kAzimuthDeg[c], 0.0f);
     }
     hrtf_model_.Prepare(sr);
+    post_.Prepare(sr);
+    for (int c = 0; c < vs::kChannelCount; ++c) {
+      ch_ptr_[static_cast<std::size_t>(c)] = layout_.data() +
+          static_cast<std::size_t>(c) * static_cast<std::size_t>(max_frames_);
+    }
     Reset();
   }
 
@@ -59,6 +65,7 @@ class VirtualSurroundNode final : public DspNode {
     decoder_.Reset();
     for (auto& h : hrtf_ch_) h.Reset();
     hrtf_model_.Reset();
+    post_.Reset();
   }
 
   void SetBypass(bool bypass) override { bypass_ = bypass; }
@@ -111,6 +118,18 @@ class VirtualSurroundNode final : public DspNode {
     decoder_.SetGains(param_[vs::kParamCenterGain], param_[vs::kParamSurroundGain], 0.0f);
 
     DecodeFrames(channels[0], channels[1], frames);
+
+    // 7 声道后处理：中置三态 / 人声清晰度 / 低音谐波 / 后中置
+    vs::PostStage::Params pp;
+    pp.center_mode = param_[vs::kParamCenterMode];
+    pp.dialog_db = param_[vs::kParamDialog];
+    pp.dialog_enabled = param_[vs::kParamDialogEnabled];
+    pp.bass_enhancer = param_[vs::kParamBassEnhancer];
+    pp.bass_enhancer_mode = param_[vs::kParamBassEnhancerMode];
+    pp.rear_center_enabled = param_[vs::kParamRearCenterEnabled];
+    pp.rear_delay_ms = param_[vs::kParamRearCenterDelayMs];
+    post_.Process(ch_ptr_.data(), frames, pp);
+
     RenderFrames(channels[0], channels[1], frames, goal, step);
   }
 
@@ -171,6 +190,8 @@ class VirtualSurroundNode final : public DspNode {
   std::vector<float> layout_;  // 7 声道 × max_frames（planar 展开存储）
 
   vs::StereoSpatialDecoder decoder_;
+  vs::PostStage post_;
+  std::array<float*, vs::kChannelCount> ch_ptr_{};
   std::array<vs::ParametricHrtf, vs::kChannelCount> hrtf_ch_{};
   vs::ParametricHrtf hrtf_model_;
   vs::LocalizationSelfTest::Report last_report_{};
