@@ -197,8 +197,16 @@ class VirtualSurroundNode final : public DspNode {
     // 逐声道 trim（dB → 线性）与静音；LFE 不做 HRTF，直接按增益混入双耳
     float gain[vs::kChannelCount];
     for (int c = 0; c < vs::kChannelCount; ++c) {
-      const int trim_id = vs::kParamTrimL + c;
-      const int mute_id = vs::kParamMuteL + c;
+      // 参数表里 trim/mute 的排列是 L,C,R,SL,SR,CS,LFE，而声道顺序是 FL,FR,C,...
+      // 直接 kParamTrimL + c 会错位（FR 拿到 C 的 trim、C 拿到 R 的），必须显式映射。
+      static constexpr int kTrimId[vs::kChannelCount] = {
+          vs::kParamTrimL, vs::kParamTrimR, vs::kParamTrimC,
+          vs::kParamTrimSL, vs::kParamTrimSR, vs::kParamTrimCS, vs::kParamTrimLFE};
+      static constexpr int kMuteId[vs::kChannelCount] = {
+          vs::kParamMuteL, vs::kParamMuteR, vs::kParamMuteC,
+          vs::kParamMuteSL, vs::kParamMuteSR, vs::kParamMuteCS, vs::kParamMuteLFE};
+      const int trim_id = kTrimId[c];
+      const int mute_id = kMuteId[c];
       gain[c] = param_[mute_id] > 0.5f ? 0.0f : std::pow(10.0f, param_[trim_id] / 20.0f);
     }
 
