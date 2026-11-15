@@ -3796,6 +3796,8 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsSurroundGain by viewModel.vsSurroundGain.collectAsStateWithLifecycle()
     val vsCenterGain by viewModel.vsCenterGain.collectAsStateWithLifecycle()
     val vsFrontGain by viewModel.vsFrontGain.collectAsStateWithLifecycle()
+    val vsRoomSize by viewModel.vsRoomSize.collectAsStateWithLifecycle()
+    val vsRoomWet by viewModel.vsRoomWet.collectAsStateWithLifecycle()
     val vsEncodeStrength by viewModel.vsEncodeStrength.collectAsStateWithLifecycle()
     val vsCenterMode by viewModel.vsCenterMode.collectAsStateWithLifecycle()
     val vsDialog by viewModel.vsDialog.collectAsStateWithLifecycle()
@@ -3857,6 +3859,25 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         enabled = vsEnabled,
                         onChange = viewModel::setVsFrontGain,
                     )
+
+                    // ---- 房间（RIR 卷积，预设名与卷积器一致：小房间/客厅/音乐厅/大教堂）----
+                    Text(text = "房间", fontSize = 12.sp, color = ScColors.TextMain)
+                    VsChoiceRow(
+                        options = listOf("关", "小房间", "客厅", "音乐厅", "大教堂"),
+                        selected = vsRoomSize,
+                        enabled = vsEnabled,
+                        onSelect = viewModel::setVsRoomSize,
+                    )
+                    if (vsRoomSize > 0) {
+                        VsGainRow(
+                            label = "混响量",
+                            value = vsRoomWet,
+                            range = 0f..1f,
+                            suffix = "",
+                            enabled = vsEnabled,
+                            onChange = viewModel::setVsRoomWet,
+                        )
+                    }
 
                     // 参数名沿用源码：encode_strength（Lt/Rt 往返强度）
                     VsGainRow(

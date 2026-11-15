@@ -1595,6 +1595,26 @@ class MainViewModel @Inject constructor(
     }
 
     // 后处理参数（算法已实现，这里补状态与下发）
+    private val _vsRoomSize = MutableStateFlow(prefs.getInt(KEY_VS_ROOM_SIZE, 0))
+    val vsRoomSize: StateFlow<Int> = _vsRoomSize.asStateFlow()
+
+    private val _vsRoomWet = MutableStateFlow(prefs.getFloat(KEY_VS_ROOM_WET, 0.35f))
+    val vsRoomWet: StateFlow<Float> = _vsRoomWet.asStateFlow()
+
+    fun setVsRoomSize(size: Int) {
+        val v = size.coerceIn(0, 4)
+        _vsRoomSize.value = v
+        prefs.edit().putInt(KEY_VS_ROOM_SIZE, v).apply()
+        engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_ROOM_SIZE, v.toFloat())
+    }
+
+    fun setVsRoomWet(v0: Float) {
+        val v = v0.coerceIn(0f, 1f)
+        _vsRoomWet.value = v
+        prefs.edit().putFloat(KEY_VS_ROOM_WET, v).apply()
+        engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_ROOM_WET_DRY, v)
+    }
+
     private val _vsEncodeStrength = MutableStateFlow(prefs.getFloat(KEY_VS_ENCODE_STRENGTH, 0.5f))
     val vsEncodeStrength: StateFlow<Float> = _vsEncodeStrength.asStateFlow()
 
@@ -2197,6 +2217,8 @@ class MainViewModel @Inject constructor(
             "vs_center_gain" -> setVsCenterGain(v)
             "vs_front_gain" -> setVsFrontGain(v)
             "vs_encode_strength" -> setVsEncodeStrength(v)
+            "vs_room_size" -> setVsRoomSize(v.toInt())
+            "vs_room_wet" -> setVsRoomWet(v)
             "vs_center_mode" -> setVsCenterMode(v.toInt())
             "vs_dialog" -> setVsDialog(v)
             "vs_bass_enh" -> setVsBassEnh(v)
@@ -2345,6 +2367,8 @@ class MainViewModel @Inject constructor(
         "vs_center_gain" to _vsCenterGain.value,
         "vs_front_gain" to _vsFrontGain.value,
         "vs_encode_strength" to _vsEncodeStrength.value,
+        "vs_room_size" to _vsRoomSize.value.toFloat(),
+        "vs_room_wet" to _vsRoomWet.value,
         "vs_center_mode" to _vsCenterMode.value.toFloat(),
         "vs_dialog" to _vsDialog.value,
         "vs_bass_enh" to _vsBassEnh.value,
@@ -5691,6 +5715,16 @@ class MainViewModel @Inject constructor(
         )
         engine.setParam(
             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_ROOM_SIZE,
+            _vsRoomSize.value.toFloat(),
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_ROOM_WET_DRY,
+            _vsRoomWet.value,
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
             AudioEngine.VS_PARAM_ENCODE_STRENGTH,
             _vsEncodeStrength.value,
         )
@@ -5928,6 +5962,8 @@ class MainViewModel @Inject constructor(
     const val KEY_VS_SURROUND_GAIN = "vs_surround_gain"
     const val KEY_VS_CENTER_GAIN = "vs_center_gain"
     const val KEY_VS_FRONT_GAIN = "vs_front_gain"
+    const val KEY_VS_ROOM_SIZE = "vs_room_size"
+    const val KEY_VS_ROOM_WET = "vs_room_wet"
     const val KEY_VS_ENCODE_STRENGTH = "vs_encode_strength"
     const val KEY_VS_CENTER_MODE = "vs_center_mode"
     const val KEY_VS_DIALOG = "vs_dialog"

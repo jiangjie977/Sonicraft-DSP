@@ -12,6 +12,7 @@
 #include "sonicraft/dsp/vs_decoder.hpp"
 #include "sonicraft/dsp/vs_encoder.hpp"
 #include "sonicraft/dsp/vs_hrtf.hpp"
+#include "sonicraft/dsp/convolver.hpp"
 #include "sonicraft/dsp/vs_params.hpp"
 #include "sonicraft/dsp/vs_post.hpp"
 #include "sonicraft/dsp/vs_selftest.hpp"
@@ -56,6 +57,11 @@ class VirtualSurroundNode final : public DspNode {
     }
     hrtf_model_.Prepare(sr);
     post_.Prepare(sr);
+    // 房间卷积复用现成的 ConvolverNode：它已内置 Dry/小房/客厅/音乐厅/大教堂 五档 RIR，
+    // 与我们的 roomSize 取值 0..4 一一对应（0 = 关，不跑）。
+    room_.set_channel_count(2);
+    room_.Prepare(sample_rate_, max_frames_);
+    room_.SetBypass(false);
     for (int c = 0; c < vs::kChannelCount; ++c) {
       ch_ptr_[static_cast<std::size_t>(c)] = layout_.data() +
           static_cast<std::size_t>(c) * static_cast<std::size_t>(max_frames_);
@@ -71,6 +77,7 @@ class VirtualSurroundNode final : public DspNode {
     for (auto& h : hrtf_ch_) h.Reset();
     hrtf_model_.Reset();
     post_.Reset();
+    room_.Reset();
   }
 
   void SetBypass(bool bypass) override { bypass_ = bypass; }
@@ -143,6 +150,16 @@ class VirtualSurroundNode final : public DspNode {
     post_.Process(ch_ptr_.data(), frames, pp);
 
     RenderFrames(channels[0], channels[1], frames, goal, step);
+
+    // 房间卷积（湿声）：放在双耳渲染之后 —— 先空间化再进房间，房间才不会被 HRTF 染色串掉。
+    // 预设映射：1=小房 2=客厅 3=音乐厅 4=大教堂；0=关（完全不跑，零开销）。
+    const int room = static_cast<int>(param_[vs::kParamRoomSize] + 0.5f);
+    if (room >= 1 && room <= 4) {
+      room_.SetParam(dsp::ConvolverNode::kParamPreset, static_cast<float>(room));
+      room_.SetParam(dsp::ConvolverNode::kParamWet, param_[vs::kParamRoomWetDry]);
+      room_.SetParam(dsp::ConvolverNode::kParamDry, 1.0f);
+      room_.Process(channels, frames);
+    }
   }
 
  private:
@@ -205,6 +222,7 @@ class VirtualSurroundNode final : public DspNode {
   vs::StereoSpatialDecoder decoder2_;
   vs::LtRtRoundTrip round_trip_;
   vs::PostStage post_;
+  dsp::ConvolverNode room_;
   std::array<float*, vs::kChannelCount> ch_ptr_{};
   std::array<vs::ParametricHrtf, vs::kChannelCount> hrtf_ch_{};
   vs::ParametricHrtf hrtf_model_;
