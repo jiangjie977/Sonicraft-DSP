@@ -177,8 +177,8 @@ class StereoSpatialDecoder {
     const float sum = (in_l + in_r) * 0.5f;
     // 中置源（带通后、未加增益）：既用于 C 声道，也用于前置的等量扣除
     const float c_src = center_bp_.Process(sum);
-    // C 比扣除量低 3 dB，避免补位时抢眼
-    float c = c_src * 0.7071068f * center_gain_;
+    // C 只比原基准低 1 dB（原基准 0.9118 → 0.8127），补位自然、不抢
+    float c = c_src * 0.8126547f * center_gain_;
 
     // ---- 细粒度 bias（高频包络差 → 左右偏置）----
     const float fine_left = fs_lx_ + fs_rx_;
