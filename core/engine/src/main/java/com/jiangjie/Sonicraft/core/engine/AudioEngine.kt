@@ -193,25 +193,58 @@ interface AudioEngine {
         const val EQ_Q_BASE = 31
         const val EQ_FREQ_BASE = 62
         const val EQ_TYPE_BASE = 95  // M9 AutoEQ 前置：段类型（0=PK 1=LSC 2=HSC，95~125）
-        const val DYNAMIC_BASS_NODE_INDEX = 4
-        const val VIRTUAL_BASS_NODE_INDEX = 5
-        const val BASS_ENHANCE_NODE_INDEX = 6
-        const val COMPRESSOR_NODE_INDEX = 7
-        const val MULTIBAND_NODE_INDEX = 8
-        const val CONVOLVER_NODE_INDEX = 9
-        const val ALGORITHMIC_REVERB_NODE_INDEX = 10
-        const val STEREO_WIDTH_NODE_INDEX = 11
-        const val OUTPUT_GAIN_NODE_INDEX = 12
+        /**
+         * 虚拟环绕节点：位于 AutoEq 之后、低频/动态之前。
+         * 默认 bypass=true，由 prefs `vs_enabled` 控制；参数 id 见 [VS_PARAM_*]。
+         */
+        const val VIRTUAL_SURROUND_NODE_INDEX = 4
+
+        const val DYNAMIC_BASS_NODE_INDEX = 5
+        const val VIRTUAL_BASS_NODE_INDEX = 6
+        const val BASS_ENHANCE_NODE_INDEX = 7
+        const val COMPRESSOR_NODE_INDEX = 8
+        const val MULTIBAND_NODE_INDEX = 9
+        const val CONVOLVER_NODE_INDEX = 10
+        const val ALGORITHMIC_REVERB_NODE_INDEX = 11
+        const val STEREO_WIDTH_NODE_INDEX = 12
+        const val OUTPUT_GAIN_NODE_INDEX = 13
 
         /**
          * 自定义脚本效果器：位于 OutputGain 之后、Limiter 之前，
          * 保证 Limiter 仍是绝对末级（用户脚本 boost 也会被限幅兜住）。
          * 默认 bypass=true，由 prefs `script_effect_enabled` 控制。
          */
-        const val SCRIPT_EFFECT_NODE_INDEX = 13
+        const val SCRIPT_EFFECT_NODE_INDEX = 14
 
-        /** Limiter 绝对末级（index 13）。 */
-        const val LIMITER_NODE_INDEX = 14
+        /** Limiter 绝对末级（index 15）。 */
+        const val LIMITER_NODE_INDEX = 15
+
+        // ---- 虚拟环绕参数 id（与 native `vs::Param` 一一对应，跨语言契约）----
+        const val VS_PARAM_ENABLED = 0
+        const val VS_PARAM_MODE = 1
+        const val VS_PARAM_SURROUND_GAIN = 2
+        const val VS_PARAM_CENTER_GAIN = 3
+        const val VS_PARAM_REAR_GAIN = 4
+        const val VS_PARAM_FRONT_GAIN = 5
+        const val VS_PARAM_DISTANCE = 6
+        const val VS_PARAM_ENCODE_STRENGTH = 7
+        const val VS_PARAM_CENTER_MODE = 8
+        const val VS_PARAM_DIALOG = 9
+        const val VS_PARAM_DIALOG_ENABLED = 10
+        const val VS_PARAM_BASS_ENHANCER = 11
+        const val VS_PARAM_BASS_ENHANCER_MODE = 12
+        const val VS_PARAM_REAR_CENTER_ENABLED = 13
+        const val VS_PARAM_REAR_CENTER_DELAY_MS = 14
+        const val VS_PARAM_HRTF_MODEL = 15
+        const val VS_PARAM_HRTF_MODE = 16
+        const val VS_PARAM_HEIGHT_STRENGTH = 17
+        const val VS_PARAM_EARLY_REFLECTION = 18
+        const val VS_PARAM_AMBISONIC = 19
+        const val VS_PARAM_STEREO_EXPAND = 20
+        const val VS_PARAM_HEAD_TRACK = 21
+        const val VS_PARAM_HEAD_YAW = 22
+        const val VS_PARAM_ROOM_SIZE = 23
+        const val VS_PARAM_ROOM_WET_DRY = 24
 
         /**
          * 低音增强参数 id（与 native `BassEnhanceNode` 常量对齐）。

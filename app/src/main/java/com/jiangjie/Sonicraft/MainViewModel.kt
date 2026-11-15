@@ -1524,6 +1524,81 @@ class MainViewModel @Inject constructor(
         engine.setBypass(AudioEngine.STEREO_WIDTH_NODE_INDEX, !enabled)
     }
 
+    // ---- 虚拟环绕 ----
+    // 链路位置在 AutoEq 之后、低频/动态之前：先做耳机校正再空间化，
+    // 否则渲染染色会被校正曲线抵消。
+    private val _vsEnabled = MutableStateFlow(prefs.getBoolean(KEY_VS_ENABLED, false))
+    val vsEnabled: StateFlow<Boolean> = _vsEnabled.asStateFlow()
+
+    private val _vsMode = MutableStateFlow(prefs.getInt(KEY_VS_MODE, 0))
+    val vsMode: StateFlow<Int> = _vsMode.asStateFlow()
+
+    private val _vsSurroundGain = MutableStateFlow(prefs.getFloat(KEY_VS_SURROUND_GAIN, 0f))
+    val vsSurroundGain: StateFlow<Float> = _vsSurroundGain.asStateFlow()
+
+    private val _vsCenterGain = MutableStateFlow(prefs.getFloat(KEY_VS_CENTER_GAIN, 0f))
+    val vsCenterGain: StateFlow<Float> = _vsCenterGain.asStateFlow()
+
+    private val _vsFrontGain = MutableStateFlow(prefs.getFloat(KEY_VS_FRONT_GAIN, 0f))
+    val vsFrontGain: StateFlow<Float> = _vsFrontGain.asStateFlow()
+
+    fun setVsEnabled(enabled: Boolean) {
+        _vsEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_VS_ENABLED, enabled).apply()
+        engine.setBypass(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, !enabled)
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_ENABLED,
+            if (enabled) 1f else 0f,
+        )
+        // 立即落盘当前设备配置：10s 周期快照会把开关状态覆盖成旧值（历史问题）
+        runCatching { saveLiveConfig(outputDeviceMonitor.current.value.key) }
+    }
+
+    fun setVsMode(mode: Int) {
+        val v = mode.coerceIn(0, 1)
+        _vsMode.value = v
+        prefs.edit().putInt(KEY_VS_MODE, v).apply()
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_MODE,
+            v.toFloat(),
+        )
+    }
+
+    fun setVsSurroundGain(db: Float) {
+        val v = db.coerceIn(-12f, 12f)
+        _vsSurroundGain.value = v
+        prefs.edit().putFloat(KEY_VS_SURROUND_GAIN, v).apply()
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_SURROUND_GAIN,
+            v,
+        )
+    }
+
+    fun setVsCenterGain(db: Float) {
+        val v = db.coerceIn(-12f, 12f)
+        _vsCenterGain.value = v
+        prefs.edit().putFloat(KEY_VS_CENTER_GAIN, v).apply()
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_CENTER_GAIN,
+            v,
+        )
+    }
+
+    fun setVsFrontGain(db: Float) {
+        val v = db.coerceIn(-12f, 12f)
+        _vsFrontGain.value = v
+        prefs.edit().putFloat(KEY_VS_FRONT_GAIN, v).apply()
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_FRONT_GAIN,
+            v,
+        )
+    }
+
     // ---- 动态低音----
 
     /**
@@ -2036,6 +2111,11 @@ class MainViewModel @Inject constructor(
             "gate_threshold" -> setGateThreshold(v)
             "stereo_width_enabled" -> setStereoWidthEnabled(v > 0.5f)
             "stereo_width" -> setStereoWidth(v)
+            "vs_enabled" -> setVsEnabled(v > 0.5f)
+            "vs_mode" -> setVsMode(v.toInt())
+            "vs_surround_gain" -> setVsSurroundGain(v)
+            "vs_center_gain" -> setVsCenterGain(v)
+            "vs_front_gain" -> setVsFrontGain(v)
             "output_gain" -> setOutputGain(v)
             "fdn_enabled" -> setFdnEnabled(v > 0.5f)
             "fdn_room_size" -> setFdnRoomSize(v)
@@ -2172,6 +2252,11 @@ class MainViewModel @Inject constructor(
         "gate_threshold" to _gateThreshold.value,
         "stereo_width_enabled" to if (_stereoWidthEnabled.value) 1f else 0f,
         "stereo_width" to _stereoWidth.value,
+        "vs_enabled" to if (_vsEnabled.value) 1f else 0f,
+        "vs_mode" to _vsMode.value.toFloat(),
+        "vs_surround_gain" to _vsSurroundGain.value,
+        "vs_center_gain" to _vsCenterGain.value,
+        "vs_front_gain" to _vsFrontGain.value,
         "output_gain" to _outputGain.value,
         "fdn_enabled" to if (_fdnEnabled.value) 1f else 0f,
         "fdn_room_size" to _fdnRoomSize.value,
@@ -5483,6 +5568,33 @@ class MainViewModel @Inject constructor(
                 }
             }
         }
+        // 虚拟环绕：旁路 + 已保存参数（开关关时也下发，便于下次打开立即生效）
+        engine.setBypass(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, !_vsEnabled.value)
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_ENABLED,
+            if (_vsEnabled.value) 1f else 0f,
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_MODE,
+            _vsMode.value.toFloat(),
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_SURROUND_GAIN,
+            _vsSurroundGain.value,
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_CENTER_GAIN,
+            _vsCenterGain.value,
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_FRONT_GAIN,
+            _vsFrontGain.value,
+        )
         engine.setBypass(AudioEngine.STEREO_WIDTH_NODE_INDEX, !_stereoWidthEnabled.value)
         engine.setParam(
             AudioEngine.STEREO_WIDTH_NODE_INDEX,
@@ -5681,6 +5793,12 @@ class MainViewModel @Inject constructor(
     const val KEY_REVERB_SECTION_ENABLED = "reverb_section_enabled"
         const val KEY_REVERB_PRESET = "reverb_preset"
         const val KEY_STEREO_WIDTH_ENABLED = "stereo_width_enabled"
+
+    const val KEY_VS_ENABLED = "vs_enabled"
+    const val KEY_VS_MODE = "vs_mode"
+    const val KEY_VS_SURROUND_GAIN = "vs_surround_gain"
+    const val KEY_VS_CENTER_GAIN = "vs_center_gain"
+    const val KEY_VS_FRONT_GAIN = "vs_front_gain"
 
     // ---- 动态低音----
     /**

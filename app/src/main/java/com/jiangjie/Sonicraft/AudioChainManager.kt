@@ -218,6 +218,32 @@ class AudioChainManager @Inject constructor(
                 AudioEngine.STEREO_WIDTH_PARAM_WIDTH,
                 f("stereo_width", 1f),
             )
+            engine.setBypass(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, !b("vs_enabled", false))
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_MODE,
+                f("vs_mode", 0f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_SURROUND_GAIN,
+                f("vs_surround_gain", 0f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_CENTER_GAIN,
+                f("vs_center_gain", 0f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_FRONT_GAIN,
+                f("vs_front_gain", 0f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_ENABLED,
+                if (b("vs_enabled", false)) 1f else 0f,
+            )
             engine.setBypass(AudioEngine.STEREO_WIDTH_NODE_INDEX, !b("stereo_width_enabled", true))
             // 三个 Gain/Balance 节点的旁路（2026-11-11 双路径一致性检查检出）：
             // 前台 applyEqSettings 有 setBypass，headless 此前只发 setParam ——

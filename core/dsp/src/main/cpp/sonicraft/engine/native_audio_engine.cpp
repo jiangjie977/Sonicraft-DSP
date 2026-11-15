@@ -28,6 +28,7 @@
 #include "sonicraft/dsp/bass_enhance.hpp"
 #include "sonicraft/dsp/virtual_bass.hpp"
 #include "sonicraft/dsp/script_effect.hpp"
+#include "sonicraft/dsp/virtual_surround.hpp"
 
 namespace sonicraft::engine {
 
@@ -54,23 +55,26 @@ constexpr int kNodeBalance     = 1;
 constexpr int kNodeEq          = 2;
 // AutoEq 耳机校正（2026-11-14 插入，紧跟 PEQ 之后 → 其余索引整体 +1）
 constexpr int kNodeAutoEq      = 3;
+// 虚拟环绕（2026-11-15 插入，紧跟 AutoEq 之后 → 其余索引整体 +1）
+// 放在耳机校正之后、低频/动态之前：空间化会重塑频响，先校正再渲染才是正确顺序。
+constexpr int kNodeVirtualSurround = 4;
 // 动态低音（2026-11-11 插入，位于 EQ 与压限之间）
-constexpr int kNodeDynamicBass = 4;
+constexpr int kNodeDynamicBass = 5;
 // 虚拟低音（2026-11-11 插入，紧随动态低音）
-constexpr int kNodeVirtualBass = 5;
+constexpr int kNodeVirtualBass = 6;
 // 低音增强（2026-11-11 插入，M/S + EQ + 瞬态 + 次谐波，设备无关）
-constexpr int kNodeBassEnhance = 6;
-constexpr int kNodeCompressor  = 7;
-constexpr int kNodeMultiband   = 8;
-constexpr int kNodeConvolver   = 9;
-constexpr int kNodeReverb      = 10;
-constexpr int kNodeStereoWidth = 11;
-constexpr int kNodeOutputGain  = 12;
+constexpr int kNodeBassEnhance = 7;
+constexpr int kNodeCompressor  = 8;
+constexpr int kNodeMultiband   = 9;
+constexpr int kNodeConvolver   = 10;
+constexpr int kNodeReverb      = 11;
+constexpr int kNodeStereoWidth = 12;
+constexpr int kNodeOutputGain  = 13;
 // 自定义脚本效果器：位于 OutputGain 之后、Limiter 之前，
 // 保证 Limiter 仍是绝对末级（用户脚本 boost 也会被限幅兜住）。
-constexpr int kNodeScriptEffect = 13;
-constexpr int kNodeLimiter     = 14;
-constexpr int kNodeCount       = 15;
+constexpr int kNodeScriptEffect = 14;
+constexpr int kNodeLimiter     = 15;
+constexpr int kNodeCount       = 16;
 
 /**
  * 索引脱节标志。由 AddNodeAt 置位，装配末尾汇总写诊断文件。
@@ -139,6 +143,11 @@ NativeAudioEngine::NativeAudioEngine(int sample_rate, int channels, int max_fram
   auto autoEq = std::make_unique<dsp::ParametricEqNode>();
   autoEq->set_channel_count(channels);
   AddNodeAt(*graph_, std::move(autoEq), kNodeAutoEq);
+
+  // 虚拟环绕：默认旁路，由 Kotlin 侧 vs_enabled 控制；
+  // 输出仍为双声道（内部完成 7 声道解码与双耳渲染）。
+  auto vs = std::make_unique<dsp::VirtualSurroundNode>();
+  AddNodeAt(*graph_, std::move(vs), kNodeVirtualSurround);
   // 动态低音（M15）：插在 EQ 之后、压限之前 ——
   // 低音增强后的电平由后续压限顺带兜住；但本节点**不依赖**压限（自带低频保护，
   // 见 docs/M15_DYNAMIC_BASS_DESIGN.md ）。
