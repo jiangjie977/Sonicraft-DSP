@@ -4001,29 +4001,6 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
             if (trimExpanded.value) {
                 Column(modifier = Modifier.padding(bottom = 20.dp)) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "仅解码测试（旁通其余环节）",
-                            fontSize = 12.sp,
-                            color = ScColors.TextMain,
-                            modifier = Modifier.weight(1f),
-                        )
-                        ScTinySwitch(
-                            checked = vsDebugRaw,
-                            onCheckedChange = { viewModel.setVsDebugRaw(it) },
-                        )
-                    }
-                    Text(
-                        text = "逐声道校验：把某一路拉到 +12 dB 或静音，即可确认该声道是否真的在工作。" +
-                            "LFE 不走双耳渲染，直接混入双耳。\n" +
-                            "打开「仅解码测试」后链路只剩：解码 → 声道 trim → 双耳渲染，" +
-                            "编解码往返、后处理与房间全部旁通。",
-                        fontSize = 11.sp,
-                        color = ScColors.TextSub,
-                    )
-                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 8.dp),
@@ -4049,6 +4026,30 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                             Text("还原默认值", fontSize = 12.sp)
                         }
                     }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "仅解码测试（旁通其余环节）",
+                            fontSize = 12.sp,
+                            color = ScColors.TextMain,
+                            modifier = Modifier.weight(1f),
+                        )
+                        ScTinySwitch(
+                            checked = vsDebugRaw,
+                            onCheckedChange = { viewModel.setVsDebugRaw(it) },
+                        )
+                    }
+                    Text(
+                        text = "逐声道校验：把某一路拉到 +12 dB 或静音，即可确认该声道是否真的在工作。" +
+                            "LFE 不走双耳渲染，直接混入双耳。\n" +
+                            "打开「仅解码测试」后链路只剩：解码 → 声道 trim → 双耳渲染，" +
+                            "编解码往返、后处理与房间全部旁通。",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                    )
                 }
             }
         }
@@ -4166,8 +4167,8 @@ private fun VsTrimColumn(
     ) {
         Box(
             modifier = Modifier
-                .width(36.dp)
-                .height(140.dp),
+                .width(44.dp)
+                .height(190.dp),
             contentAlignment = Alignment.Center,
         ) {
             // 竖滑条：把标准 Slider 旋转 −90° 放进固定高度的盒子里
@@ -4177,7 +4178,7 @@ private fun VsTrimColumn(
                 valueRange = -12f..12f,
                 enabled = enabled && !muted,
                 modifier = Modifier
-                    .width(140.dp)
+                    .width(190.dp)
                     .graphicsLayer { rotationZ = -90f },
             )
         }
