@@ -52,6 +52,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
@@ -97,6 +98,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -4167,19 +4169,20 @@ private fun VsTrimColumn(
     ) {
         Box(
             modifier = Modifier
-                .width(44.dp)
+                .width(52.dp)
                 .height(190.dp),
             contentAlignment = Alignment.Center,
         ) {
-            // 竖滑条：把标准 Slider 旋转 −90° 放进固定高度的盒子里
+            // 竖滑条：requiredWidth 让布局宽度不受父级约束（graphicsLayer 只改绘制，
+            // 用 width 会被父盒子裁成很短一段），再整体旋转 −90°。
             Slider(
                 value = value,
                 onValueChange = onValue,
                 valueRange = -12f..12f,
                 enabled = enabled && !muted,
                 modifier = Modifier
-                    .width(190.dp)
-                    .graphicsLayer { rotationZ = -90f },
+                    .requiredWidth(190.dp)
+                    .rotate(-90f),
             )
         }
         Text(
