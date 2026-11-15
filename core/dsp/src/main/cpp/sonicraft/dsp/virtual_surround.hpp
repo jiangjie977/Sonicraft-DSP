@@ -157,7 +157,7 @@ class VirtualSurroundNode final : public DspNode {
     pp.rear_delay_ms = param_[vs::kParamRearCenterDelayMs];
     if (!debug_raw) post_.Process(ch_ptr_.data(), frames, pp);
 
-    RenderFrames(channels[0], channels[1], frames, goal, step);
+    RenderFrames(channels[0], channels[1], frames, goal, step, debug_raw);
 
     // 房间卷积（湿声）：放在双耳渲染之后 —— 先空间化再进房间，房间才不会被 HRTF 染色串掉。
     // 预设映射：1=小房 2=客厅 3=音乐厅 4=大教堂；0=关（完全不跑，零开销）。
@@ -182,7 +182,7 @@ class VirtualSurroundNode final : public DspNode {
   }
 
   /** 逐声道 HRTF 累加到双耳，再与干声按 render_gain_ 交叉淡化 */
-  void RenderFrames(float* l, float* r, int frames, float goal, float step) {
+  void RenderFrames(float* l, float* r, int frames, float goal, float step, bool direct = false) {
     // 逐声道 trim（dB → 线性）与静音；LFE 不做 HRTF，直接按增益混入双耳
     float gain[vs::kChannelCount];
     for (int c = 0; c < vs::kChannelCount; ++c) {
@@ -194,17 +194,31 @@ class VirtualSurroundNode final : public DspNode {
     for (int i = 0; i < frames; ++i) {
       float wet_l = 0.0f;
       float wet_r = 0.0f;
-      for (int c = 0; c < vs::kChannelCount; ++c) {
-        const float x = layout_[static_cast<std::size_t>(c) * max_frames_ + i] * gain[c];
-        if (c == vs::kLFE) {
-          wet_l += x;
-          wet_r += x;
-          continue;
+      if (direct) {
+        // 仅解码测试：**不过双耳渲染**，7 声道按经典下混矩阵直接进双耳，
+        // 这样把某一路之外全部静音，听到的就是那一路上解码出来的原始内容。
+        const float fl = layout_[static_cast<std::size_t>(vs::kFL) * max_frames_ + i] * gain[vs::kFL];
+        const float fr = layout_[static_cast<std::size_t>(vs::kFR) * max_frames_ + i] * gain[vs::kFR];
+        const float cc = layout_[static_cast<std::size_t>(vs::kC) * max_frames_ + i] * gain[vs::kC];
+        const float sl = layout_[static_cast<std::size_t>(vs::kSL) * max_frames_ + i] * gain[vs::kSL];
+        const float sr = layout_[static_cast<std::size_t>(vs::kSR) * max_frames_ + i] * gain[vs::kSR];
+        const float cs = layout_[static_cast<std::size_t>(vs::kCS) * max_frames_ + i] * gain[vs::kCS];
+        const float lfe = layout_[static_cast<std::size_t>(vs::kLFE) * max_frames_ + i] * gain[vs::kLFE];
+        wet_l = fl + 0.7071068f * cc + 0.7071068f * sl + 0.7071068f * cs + lfe;
+        wet_r = fr + 0.7071068f * cc + 0.7071068f * sr + 0.7071068f * cs + lfe;
+      } else {
+        for (int c = 0; c < vs::kChannelCount; ++c) {
+          const float x = layout_[static_cast<std::size_t>(c) * max_frames_ + i] * gain[c];
+          if (c == vs::kLFE) {
+            wet_l += x;
+            wet_r += x;
+            continue;
+          }
+          float hl = 0.0f, hr = 0.0f;
+          hrtf_ch_[static_cast<std::size_t>(c)].ProcessSample(x, &hl, &hr);
+          wet_l += hl;
+          wet_r += hr;
         }
-        float hl = 0.0f, hr = 0.0f;
-        hrtf_ch_[static_cast<std::size_t>(c)].ProcessSample(x, &hl, &hr);
-        wet_l += hl;
-        wet_r += hr;
       }
 
       // 交叉淡化：dry*(1−g) + wet*g（g 逐样本推进，开关无爆音）

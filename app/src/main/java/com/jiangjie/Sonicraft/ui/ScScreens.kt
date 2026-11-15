@@ -4019,7 +4019,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     Text(
                         text = "逐声道校验：把某一路拉到 +12 dB 或静音，即可确认该声道是否真的在工作。" +
                             "LFE 不走双耳渲染，直接混入双耳。\n" +
-                            "打开「仅解码测试」后链路只剩：解码 → 声道 trim → 双耳渲染，" +
+                            "打开「仅解码测试」后链路只剩：解码 → 声道 trim → 经典下混直接输出（不过双耳渲染），" +
                             "编解码往返、后处理与房间全部旁通。",
                         fontSize = 11.sp,
                         color = ScColors.TextSub,
