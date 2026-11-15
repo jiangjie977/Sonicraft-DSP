@@ -12,6 +12,8 @@
 #include "sonicraft/dsp/dsp_node.hpp"
 #include "sonicraft/dsp/param_queue.hpp"
 #include "sonicraft/dsp/perf_probe.hpp"
+// 编译期校验：虚拟环绕节点头文件随图一起构建（接入音频图见 native_audio_engine.cpp）
+#include "sonicraft/dsp/virtual_surround.hpp"
 
 namespace sonicraft::dsp {
 
