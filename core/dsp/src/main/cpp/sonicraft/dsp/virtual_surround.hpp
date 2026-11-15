@@ -157,7 +157,9 @@ class VirtualSurroundNode final : public DspNode {
     pp.rear_delay_ms = param_[vs::kParamRearCenterDelayMs];
     if (!debug_raw) post_.Process(ch_ptr_.data(), frames, pp);
 
-    RenderFrames(channels[0], channels[1], frames, goal, step, debug_raw);
+    // 仅解码测试也走双耳渲染：trim 作用在 7 声道上，再逐路 HRTF 送双耳输出。
+    // 若在这里直接下混，测试链就断了（听的不是最终链路的解码结果）。
+    RenderFrames(channels[0], channels[1], frames, goal, step, false);
 
     // 房间卷积（湿声）：放在双耳渲染之后 —— 先空间化再进房间，房间才不会被 HRTF 染色串掉。
     // 预设映射：1=小房 2=客厅 3=音乐厅 4=大教堂；0=关（完全不跑，零开销）。
