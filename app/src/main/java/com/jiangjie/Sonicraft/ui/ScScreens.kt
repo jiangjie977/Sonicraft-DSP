@@ -3796,6 +3796,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsSurroundGain by viewModel.vsSurroundGain.collectAsStateWithLifecycle()
     val vsCenterGain by viewModel.vsCenterGain.collectAsStateWithLifecycle()
     val vsFrontGain by viewModel.vsFrontGain.collectAsStateWithLifecycle()
+    val vsEncodeStrength by viewModel.vsEncodeStrength.collectAsStateWithLifecycle()
     val vsCenterMode by viewModel.vsCenterMode.collectAsStateWithLifecycle()
     val vsDialog by viewModel.vsDialog.collectAsStateWithLifecycle()
     val vsBassEnh by viewModel.vsBassEnh.collectAsStateWithLifecycle()
@@ -3855,6 +3856,16 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         value = vsFrontGain,
                         enabled = vsEnabled,
                         onChange = viewModel::setVsFrontGain,
+                    )
+
+                    // 参数名沿用源码：encode_strength（Lt/Rt 往返强度）
+                    VsGainRow(
+                        label = "编码强度",
+                        value = vsEncodeStrength,
+                        range = 0f..1f,
+                        suffix = "",
+                        enabled = vsEnabled,
+                        onChange = viewModel::setVsEncodeStrength,
                     )
 
                     // ---- 中置模式（关 / 直通 / 混入前置）----

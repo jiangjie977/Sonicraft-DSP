@@ -241,6 +241,11 @@ class AudioChainManager @Inject constructor(
             )
             engine.setParam(
                 AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_ENCODE_STRENGTH,
+                f("vs_encode_strength", 0.5f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
                 AudioEngine.VS_PARAM_CENTER_MODE,
                 f("vs_center_mode", 1f),
             )

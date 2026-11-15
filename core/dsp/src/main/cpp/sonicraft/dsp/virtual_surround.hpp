@@ -10,6 +10,7 @@
 
 #include "sonicraft/dsp/dsp_node.hpp"
 #include "sonicraft/dsp/vs_decoder.hpp"
+#include "sonicraft/dsp/vs_encoder.hpp"
 #include "sonicraft/dsp/vs_hrtf.hpp"
 #include "sonicraft/dsp/vs_params.hpp"
 #include "sonicraft/dsp/vs_post.hpp"
@@ -47,6 +48,8 @@ class VirtualSurroundNode final : public DspNode {
 
     const float sr = static_cast<float>(sample_rate_);
     decoder_.Prepare(sr);
+    decoder2_.Prepare(sr);
+    round_trip_.Prepare(sr);
     for (int c = 0; c < vs::kChannelCount; ++c) {
       hrtf_ch_[static_cast<std::size_t>(c)].Prepare(sr);
       hrtf_ch_[static_cast<std::size_t>(c)].Configure(vs::kAzimuthDeg[c], 0.0f);
@@ -63,6 +66,8 @@ class VirtualSurroundNode final : public DspNode {
   void Reset() override {
     render_gain_ = 0.0f;  // 从静音淡入，避免开关瞬间爆音
     decoder_.Reset();
+    decoder2_.Reset();
+    round_trip_.Reset();
     for (auto& h : hrtf_ch_) h.Reset();
     hrtf_model_.Reset();
     post_.Reset();
@@ -120,6 +125,11 @@ class VirtualSurroundNode final : public DspNode {
     decoder_.SetFrontGain(param_[vs::kParamFrontGain]);
 
     DecodeFrames(channels[0], channels[1], frames);
+
+    // Lt/Rt 编解码往返：制造相位扩散（强度 0 = 直通）
+    round_trip_.Process(ch_ptr_.data(), frames, param_[vs::kParamEncodeStrength],
+                        decoder2_, param_[vs::kParamMode] > 0.5f,
+                        param_[vs::kParamCenterGain], param_[vs::kParamSurroundGain]);
 
     // 7 声道后处理：中置三态 / 人声清晰度 / 低音谐波 / 后中置
     vs::PostStage::Params pp;
@@ -192,6 +202,8 @@ class VirtualSurroundNode final : public DspNode {
   std::vector<float> layout_;  // 7 声道 × max_frames（planar 展开存储）
 
   vs::StereoSpatialDecoder decoder_;
+  vs::StereoSpatialDecoder decoder2_;
+  vs::LtRtRoundTrip round_trip_;
   vs::PostStage post_;
   std::array<float*, vs::kChannelCount> ch_ptr_{};
   std::array<vs::ParametricHrtf, vs::kChannelCount> hrtf_ch_{};

@@ -92,7 +92,7 @@ constexpr float kDefault[kParamCount] = {
     /* rear_gain          */ -6.0f,
     /* front_gain         */ 0.0f,
     /* distance           */ 0.5f,
-    /* encode_strength    */ 0.3f,
+    /* encode_strength    */ 0.5f,
     /* center_mode        */ 1.0f,
     /* dialog             */ 0.0f,
     /* dialog_enabled     */ 1.0f,
