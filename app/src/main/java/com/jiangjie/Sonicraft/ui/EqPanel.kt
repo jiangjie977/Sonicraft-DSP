@@ -868,7 +868,26 @@ internal fun ScAutoEqCard(viewModel: MainViewModel, sectionEnabled: Boolean = tr
     var libSelectMode by remember { mutableStateOf(false) }
     var libSelected by remember { mutableStateOf(setOf<String>()) }
 
+    // 导入失败弹窗 / 批量导入汇总
+    var importError by remember { mutableStateOf<String?>(null) }
+    var zipSummary by remember { mutableStateOf<String?>(null) }
+    // 重命名
+    var renameTarget by remember { mutableStateOf<String?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var renameErr by remember { mutableStateOf<String?>(null) }
+
     val autoEqCtx = androidx.compose.ui.platform.LocalContext.current
+
+    /** 读 SAF 的显示名：lastPathSegment 是 document id，不能当文件名用 */
+    fun displayNameOf(uri: android.net.Uri): String = runCatching {
+        autoEqCtx.contentResolver.query(
+            uri,
+            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+            null, null, null,
+        )?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null }
+    }.getOrNull() ?: uri.lastPathSegment?.substringAfterLast('/') ?: "AutoEq"
+
+    // 单文件：选中后**直接自检并应用**（不再弹对话框让用户点「应用」）
     val pickAutoEqFile = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -876,24 +895,68 @@ internal fun ScAutoEqCard(viewModel: MainViewModel, sectionEnabled: Boolean = tr
             val txt = runCatching {
                 autoEqCtx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             }.getOrNull()
+            val name = displayNameOf(uri).substringBeforeLast('.').ifBlank { "AutoEq" }
             if (txt.isNullOrBlank()) {
-                autoEqOk = false
-                autoEqMsg = "读取文件失败（可能不是文本文件或编码不支持）"
+                importError = "读取文件失败：可能不是文本文件，或编码不受支持（请用 UTF-8）"
             } else {
-                // SAF 的 lastPathSegment 是 document id，必须查 DISPLAY_NAME 才是文件名
-                val displayName = runCatching {
-                    autoEqCtx.contentResolver.query(
-                        uri,
-                        arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
-                        null, null, null,
-                    )?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null }
-                }.getOrNull()
-                autoEqFileName = (displayName ?: uri.lastPathSegment?.substringAfterLast('/') ?: "AutoEq")
-                    .substringBeforeLast('.').ifBlank { "AutoEq" }
-                autoEqText = txt
-                autoEqMsg = null
-                autoEqOk = null
-                showAutoEqDialog = true
+                autoEqFileName = name
+                val res = viewModel.applyAutoEq(txt, saveAsPreset = name)
+                autoEqMsg = res.message
+                autoEqOk = res.ok
+                if (!res.ok) importError = res.message
+            }
+        }
+    }
+
+    // 批量：zip 里的每个 .txt / .csv 逐个自检入库
+    val pickAutoEqZip = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            val okNames = mutableListOf<String>()
+            val fails = mutableListOf<String>()
+            runCatching {
+                autoEqCtx.contentResolver.openInputStream(uri)?.use { ins ->
+                    java.util.zip.ZipInputStream(ins.buffered()).use { zip ->
+                        var entry = zip.nextEntry
+                        while (entry != null) {
+                            val entryName = entry.name
+                            if (!entry.isDirectory &&
+                                (entryName.endsWith(".txt", true) || entryName.endsWith(".csv", true))
+                            ) {
+                                val text = runCatching {
+                                    zip.readBytes().toString(Charsets.UTF_8)
+                                }.getOrNull()
+                                val base = entryName.substringAfterLast('/').substringBeforeLast('.')
+                                if (text.isNullOrBlank()) {
+                                    fails.add("$entryName：读取失败")
+                                } else {
+                                    val res = viewModel.applyAutoEq(text, saveAsPreset = base)
+                                    if (res.ok) okNames.add(base) else fails.add("$entryName：${res.message}")
+                                }
+                            }
+                            zip.closeEntry()
+                            entry = zip.nextEntry
+                        }
+                    }
+                }
+            }.onFailure { fails.add("压缩包读取失败：${it.message ?: "未知错误"}") }
+
+            if (okNames.isEmpty() && fails.isEmpty()) {
+                importError = "压缩包里没有 .txt / .csv 文件"
+            } else {
+                // 批量导入后把**第一条**设为当前（一次只能有一条生效）
+                if (okNames.isNotEmpty()) viewModel.applyAutoEqCurve(okNames.first())
+                val sb = StringBuilder()
+                sb.append("批量导入完成：成功 ${okNames.size} 条")
+                if (fails.isNotEmpty()) sb.append("，失败 ${fails.size} 条")
+                if (okNames.isNotEmpty()) sb.append("\n当前生效：${okNames.first()}")
+                if (fails.isNotEmpty()) {
+                    sb.append("\n\n失败明细：")
+                    fails.take(8).forEach { sb.append("\n· $it") }
+                    if (fails.size > 8) sb.append("\n· …还有 ${fails.size - 8} 条")
+                }
+                zipSummary = sb.toString()
             }
         }
     }
@@ -917,41 +980,6 @@ internal fun ScAutoEqCard(viewModel: MainViewModel, sectionEnabled: Boolean = tr
                 modifier = Modifier.padding(bottom = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            ) {
-                Text(text = "导入 AutoEq 结果", fontSize = 12.sp, color = ScColors.TextMain)
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = {
-                    pickAutoEqFile.launch(
-                        arrayOf(
-                            "text/plain",
-                            "text/csv",
-                            "text/comma-separated-values",
-                            "application/octet-stream",
-                        ),
-                    )
-                }) {
-                    Text(text = "从文件导入", fontSize = 12.sp)
-                }
-                TextButton(onClick = {
-                    autoEqText = ""
-                    autoEqMsg = null
-                    autoEqFileName = null
-                    showAutoEqDialog = true
-                }) {
-                    Text(text = "粘贴导入", fontSize = 12.sp)
-                }
-            }
-            autoEqMsg?.let {
-                Text(
-                    text = it,
-                    fontSize = 12.sp,
-                    color = if (autoEqOk == false) Color(0xFFB00020) else ScColors.Primary,
-                )
-            }
 
             // ---- 实际频响曲线（从独立卡并入本卡）：PEQ + AutoEq 合成响应 ----
             Row(
@@ -986,6 +1014,77 @@ internal fun ScAutoEqCard(viewModel: MainViewModel, sectionEnabled: Boolean = tr
                 fontSize = 10.sp,
                 color = ScColors.TextSub,
             )
+            // ---- 导入（下移到曲线下方；按钮样式，标签在上）----
+            Text(
+                text = "导入 AutoEq 结果",
+                fontSize = 12.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                color = ScColors.TextMain,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        pickAutoEqFile.launch(
+                            arrayOf(
+                                "text/plain",
+                                "text/csv",
+                                "text/comma-separated-values",
+                                "application/octet-stream",
+                            ),
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        horizontal = 6.dp, vertical = 6.dp,
+                    ),
+                ) {
+                    Text("从文件导入", fontSize = 12.sp, maxLines = 1)
+                }
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        pickAutoEqZip.launch(
+                            arrayOf(
+                                "application/zip",
+                                "application/x-zip-compressed",
+                                "application/octet-stream",
+                            ),
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        horizontal = 6.dp, vertical = 6.dp,
+                    ),
+                ) {
+                    Text("批量 ZIP", fontSize = 12.sp, maxLines = 1)
+                }
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        autoEqText = ""
+                        autoEqMsg = null
+                        autoEqFileName = null
+                        showAutoEqDialog = true
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        horizontal = 6.dp, vertical = 6.dp,
+                    ),
+                ) {
+                    Text("粘贴导入", fontSize = 12.sp, maxLines = 1)
+                }
+            }
+            autoEqMsg?.let {
+                Text(
+                    text = it,
+                    fontSize = 12.sp,
+                    color = if (autoEqOk == false) Color(0xFFB00020) else ScColors.Primary,
+                )
+            }
 
             // ---- 库（与「机架脚本库」同构：计数 + 列表 + 点按装载 + 删除）----
             if (library.isNotEmpty()) {
@@ -1155,6 +1254,19 @@ internal fun ScAutoEqCard(viewModel: MainViewModel, sectionEnabled: Boolean = tr
                         }
                         if (!libSelectMode) {
                             Text(
+                                text = "改名",
+                                fontSize = 11.sp,
+                                color = ScColors.Primary,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable {
+                                        renameTarget = item.name
+                                        renameText = item.name
+                                        renameErr = null
+                                    }
+                                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                            )
+                            Text(
                                 text = "删除",
                                 fontSize = 11.sp,
                                 color = Color(0xFFE5484D),
@@ -1168,6 +1280,86 @@ internal fun ScAutoEqCard(viewModel: MainViewModel, sectionEnabled: Boolean = tr
                     }
                 }
                 }
+            }
+            if (importError != null) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { importError = null },
+                    title = { Text("导入失败", fontSize = 14.sp) },
+                    text = {
+                        Text(
+                            text = importError ?: "",
+                            fontSize = 12.sp,
+                            color = ScColors.TextSub,
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { importError = null }) { Text("知道了") }
+                    },
+                )
+            }
+            if (zipSummary != null) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { zipSummary = null },
+                    title = { Text("批量导入结果", fontSize = 14.sp) },
+                    text = {
+                        Text(
+                            text = zipSummary ?: "",
+                            fontSize = 12.sp,
+                            color = ScColors.TextSub,
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { zipSummary = null }) { Text("好") }
+                    },
+                )
+            }
+            renameTarget?.let { oldName ->
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = {
+                        renameTarget = null
+                        renameErr = null
+                    },
+                    title = { Text("重命名预设", fontSize = 14.sp) },
+                    text = {
+                        Column {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = renameText,
+                                onValueChange = {
+                                    renameText = it
+                                    renameErr = null
+                                },
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            renameErr?.let {
+                                Text(
+                                    text = it,
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFB00020),
+                                    modifier = Modifier.padding(top = 6.dp),
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val err = viewModel.renameAutoEqCurve(oldName, renameText)
+                            if (err == null) {
+                                renameTarget = null
+                                renameErr = null
+                            } else {
+                                renameErr = err
+                            }
+                        }) { Text("确定") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            renameTarget = null
+                            renameErr = null
+                        }) { Text("取消") }
+                    },
+                )
             }
             if (showAutoEqDialog) {
                 androidx.compose.material3.AlertDialog(

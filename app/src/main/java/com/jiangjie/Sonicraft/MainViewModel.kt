@@ -3223,6 +3223,28 @@ class MainViewModel @Inject constructor(
         )
     }
 
+    /**
+     * 重命名库条目。成功返回 null，失败返回给用户看的原因。
+     * 若改的正是「当前生效」那条，同步更新来源名，避免列表与卡片对不上。
+     */
+    fun renameAutoEqCurve(oldName: String, newNameRaw: String): String? {
+        val newName = newNameRaw.trim()
+        if (newName.isEmpty()) return "名字不能为空"
+        if (newName == oldName) return null
+        if (_autoEqLibrary.value.any { it.name == newName }) return "已有同名条目"
+        val idx = _autoEqLibrary.value.indexOfFirst { it.name == oldName }
+        if (idx < 0) return "条目不存在"
+        _autoEqLibrary.value = _autoEqLibrary.value.toMutableList().also {
+            it[idx] = it[idx].copy(name = newName)
+        }
+        persistAutoEqLibrary(_autoEqLibrary.value)
+        if (_autoEqSource.value == oldName) {
+            _autoEqSource.value = newName
+            prefs.edit().putString(KEY_AUTOEQ_SOURCE, newName).apply()
+        }
+        return null
+    }
+
     fun deleteAutoEqCurve(name: String) {
         _autoEqLibrary.value = _autoEqLibrary.value.filter { it.name != name }
         persistAutoEqLibrary(_autoEqLibrary.value)
