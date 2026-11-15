@@ -241,6 +241,11 @@ class AudioChainManager @Inject constructor(
             )
             engine.setParam(
                 AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_STEREO_EXPAND,
+                f("vs_rear_space", 0.5f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
                 AudioEngine.VS_PARAM_REAR_GAIN,
                 f("vs_rear_gain", -6f),
             )

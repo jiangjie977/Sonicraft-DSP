@@ -3797,6 +3797,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsCenterGain by viewModel.vsCenterGain.collectAsStateWithLifecycle()
     val vsFrontGain by viewModel.vsFrontGain.collectAsStateWithLifecycle()
     val vsRearGain by viewModel.vsRearGain.collectAsStateWithLifecycle()
+    val vsRearSpace by viewModel.vsRearSpace.collectAsStateWithLifecycle()
     val vsRoomSize by viewModel.vsRoomSize.collectAsStateWithLifecycle()
     val vsRoomWet by viewModel.vsRoomWet.collectAsStateWithLifecycle()
     val vsEncodeStrength by viewModel.vsEncodeStrength.collectAsStateWithLifecycle()
@@ -3866,6 +3867,16 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         value = vsRearGain,
                         enabled = vsEnabled,
                         onChange = viewModel::setVsRearGain,
+                    )
+
+                    // ---- 后环绕空间感（环绕去相关深度 0~1）----
+                    VsGainRow(
+                        label = "后环绕空间感",
+                        value = vsRearSpace,
+                        range = 0f..1f,
+                        suffix = "",
+                        enabled = vsEnabled,
+                        onChange = viewModel::setVsRearSpace,
                     )
 
                     // ---- 房间（RIR 卷积，预设名与卷积器一致：小房间/客厅/音乐厅/大教堂）----

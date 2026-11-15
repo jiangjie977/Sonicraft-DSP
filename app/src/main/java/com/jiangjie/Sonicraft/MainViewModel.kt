@@ -1601,6 +1601,16 @@ class MainViewModel @Inject constructor(
         return if (v.isFinite()) v.coerceIn(lo, hi) else def
     }
 
+    private val _vsRearSpace = MutableStateFlow(saneFloat(KEY_VS_REAR_SPACE, 0.5f, 0f, 1f))
+    val vsRearSpace: StateFlow<Float> = _vsRearSpace.asStateFlow()
+
+    fun setVsRearSpace(v0: Float) {
+        val v = if (v0.isFinite()) v0.coerceIn(0f, 1f) else _vsRearSpace.value
+        _vsRearSpace.value = v
+        prefs.edit().putFloat(KEY_VS_REAR_SPACE, v).apply()
+        engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_STEREO_EXPAND, v)
+    }
+
     private val _vsRearGain = MutableStateFlow(saneFloat(KEY_VS_REAR_GAIN, -6f, -12f, 12f))
     val vsRearGain: StateFlow<Float> = _vsRearGain.asStateFlow()
 
@@ -2235,6 +2245,7 @@ class MainViewModel @Inject constructor(
             "vs_encode_strength" -> setVsEncodeStrength(v)
             "vs_room_size" -> setVsRoomSize(v.toInt())
             "vs_rear_gain" -> setVsRearGain(v)
+            "vs_rear_space" -> setVsRearSpace(v)
             "vs_room_wet" -> setVsRoomWet(v)
             "vs_center_mode" -> setVsCenterMode(v.toInt())
             "vs_dialog" -> setVsDialog(v)
@@ -2386,6 +2397,7 @@ class MainViewModel @Inject constructor(
         "vs_encode_strength" to _vsEncodeStrength.value,
         "vs_room_size" to _vsRoomSize.value.toFloat(),
         "vs_rear_gain" to _vsRearGain.value,
+        "vs_rear_space" to _vsRearSpace.value,
         "vs_room_wet" to _vsRoomWet.value,
         "vs_center_mode" to _vsCenterMode.value.toFloat(),
         "vs_dialog" to _vsDialog.value,
@@ -5733,6 +5745,11 @@ class MainViewModel @Inject constructor(
         )
         engine.setParam(
             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_STEREO_EXPAND,
+            _vsRearSpace.value,
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
             AudioEngine.VS_PARAM_REAR_GAIN,
             _vsRearGain.value,
         )
@@ -5986,6 +6003,7 @@ class MainViewModel @Inject constructor(
     const val KEY_VS_CENTER_GAIN = "vs_center_gain"
     const val KEY_VS_FRONT_GAIN = "vs_front_gain"
     const val KEY_VS_REAR_GAIN = "vs_rear_gain"
+    const val KEY_VS_REAR_SPACE = "vs_rear_space"
     const val KEY_VS_ROOM_SIZE = "vs_room_size"
     const val KEY_VS_ROOM_WET = "vs_room_wet"
     const val KEY_VS_ENCODE_STRENGTH = "vs_encode_strength"

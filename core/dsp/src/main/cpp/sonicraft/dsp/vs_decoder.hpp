@@ -121,6 +121,17 @@ class StereoSpatialDecoder {
   void SetRearGain(float rear_db) { rear_gain_ = DbToGain(rear_db); }
 
   /**
+   * 后环绕空间感（0~1）：控制环绕声道的**去相关深度**。
+   *
+   * 0 = 全通链完全旁路，SL/SR 与原差分信号同相（贴耳、无包围感）；
+   * 1 = 完全走 5 级全通（相位最散，包围感最强，但过大时后方会"糊"）。
+   * 中间值按比例混合，因此这是一个连续的"空间感"旋钮，而不是开关。
+   */
+  void SetRearSpace(float amount) {
+    rear_space_ = amount < 0.0f ? 0.0f : (amount > 1.0f ? 1.0f : amount);
+  }
+
+  /**
    * 前场补偿：只作用于 FL/FR。
    *
    * 空间化后前端常显得变薄（能量被中置与环绕分走），这里给前置一个独立补偿量。
@@ -197,11 +208,19 @@ class StereoSpatialDecoder {
 
     // ---- 环绕去相关：5 级一阶全通（左右系数反号）----
     static constexpr float kAp[5] = {-0.6f, 0.5f, -0.4f, 0.3f, -0.25f};
-    for (int i = 0; i < 5; ++i) {
-      ap_l_[i].coeff = kAp[i];
-      ap_r_[i].coeff = -kAp[i];
-      sl = ap_l_[i].Process(sl);
-      sr = ap_r_[i].Process(sr);
+    {
+      const float dry_l = sl, dry_r = sr;
+      float wet_l = sl, wet_r = sr;
+      for (int i = 0; i < 5; ++i) {
+        ap_l_[i].coeff = kAp[i];
+        ap_r_[i].coeff = -kAp[i];
+        wet_l = ap_l_[i].Process(wet_l);
+        wet_r = ap_r_[i].Process(wet_r);
+      }
+      // 注意：全通链即使 wet=0 也必须继续跑，否则切回时状态是旧的（会「啵」一声）
+      const float w = rear_space_;
+      sl = dry_l * (1.0f - w) + wet_l * w;
+      sr = dry_r * (1.0f - w) + wet_r * w;
     }
 
     out[kFL] = fl;
@@ -282,6 +301,7 @@ class StereoSpatialDecoder {
   float center_gain_ = 1.0f, surround_gain_ = 1.0f, lfe_gain_ = 1.0f;
   float front_gain_ = 1.0f;
   float rear_gain_ = 1.0f;
+  float rear_space_ = 0.5f;
 
   LowPass4 lp_l_, lp_r_;
   LowPass4 lfe_l_, lfe_r_;

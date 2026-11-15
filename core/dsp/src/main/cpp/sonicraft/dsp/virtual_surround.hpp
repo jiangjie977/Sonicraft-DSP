@@ -131,6 +131,7 @@ class VirtualSurroundNode final : public DspNode {
     // 前场补偿此前只接线未生效（参数下发到节点却没人使用）—— 这里补上
     decoder_.SetFrontGain(param_[vs::kParamFrontGain]);
     decoder_.SetRearGain(param_[vs::kParamRearGain]);
+    decoder_.SetRearSpace(param_[vs::kParamStereoExpand]);
 
     DecodeFrames(channels[0], channels[1], frames);
 
