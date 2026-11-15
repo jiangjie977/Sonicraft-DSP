@@ -3828,21 +3828,13 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     modifier = Modifier.padding(bottom = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "电影模式（更强的方向分离）",
-                            fontSize = 12.sp,
-                            color = ScColors.TextMain,
-                            modifier = Modifier.weight(1f),
-                        )
-                        ScTinySwitch(
-                            checked = vsMode == 1,
-                            onCheckedChange = { viewModel.setVsMode(if (it) 1 else 0) },
-                        )
-                    }
+                    Text(text = "解码模式", fontSize = 12.sp, color = ScColors.TextMain)
+                    VsChoiceRow(
+                        options = listOf("Cine6.1", "LCRS", "StereoTrack", "Mono"),
+                        selected = vsMode,
+                        enabled = vsEnabled,
+                        onSelect = viewModel::setVsMode,
+                    )
 
 
 

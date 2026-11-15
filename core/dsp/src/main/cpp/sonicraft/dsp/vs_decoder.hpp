@@ -102,6 +102,8 @@ class StereoSpatialDecoder {
     lp_l_.Reset();
     lp_r_.Reset();
     center_bp_.Reset();
+    for (int i = 0; i < kCsDelaySize; ++i) cs_delay_[i] = 0.0f;
+    cs_pos_ = 0;
     surround_bp_l_.Reset();
     surround_bp_r_.Reset();
     lfe_l_.Reset();
@@ -124,6 +126,9 @@ class StereoSpatialDecoder {
   }
 
   void SetMode(bool movie) { movie_ = movie; }
+
+  /** 解码模式：0=Cine6.1（含后中置）1=LCRS（无后中置）2=Stereo 3=Mono */
+  void SetDecodeMode(int mode) { decode_mode_ = mode < 0 ? 0 : (mode > 3 ? 3 : mode); }
   /**
    * @param rear_db 后中置（CS）增益。此前 CS 只有固定 ms_gain，参数表里的
    *                rear_gain 一直是死参数 —— 这里补上。
@@ -198,11 +203,21 @@ class StereoSpatialDecoder {
     sr *= surround_damp;
 
     // ---- 前置：扣掉已进中置的部分（避免重复计入）----
+    float cs = 0.0f;
     float fl = (in_l - c * 0.5f) * front_gain_;
     float fr = (in_r - c * 0.5f) * front_gain_;
 
     // ---- 后中置：环绕之和 ----
-    const float cs = (sl + sr) * 0.5f * 0.9831886887550354f * rear_gain_;
+    // 后中置：两侧环绕互为反相（线性滤波），直接相加恒为 0 ——
+    // 因此取"左环绕延迟 10 ms + 右环绕"，制造去相关后才会有真实的后方中线信号。
+    cs_delay_[cs_pos_] = sl;
+    {
+      const int read = (cs_pos_ - 480 + kCsDelaySize) & (kCsDelaySize - 1);   // 10 ms @48k
+      float cs_src = (cs_delay_[read] + sr) * 0.5f;
+      if (decode_mode_ != 0) cs_src = 0.0f;   // 只有 Cine6.1 产生后中置
+      cs = cs_src * 0.9831886887550354f * rear_gain_;
+    }
+    cs_pos_ = (cs_pos_ + 1) & (kCsDelaySize - 1);
 
     // ---- LFE ----
     const float lfe_l = lfe_l_.Process(in_l);
@@ -232,6 +247,21 @@ class StereoSpatialDecoder {
       const float w = rear_space_;
       sl = dry_l * (1.0f - w) + wet_l * w;
       sr = dry_r * (1.0f - w) + wet_r * w;
+    }
+
+    // 解码模式覆盖
+    if (decode_mode_ == 2) {           // Stereo：只保留左右
+      fl = in_l;
+      fr = in_r;
+      c = 0.0f;
+      sl = sr = cs = 0.0f;
+    } else if (decode_mode_ == 3) {    // Mono：双耳同源
+      const float m = (in_l + in_r) * 0.5f;
+      fl = fr = m;
+      c = 0.0f;
+      sl = sr = cs = 0.0f;
+    } else if (decode_mode_ == 1) {    // LCRS：无后中置
+      cs = 0.0f;
     }
 
     out[kFL] = fl;
@@ -318,6 +348,10 @@ class StereoSpatialDecoder {
   // 分频段矩阵：中置与环绕各自先过带通，只取本声道的频段
   Biquad center_bp_;
   Biquad surround_bp_l_, surround_bp_r_;
+  int decode_mode_ = 0;                       // 0=Cine6.1 1=LCRS 2=Stereo 3=Mono
+  static constexpr int kCsDelaySize = 1024;   // 20 ms @48k
+  float cs_delay_[kCsDelaySize]{};
+  int cs_pos_ = 0;
   LowPass4 lfe_l_, lfe_r_;
 
   float env_alpha_ = 0.0f;

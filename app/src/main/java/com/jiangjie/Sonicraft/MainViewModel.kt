@@ -1562,7 +1562,7 @@ class MainViewModel @Inject constructor(
     }
 
     fun setVsMode(mode: Int) {
-        val v = mode.coerceIn(0, 1)
+        val v = mode.coerceIn(0, 3)
         _vsMode.value = v
         prefs.edit().putInt(KEY_VS_MODE, v).apply()
         engine.setParam(

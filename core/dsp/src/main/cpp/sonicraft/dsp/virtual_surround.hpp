@@ -127,6 +127,8 @@ class VirtualSurroundNode final : public DspNode {
     const float goal = want ? 1.0f : 0.0f;
 
     decoder_.SetMode(param_[vs::kParamMode] > 0.5f);
+    // 解码模式：0=Cine6.1 1=LCRS 2=Stereo 3=Mono
+    decoder_.SetDecodeMode(static_cast<int>(param_[vs::kParamMode] + 0.5f));
     // 四个声道增益不再对外开放：中置/环绕/前置/后中置一律按 0 dB 直通，    // 电平只由解码矩阵系数与声道 Trim 决定。
     decoder_.SetGains(0.0f, 0.0f, 0.0f);
     decoder_.SetFrontGain(0.0f);
