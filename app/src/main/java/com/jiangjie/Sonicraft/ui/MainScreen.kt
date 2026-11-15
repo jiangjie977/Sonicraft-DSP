@@ -697,6 +697,7 @@ private fun P1LibrarySection(
     val takeoverError by viewModel.takeoverError.collectAsStateWithLifecycle()
     val engineState by viewModel.engineState.collectAsStateWithLifecycle()
     val eqEnabled by viewModel.eqEnabled.collectAsStateWithLifecycle()
+    val eqSectionEnabled by viewModel.eqSectionEnabled.collectAsStateWithLifecycle()
     val bassGain by viewModel.bassGain.collectAsStateWithLifecycle()
     val trebleGain by viewModel.trebleGain.collectAsStateWithLifecycle()
     val limiterEnabled by viewModel.limiterEnabled.collectAsStateWithLifecycle()
@@ -878,9 +879,10 @@ private fun P1LibrarySection(
                 title = "均衡器",
                 subtitle = "多段曲线校正",
                 icon = ScEffectIconKind.EQ,
-                enabled = eqEnabled,
+                // 库卡片 = **组总闸**（与压限器/低频管家一致）；PEQ 与 AutoEq 是它的两张子卡
+                enabled = eqSectionEnabled,
                 onClick = onOpenEq,
-                onToggle = { viewModel.setEqEnabled(!eqEnabled) },
+                onToggle = { viewModel.setEqSectionEnabled(!eqSectionEnabled) },
                 modifier = Modifier.weight(1f),
             )
         }

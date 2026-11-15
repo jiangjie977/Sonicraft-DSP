@@ -820,7 +820,7 @@ private fun EqResponseChart(
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-internal fun ScAutoEqCard(viewModel: MainViewModel) {
+internal fun ScAutoEqCard(viewModel: MainViewModel, sectionEnabled: Boolean = true) {
     val enabled by viewModel.autoEqEnabled.collectAsStateWithLifecycle()
     val mode by viewModel.autoEqMode.collectAsStateWithLifecycle()
     val preGain by viewModel.autoEqPreGain.collectAsStateWithLifecycle()
@@ -855,7 +855,9 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
     var libExpanded by remember { mutableStateOf(true) }
     // 库多选（对齐机架脚本库：长按进选择，顶部出现删除/完成）
     // 折叠默认跟随开关：开=展开、关=收起；点标题行可手动展开/收起
-    val autoEqExpanded = rememberExpandedFollowing(enabled, "autoeq_card_expanded")
+    // 子卡开关 = 记忆值 && 组总闸（与压限器/低频管家一致）
+    val autoEqGate = enabled && sectionEnabled
+    val autoEqExpanded = rememberExpandedFollowing(autoEqGate, "autoeq_card_expanded")
     var libSelectMode by remember { mutableStateOf(false) }
     var libSelected by remember { mutableStateOf(setOf<String>()) }
 
@@ -897,9 +899,9 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
             // 与其他详情页共用同一个卡头组件
             ScSlotHeader(
                 title = "AutoEq 校正",
-                checked = enabled,
+                checked = autoEqGate,
                 onCheckedChange = { viewModel.setAutoEqEnabled(!enabled) },
-                switchEnabled = true,
+                switchEnabled = sectionEnabled,
                 expanded = autoEqExpanded.value,
                 onToggleExpand = { autoEqExpanded.value = !autoEqExpanded.value },
             )
@@ -994,7 +996,7 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                         Text(
                             text = if (libSelectMode) "已选 ${libSelected.size} 项" else
                                 "库 · ${library.size}/${viewModel.autoEqLibraryMax} 条 · 点按装载" +
-                                    (if (library.size > 4) " · 上下滑动" else ""),
+                                    (if (library.size > 2) " · 上下滑动" else ""),
                             fontSize = 11.sp,
                             color = ScColors.TextSub,
                         )
@@ -1056,11 +1058,13 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                     }
                 }
                 if (libExpanded) {
-                    // 库列表限高 + 内部滚动：条目变多时不允许无限拉长整页
+                    // 库列表限高 + 内部滚动：条目变多时不允许无限拉长整页。
+                    // 高度取 **168dp（约 2.3 行）** 而不是"刚好 3 行"——
+                    // 否则库里有 3 条时正好填满，用户拖动毫无反应，会以为列表不可滑动。
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 216.dp)
+                            .heightIn(max = 168.dp)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
@@ -1184,10 +1188,18 @@ internal fun ScAutoEqCard(viewModel: MainViewModel) {
                                         null
                                     } else {
                                         val bands = com.jiangjie.Sonicraft.AutoEqParser
-                                            .curveToBands(curve, autoEqFreqs)
+                                            .fitBandsToCurve(
+                                                curve = curve,
+                                                freqs = autoEqFreqs,
+                                                qs = autoEqQs,
+                                                types = autoEqTypes,
+                                            ).ifEmpty {
+                                                com.jiangjie.Sonicraft.AutoEqParser
+                                                    .curveToBands(curve, autoEqFreqs)
+                                            }
                                         val peak = curve.maxOfOrNull { it.second } ?: 0f
                                         val pre = if (peak > 0f) -peak else 0f
-                                        "预览：曲线映射到 ${bands.size} 段（Q=1.41）" +
+                                        "预览：曲线拟合到 ${bands.size} 段（最小二乘）" +
                                             " · preamp ${"%+.1f".format(pre)} dB"
                                     }
                                 }

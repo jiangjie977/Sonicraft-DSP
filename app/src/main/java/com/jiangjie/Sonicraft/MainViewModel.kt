@@ -204,6 +204,21 @@ class MainViewModel @Inject constructor(
 
     // ---- 参量均衡器控制（A/B 标尺：eqEnabled=false → 节点 bypass 透传） ----
     /** 音效总开关：关 = 原样透传（听原声副本），开 = 应用 EQ 曲线 */
+    /**
+     * 均衡器**组总闸**（与「压限器」「低频管家」同构：组闸 + 子卡开关两级）。
+     *
+     * 迁移：旧版本只有 `eq_enabled` 一个开关（既当组闸又当 PEQ 子开关），
+     * 因此首次读取时若没有 `eq_section_enabled`，就沿用 `eq_enabled` 的值 ——
+     * 老用户不会因为升级突然被"总闸关掉"。
+     */
+    private val _eqSectionEnabled = MutableStateFlow(
+        prefs.getBoolean(
+            KEY_EQ_SECTION_ENABLED,
+            prefs.getBoolean(KEY_EQ_ENABLED, false),
+        ),
+    )
+    val eqSectionEnabled: StateFlow<Boolean> = _eqSectionEnabled.asStateFlow()
+
     private val _eqEnabled = MutableStateFlow(prefs.getBoolean(KEY_EQ_ENABLED, false))
     val eqEnabled: StateFlow<Boolean> = _eqEnabled.asStateFlow()
 
@@ -2002,6 +2017,7 @@ class MainViewModel @Inject constructor(
             "input_gain" -> setInputGain(v)
             "balance" -> setBalance(v)
             "eq_enabled" -> setEqEnabled(v > 0.5f)
+            "eq_section_enabled" -> setEqSectionEnabled(v > 0.5f)
             "auto_eq_enabled" -> setAutoEqEnabled(v > 0.5f)
             "script_effect_enabled" -> setScriptEffectEnabled(v > 0.5f)
             "bass_gain" -> setBassGain(v)
@@ -2116,6 +2132,7 @@ class MainViewModel @Inject constructor(
         "input_gain" to _inputGain.value,
         "balance" to _balance.value,
         "eq_enabled" to if (_eqEnabled.value) 1f else 0f,
+        "eq_section_enabled" to if (_eqSectionEnabled.value) 1f else 0f,
         "auto_eq_enabled" to if (_autoEqEnabled.value) 1f else 0f,
         // 机架总闸（脚本文本走字符串表，见 snapshotStringParams）
         "script_effect_enabled" to if (_scriptEffectEnabled.value) 1f else 0f,
@@ -3017,7 +3034,7 @@ class MainViewModel @Inject constructor(
     fun setAutoEqEnabled(enabled: Boolean) {
         _autoEqEnabled.value = enabled
         prefs.edit().putBoolean(KEY_AUTOEQ_ENABLED, enabled).apply()
-        engine.setBypass(AudioEngine.AUTO_EQ_NODE_INDEX, !enabled)
+        applyEqGates()
     }
 
     /**
@@ -3368,12 +3385,18 @@ class MainViewModel @Inject constructor(
                         "GraphicEQ.txt（GraphicEQ: 频点…）与结果 CSV（含 equalization 列）",
                 )
             }
-            // 曲线按**当前段频率**取值（定 Q=1.41），所以段数与位置保持用户设定
-            bands = AutoEqParser.curveToBands(curve, _autoEqFreqs.value)
+            // 曲线用**最小二乘拟合**到当前各段（段数与位置不动，只求增益）：
+            // 直接按点取值会在相邻段重叠处叠加过量（一片 +3 的曲线合起来能到 +8）。
+            bands = AutoEqParser.fitBandsToCurve(
+                curve = curve,
+                freqs = _autoEqFreqs.value,
+                qs = _autoEqQs.value,
+                types = _autoEqTypes.value,
+            ).ifEmpty { AutoEqParser.curveToBands(curve, _autoEqFreqs.value) }
             // 曲线是补偿量：峰值为正时需要预衰减，避免叠加后削波
             val peak = curve.maxOfOrNull { it.second } ?: 0f
             preampDb = if (peak > 0f) -peak else 0f
-            formatNote = "，曲线映射 · Q=1.41"
+            formatNote = "，曲线拟合 · 最小二乘"
         }
         val m = bands.size
         val gains = MutableList(m) { i -> bands[i].gain }
@@ -4438,7 +4461,24 @@ class MainViewModel @Inject constructor(
     fun setEqEnabled(enabled: Boolean) {
         _eqEnabled.value = enabled
         prefs.edit().putBoolean(KEY_EQ_ENABLED, enabled).apply()
-        engine.setBypass(AudioEngine.EQ_NODE_INDEX, !enabled)
+        applyEqGates()
+    }
+
+    /**
+     * 组总闸：同时门控 PEQ 与 AutoEq 两个节点（与「低频管家」组闸一致）。
+     * 子开关的"记忆值"不被改写 —— 关总闸再开回来，恢复你原来的选择。
+     */
+    fun setEqSectionEnabled(enabled: Boolean) {
+        _eqSectionEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_EQ_SECTION_ENABLED, enabled).apply()
+        applyEqGates()
+    }
+
+    /** 实际生效值 = 组总闸 && 子开关。UI 的开关显示与节点旁路都用它。 */
+    private fun applyEqGates() {
+        val section = _eqSectionEnabled.value
+        engine.setBypass(AudioEngine.EQ_NODE_INDEX, !(section && _eqEnabled.value))
+        engine.setBypass(AudioEngine.AUTO_EQ_NODE_INDEX, !(section && _autoEqEnabled.value))
     }
 
     /** 低音增益（dB）：实时下发到 EQ band 0，节点内部做 30ms 平滑斜坡；联动多段状态 */
@@ -5253,7 +5293,8 @@ class MainViewModel @Inject constructor(
             engine.setBufferFrames(ms * SAMPLE_RATE_KHZ)
         }
         engine.setTrimSickHead(_trimSickHead.value)
-        engine.setBypass(AudioEngine.EQ_NODE_INDEX, !_eqEnabled.value)
+        // 组总闸 && 子开关（PEQ 与 AutoEq 一起）
+        applyEqGates()
         engine.setParam(AudioEngine.EQ_NODE_INDEX, BAND_BASS, _bassGain.value)
         engine.setParam(AudioEngine.EQ_NODE_INDEX, BAND_TREBLE, _trebleGain.value)
         // 多段 EQ：段数模式 + 当前模式逐段增益重放（恢复链路补全——此前中间段丢失）
@@ -5534,6 +5575,8 @@ class MainViewModel @Inject constructor(
         const val KEY_AUTO_TAKEOVER = "auto_takeover"
         const val KEY_GATE_THRESHOLD = "gate_threshold"
         const val KEY_EQ_ENABLED = "eq_enabled"
+        /** 均衡器组总闸（两级开关：组闸 + PEQ/AutoEq 子卡） */
+        const val KEY_EQ_SECTION_ENABLED = "eq_section_enabled"
         const val KEY_BASS_GAIN = "bass_gain"
         const val KEY_TREBLE_GAIN = "treble_gain"
         const val KEY_EQ_MODE = "eq_mode"

@@ -172,6 +172,9 @@ import com.jiangjie.Sonicraft.ui.theme.ScStarBrush
 fun ScFavoritesScreen(viewModel: MainViewModel, onOpenEq: () -> Unit) {
     val userPresets by viewModel.userPresets.collectAsStateWithLifecycle()
     val eqPresets by viewModel.eqUserPresets.collectAsStateWithLifecycle()
+    // AutoEq 预设（与详细页里的"库"是同一份数据，这里作为统一入口）
+    val autoEqLibrary by viewModel.autoEqLibrary.collectAsStateWithLifecycle()
+    val autoEqSource by viewModel.autoEqSource.collectAsStateWithLifecycle()
     val irLibrary by viewModel.irLibrary.collectAsStateWithLifecycle()
     val favoriteIrs by viewModel.favoriteIrs.collectAsStateWithLifecycle()
     val activeIrName by viewModel.activeRecentIrName.collectAsStateWithLifecycle()
@@ -391,6 +394,85 @@ fun ScFavoritesScreen(viewModel: MainViewModel, onOpenEq: () -> Unit) {
                             }
                             TextButton(onClick = { viewModel.applyEqUserPreset(preset) }) {
                                 Text("应用", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- 我的 AutoEq 预设：与「均衡器」页里的库同一份数据 ----
+        ScCard {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "我的 AutoEq 预设",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ScColors.TextMain,
+                    )
+                    TextButton(onClick = onOpenEq) {
+                        Text("去导入", fontSize = 12.sp)
+                    }
+                }
+                if (autoEqLibrary.isEmpty()) {
+                    Text(
+                        text = "还没有 AutoEq 预设 —— 在「均衡器」页导入 ParametricEQ / FixedBandEQ / " +
+                            "GraphicEQ / 结果 CSV 后会自动出现在这里。",
+                        fontSize = 12.sp,
+                        color = ScColors.TextSub,
+                    )
+                } else {
+                    autoEqLibrary.forEach { curve ->
+                        val isActive = curve.name == autoEqSource
+                        val chipShape = RoundedCornerShape(ScRadius.Chip)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(chipShape)
+                                .background(ScColors.Inset)
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(chipShape)
+                                    .background(ScCardBrush),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(text = "AE", fontSize = 11.sp, color = ScColors.Primary)
+                            }
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = 10.dp),
+                            ) {
+                                Text(
+                                    text = curve.name + if (isActive) "  · 当前" else "",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isActive) ScColors.Primary else ScColors.TextMain,
+                                    maxLines = 1,
+                                )
+                                Text(
+                                    text = "${curve.mode} 段 · preamp ${"%+.1f".format(curve.preampDb)} dB",
+                                    fontSize = 10.sp,
+                                    color = ScColors.TextSub,
+                                )
+                            }
+                            TextButton(onClick = { viewModel.applyAutoEqCurve(curve.name) }) {
+                                Text("应用", fontSize = 12.sp)
+                            }
+                            TextButton(onClick = { viewModel.deleteAutoEqCurve(curve.name) }) {
+                                Text("删除", fontSize = 12.sp, color = Color(0xFFE5484D))
                             }
                         }
                     }
@@ -2540,17 +2622,29 @@ internal fun ScEffectDetailPage(
 internal fun ScEqDetailContent(viewModel: MainViewModel) {
     // 两张同级卡：均衡器 → AutoEq 校正（互相嵌套会成卡中卡，阴影叠加、层级含混）
     val eqEnabled by viewModel.eqEnabled.collectAsStateWithLifecycle()
+    // 组总闸（与「压限器」「低频管家」同构）：子卡开关 = 记忆值 && 总闸
+    val eqSectionEnabled by viewModel.eqSectionEnabled.collectAsStateWithLifecycle()
+    val eqGate = eqEnabled && eqSectionEnabled
     // 折叠默认跟随开关：开=展开、关=收起；点标题行可手动展开/收起
-    val eqExpanded = rememberExpandedFollowing(eqEnabled, "eq_panel_expanded")
+    val eqExpanded = rememberExpandedFollowing(eqGate, "eq_panel_expanded")
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 组总闸关闭 → 整页旁通（与压限器/低频管家同一套提示口径）
+        if (!eqSectionEnabled) {
+            Text(
+                text = "均衡器总开关已关闭——整体旁通。到音效库打开「均衡器」后，" +
+                    "两张卡按各自开关恢复。",
+                fontSize = 11.sp,
+                color = ScColors.TextSub,
+            )
+        }
         ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 // 与其他详情页共用同一个卡头组件 —— 标题/开关/箭头的位置与尺寸必然一致
                 ScSlotHeader(
                     title = "均衡器",
-                    checked = eqEnabled,
+                    checked = eqGate,
                     onCheckedChange = { viewModel.setEqEnabled(!eqEnabled) },
-                    switchEnabled = true,
+                    switchEnabled = eqSectionEnabled,
                     expanded = eqExpanded.value,
                     onToggleExpand = { eqExpanded.value = !eqExpanded.value },
                 )
@@ -2562,7 +2656,7 @@ internal fun ScEqDetailContent(viewModel: MainViewModel) {
                 }
             }
         }
-        ScAutoEqCard(viewModel = viewModel)
+        ScAutoEqCard(viewModel = viewModel, sectionEnabled = eqSectionEnabled)
     }
 }
 

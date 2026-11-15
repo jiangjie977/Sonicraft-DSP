@@ -359,4 +359,131 @@ object AutoEqParser {
         )
     }
 
+    /**
+     * **最小二乘拟合**：给定目标曲线与各段（频率/Q/类型），求解一组增益，
+     * 使「各段串联后的合成响应」在 dB 域最贴近目标曲线。
+     *
+     * 为什么不用 [curveToBands] 的"直接取值"：各段带宽互相重叠，直接取目标值会在
+     * 相邻段之间**叠加过量**（一片 +3 的曲线用 10 段各自 +3，合起来常常 +8）。
+     * 拟合会把重叠量自动扣掉，曲线形状与目标一致而整体电平不虚高。
+     *
+     * 实现：高斯-牛顿迭代（Tikhonov 阻尼 λ=0.05 防病态），
+     * 每段对自身增益求数值偏导（步长 0.5 dB），解 (AᵀA+λI)δ = Aᵀr 后阻尼更新并钳位 ±12 dB。
+     * 频率/Q/类型保持调用方给的（即**段位置不动**，只求增益）。
+     */
+    fun fitBandsToCurve(
+        curve: List<Pair<Float, Float>>,
+        freqs: List<Float>,
+        qs: List<Float>? = null,
+        types: List<Int>? = null,
+        iterations: Int = 6,
+        samplePoints: Int = 72,
+    ): List<Band> {
+        if (curve.size < 2 || freqs.isEmpty() || samplePoints < 8) return emptyList()
+
+        val fLo = maxOf(20f, curve.first().first)
+        val fHi = minOf(20000f, curve.last().first)
+        if (fHi <= fLo) return emptyList()
+
+        val xs = FloatArray(samplePoints)
+        val target = FloatArray(samplePoints)
+        val ratio = (fHi / fLo).toDouble()
+        for (k in 0 until samplePoints) {
+            val t = k.toDouble() / (samplePoints - 1)
+            val f = (fLo * Math.pow(ratio, t)).toFloat()
+            xs[k] = f
+            target[k] = EqMath.interpLog(curve, f)
+        }
+
+        val n = freqs.size
+        val qList = List(n) { qs?.getOrElse(it) { 1.41f } ?: 1.41f }
+        val typeList = List(n) { types?.getOrElse(it) { 0 } ?: 0 }
+        val gains = FloatArray(n)
+        val eps = 0.5f
+
+        fun bandDb(j: Int, g: Float, f: Float): Float = EqMath.responseAt(
+            freqs = listOf(freqs[j]),
+            gains = listOf(g),
+            f = f,
+            q = qList[j],
+            qs = listOf(qList[j]),
+            types = listOf(typeList[j]),
+        )
+
+        fun modelAt(g: FloatArray, f: Float): Float {
+            var db = 0f
+            for (j in 0 until n) db += bandDb(j, g[j], f)
+            return db
+        }
+
+        repeat(iterations) {
+            val base = FloatArray(samplePoints) { modelAt(gains, xs[it]) }
+            val resid = FloatArray(samplePoints) { target[it] - base[it] }
+
+            // 每段一列：对自身增益的数值偏导
+            val cols = Array(n) { j ->
+                val bumped = gains.copyOf()
+                bumped[j] += eps
+                FloatArray(samplePoints) { k ->
+                    (modelAt(bumped, xs[k]) - base[k]) / eps
+                }
+            }
+
+            val ata = Array(n) { i -> DoubleArray(n) }
+            val atb = DoubleArray(n)
+            for (i in 0 until n) {
+                for (j in 0 until n) {
+                    var acc = 0.0
+                    for (k in 0 until samplePoints) acc += (cols[i][k] * cols[j][k]).toDouble()
+                    ata[i][j] = acc
+                }
+                var acc = 0.0
+                for (k in 0 until samplePoints) acc += (cols[i][k] * resid[k]).toDouble()
+                atb[i] = acc
+                ata[i][i] += 0.05
+            }
+
+            val delta = solveLinear(ata, atb) ?: return@repeat
+            var moved = 0f
+            for (j in 0 until n) {
+                val next = (gains[j] + delta[j].toFloat()).coerceIn(-12f, 12f)
+                moved += kotlin.math.abs(next - gains[j])
+                gains[j] = next
+            }
+            if (moved < 0.01f) return@repeat
+        }
+
+        return freqs.mapIndexed { i, f ->
+            Band(
+                freq = f.coerceIn(20f, 20000f),
+                gain = if (gains[i].isFinite()) gains[i] else 0f,
+                q = qList[i],
+                type = typeList[i],
+            )
+        }
+    }
+
+    /** 高斯消元（部分选主元）；奇异时返回 null（调用方保留上一轮增益） */
+    private fun solveLinear(a: Array<DoubleArray>, b: DoubleArray): DoubleArray? {
+        val n = b.size
+        val m = Array(n) { i -> DoubleArray(n + 1) { j -> if (j < n) a[i][j] else b[i] } }
+        for (col in 0 until n) {
+            var pivot = col
+            for (r in col + 1 until n) if (kotlin.math.abs(m[r][col]) > kotlin.math.abs(m[pivot][col])) pivot = r
+            if (kotlin.math.abs(m[pivot][col]) < 1e-12) return null
+            if (pivot != col) {
+                val tmp = m[col]; m[col] = m[pivot]; m[pivot] = tmp
+            }
+            val d = m[col][col]
+            for (j in col..n) m[col][j] /= d
+            for (r in 0 until n) {
+                if (r == col) continue
+                val factor = m[r][col]
+                if (factor == 0.0) continue
+                for (j in col..n) m[r][j] -= factor * m[col][j]
+            }
+        }
+        return DoubleArray(n) { m[it][n] }
+    }
+
 }
