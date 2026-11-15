@@ -1637,13 +1637,14 @@ class MainViewModel @Inject constructor(
     private val _vsMutes = MutableStateFlow(loadVsFloats(KEY_VS_MUTES, 7, 0f, 0f, 1f))
     val vsMutes: StateFlow<FloatArray> = _vsMutes.asStateFlow()
 
+    // 顺序必须与界面标签一致：L / C / R / SL / SR / CS / LFE
     private val vsTrimIds = intArrayOf(
-        AudioEngine.VS_PARAM_TRIM_L, AudioEngine.VS_PARAM_TRIM_R, AudioEngine.VS_PARAM_TRIM_C,
+        AudioEngine.VS_PARAM_TRIM_L, AudioEngine.VS_PARAM_TRIM_C, AudioEngine.VS_PARAM_TRIM_R,
         AudioEngine.VS_PARAM_TRIM_SL, AudioEngine.VS_PARAM_TRIM_SR, AudioEngine.VS_PARAM_TRIM_CS,
         AudioEngine.VS_PARAM_TRIM_LFE,
     )
     private val vsMuteIds = intArrayOf(
-        AudioEngine.VS_PARAM_MUTE_L, AudioEngine.VS_PARAM_MUTE_R, AudioEngine.VS_PARAM_MUTE_C,
+        AudioEngine.VS_PARAM_MUTE_L, AudioEngine.VS_PARAM_MUTE_C, AudioEngine.VS_PARAM_MUTE_R,
         AudioEngine.VS_PARAM_MUTE_SL, AudioEngine.VS_PARAM_MUTE_SR, AudioEngine.VS_PARAM_MUTE_CS,
         AudioEngine.VS_PARAM_MUTE_LFE,
     )
