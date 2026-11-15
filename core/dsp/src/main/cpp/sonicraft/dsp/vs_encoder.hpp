@@ -4,50 +4,44 @@
  */
 #pragma once
 
+#include <cmath>
+
 #include "sonicraft/dsp/vs_decoder.hpp"
 #include "sonicraft/dsp/vs_params.hpp"
 
 namespace sonicraft::dsp::vs {
 
 /**
- * Lt/Rt 编解码往返（矩阵环绕的"再解码"路线）。
+ * Lt/Rt 矩阵编码（下混）：
  *
- * 目的不是"传数据"，而是**制造相位扩散**：把 7 声道按矩阵压回 Lt/Rt，
- * 环绕声道先做 90° 相移再混入，然后再解一次 —— 这一步会让原本相关的
- * L/R 在中高频产生可控的去相关，听感上就是"声场变宽、有包裹感"。
+ *   低频管理：6 条主声道的低频汇入 LFE（主声道自身只留高通）
+ *   输出      Lt = LFE + FL + 0.5·(C + 0.71C) + SL + 0.71C
+ *            Rt = LFE + FR + 0.5·(C + 0.71C) + SR + 0.71C
+ *   末端     经过一条静态电平曲线（低电平段抬升、高电平段压缩至上限），再做 outTrim。
  *
- * 相位：用两级一阶全通近似 90°（在 200 Hz~8 kHz 区间误差约 ±10°），
- * 比真 Hilbert FIR（64 tap 卷积）便宜一个数量级，听感差异可忽略。
- *
- * 强度：0 = 完全直通（不经过往返）；1 = 完全取往返结果。
- * 混合用一阶平滑，避免拨动时爆音。
+ * 与早先版本的区别：不做 90° 相移（相位扩散交给下游去相关），
+ * 中置按 1.71 份分配，且末端有电平曲线 —— 这条曲线是"响度与厚度"的主要来源。
  */
 class LtRtRoundTrip {
  public:
   void Prepare(float sample_rate) {
     sr_ = sample_rate > 0.0f ? sample_rate : 48000.0f;
-    // 两级一阶全通近似 90°：左右取反号构成正交对（0.6 / −0.4 在 200 Hz~8 kHz
-    // 相位误差 ≤ ±10°，比 64 tap Hilbert FIR 便宜一个数量级）
-    ap_l_[0].coeff = 0.6f;
-    ap_l_[1].coeff = -0.4f;
-    ap_r_[0].coeff = -0.6f;
-    ap_r_[1].coeff = 0.4f;
+    InitFilters();
     Reset();
   }
 
   void Reset() {
-    for (int i = 0; i < 2; ++i) {
-      ap_l_[i].Reset();
-      ap_r_[i].Reset();
+    for (int i = 0; i < 6; ++i) {
+      hp_[i].Reset();
+      lp_bm_[i].Reset();
     }
+    lfe_lp_.Reset();
     strength_ = 0.0f;
   }
 
   /**
-   * @param ch      7 声道 planar（就地读改写）
-   * @param frames  本块帧数
-   * @param strength 目标强度 0~1
-   * @param decoder2 第二个解码器实例（与第一个互不共享状态）
+   * @param ch       7 声道 planar（就地读改写）
+   * @param strength 0 = 完全不经过往返；1 = 完全取往返结果
    */
   void Process(float* const* ch, int frames, float strength, StereoSpatialDecoder& decoder2,
                bool movie, float center_db, float surround_db) {
@@ -57,42 +51,115 @@ class LtRtRoundTrip {
     decoder2.SetMode(movie);
     decoder2.SetGains(center_db, surround_db, 0.0f);
 
+    // 主声道顺序：FL FR C SL SR CS（LFE 单独处理）
+    static const int kMain[6] = {kFL, kFR, kC, kSL, kSR, kCS};
+
     for (int i = 0; i < frames; ++i) {
-      strength_ += 0.001f * (target - strength_);  // 约 20 ms（@48k 逐样本）
+      strength_ += 0.001f * (target - strength_);
 
-      const float fl = ch[kFL][i], fr = ch[kFR][i], c = ch[kC][i];
-      const float sl = ch[kSL][i], sr = ch[kSR][i], cs = ch[kCS][i];
+      float main[6];
+      for (int k = 0; k < 6; ++k) main[k] = ch[kMain[k]][i];
 
-      // 环绕 90° 相移（两级一阶全通，左正右负构成正交对）
-      const float ql = ap_r_[1].Process(ap_r_[0].Process(sl));
-      const float qr = ap_l_[1].Process(ap_l_[0].Process(sr));
+      // 低频管理：主声道低频汇入 LFE，主声道只留高通
+      float bass_sum = 0.0f;
+      for (int k = 0; k < 6; ++k) {
+        bass_sum += lp_bm_[k].Process(main[k]);
+        main[k] = hp_[k].Process(main[k]);
+      }
+      const float lfe = lfe_lp_.Process(ch[kLFE][i] + bass_sum);
 
-      // 矩阵编码：Lt = FL + 0.707C + jSL + CS；Rt = FR + 0.707C − jSR + CS
-      const float lt = fl + 0.7071068f * c + ql + 0.7071068f * cs;
-      const float rt = fr + 0.7071068f * c - qr + 0.7071068f * cs;
+      const float fl = main[0], fr = main[1], c = main[2], sl = main[3], sr = main[4];
 
-      // 与原立体声按强度混合后再解一次（解码器内部会把 Lt/Rt 重新分配）
+      float lt = lfe + fl;
+      float rt = lfe + fr;
+      const float t = c * 0.7099999785423279f;
+      const float center_mix = t + c;              // C × 1.71
+      lt += center_mix * 0.5f + sl + t;
+      rt += center_mix * 0.5f + sr + t;
+
+      lt = LevelCurve(lt);
+      rt = LevelCurve(rt);
+
       float out[vs::kChannelCount];
       decoder2.ProcessSample(lt, rt, out);
 
       const float s = strength_;
-      ch[kFL][i] = fl * (1.0f - s) + out[kFL] * s;
-      ch[kFR][i] = fr * (1.0f - s) + out[kFR] * s;
-      ch[kC][i] = c * (1.0f - s) + out[kC] * s;
-      ch[kSL][i] = sl * (1.0f - s) + out[kSL] * s;
-      ch[kSR][i] = sr * (1.0f - s) + out[kSR] * s;
-      ch[kCS][i] = cs * (1.0f - s) + out[kCS] * s;
-      ch[kLFE][i] = ch[kLFE][i];  // LFE 不参与矩阵往返
+      for (int k = 0; k < 6; ++k) {
+        ch[kMain[k]][i] = ch[kMain[k]][i] * (1.0f - s) + out[kMain[k]] * s;
+      }
+      ch[kLFE][i] = ch[kLFE][i] * (1.0f - s) + out[kLFE] * s;
     }
   }
 
   float Strength() const { return strength_; }
 
  private:
+  /** 静态电平曲线：低段二次曲线抬升，中高段线性 + 偏置，上限钳位 */
+  static float LevelCurve(float x) {
+    constexpr float kMin = 0.0625f;
+    constexpr float kMax = 0.9994000196456909f;
+    constexpr float kSplit = 0.25f;
+    constexpr float kC1 = 0.7099999785423279f;
+    constexpr float kP2 = -0.37119999527931213f;
+    constexpr float kP1 = 0.9775999784469604f;
+    constexpr float kP0 = -1.0f;
+    constexpr float kBias = 0.8999999761581421f;
+
+    if (x < kMin) x = kMin;
+    if (x > kSplit) {
+      if (x > kMax) x = kMax;
+      return (x * kC1) * kP2 + (x * kC1) * kP1 + (x * kP0) + kBias;
+    }
+    const float t = x * 4.0f;
+    return t * t * -0.1738000065088272f + t * 0.48249998688697815f + 0.3953000009059906f;
+  }
+
+  void InitFilters() {
+    // 44.1k 的原系数按其采样率折算到当前采样率
+    constexpr float kA2 = 0.9840099215507507f;
+    constexpr float kLfeA2 = 0.9926225543022156f;
+    const float ratio = 44100.0f / sr_;
+
+    const float r_hp = std::pow(std::sqrt(kA2), ratio);
+    const float a1 = -2.0f * r_hp;
+    const float a2 = r_hp * r_hp;
+    const float k_hp = (1.0f + a1 + a2) * 0.25f;
+
+    const float r_lp = std::pow(std::sqrt(kA2), ratio);
+    const float b1 = -2.0f * r_lp;
+    const float b2 = r_lp * r_lp;
+    const float k_lp = (1.0f + b1 + b2) * 0.25f;
+
+    const float r_lfe = std::pow(std::sqrt(kLfeA2), ratio);
+    const float c1 = -2.0f * r_lfe;
+    const float c2 = r_lfe * r_lfe;
+    const float k_lfe = (1.0f + c1 + c2) * 0.25f;
+
+    for (int i = 0; i < 6; ++i) {
+      hp_[i].b0 = k_hp;
+      hp_[i].b1 = -2.0f * k_hp;
+      hp_[i].b2 = k_hp;
+      hp_[i].a1 = a1;
+      hp_[i].a2 = a2;
+
+      lp_bm_[i].b0 = k_lp;
+      lp_bm_[i].b1 = 2.0f * k_lp;
+      lp_bm_[i].b2 = k_lp;
+      lp_bm_[i].a1 = b1;
+      lp_bm_[i].a2 = b2;
+    }
+    lfe_lp_.b0 = k_lfe;
+    lfe_lp_.b1 = 2.0f * k_lfe;
+    lfe_lp_.b2 = k_lfe;
+    lfe_lp_.a1 = c1;
+    lfe_lp_.a2 = c2;
+  }
+
   float sr_ = 48000.0f;
   float strength_ = 0.0f;
-  AllPass1 ap_l_[2];
-  AllPass1 ap_r_[2];
+  Biquad hp_[6];
+  Biquad lp_bm_[6];
+  Biquad lfe_lp_;
 };
 
 }  // namespace sonicraft::dsp::vs
