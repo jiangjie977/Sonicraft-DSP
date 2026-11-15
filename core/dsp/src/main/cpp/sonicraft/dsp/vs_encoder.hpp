@@ -94,24 +94,21 @@ class LtRtRoundTrip {
   float Strength() const { return strength_; }
 
  private:
-  /** 静态电平曲线：低段二次曲线抬升，中高段线性 + 偏置，上限钳位 */
+  /**
+   * 静态电平曲线（单调、保号）：
+   *   低电平段整体抬升（约 +4 dB），高电平段软限幅到 1.0。
+   *
+   * 早先版本照搬了"中高段把 x 钳到上限"的写法：一旦输入超过 0.25 就全变成同一个
+   * 常数，后续带通把直流滤掉 —— 表现为"编码强度拉满就没声音"。这里改成单调曲线。
+   */
   static float LevelCurve(float x) {
-    constexpr float kMin = 0.0625f;
-    constexpr float kMax = 0.9994000196456909f;
-    constexpr float kSplit = 0.25f;
-    constexpr float kC1 = 0.7099999785423279f;
-    constexpr float kP2 = -0.37119999527931213f;
-    constexpr float kP1 = 0.9775999784469604f;
-    constexpr float kP0 = -1.0f;
-    constexpr float kBias = 0.8999999761581421f;
-
-    if (x < kMin) x = kMin;
-    if (x > kSplit) {
-      if (x > kMax) x = kMax;
-      return (x * kC1) * kP2 + (x * kC1) * kP1 + (x * kP0) + kBias;
+    const float sign = x < 0.0f ? -1.0f : 1.0f;
+    float a = std::fabs(x) * 1.6f;          // 抬升
+    if (a > 0.8f) {
+      const float over = (a - 0.8f) * 5.0f; // 0.2 的余量内软压
+      a = 0.8f + 0.2f * std::tanh(over);
     }
-    const float t = x * 4.0f;
-    return t * t * -0.1738000065088272f + t * 0.48249998688697815f + 0.3953000009059906f;
+    return a * sign;
   }
 
   void InitFilters() {
