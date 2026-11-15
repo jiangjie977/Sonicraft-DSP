@@ -108,6 +108,19 @@ class DelayLine {
  */
 class ParametricHrtf {
  public:
+  /**
+   * 两套参数：0 = 现有（早先实现，级联较简）；1 = **源模型参数原样**（默认）。
+   *
+   * 差别只在参数化分支的「深度/亮度/前向陷波」三处：
+   *   现有：陷波全量、提亮作用在低频、无前向陷波；
+   *   源模型：陷波按深度混入（后方 0.30/0.40、仰角 0.30/0.50）、
+   *           提亮是 **高频** 提升（out +（g−1）·（out−lowpass））、
+   *           前方额外叠一道 9k−(az/90)·3.5k、Q=4 的谱陷波（深度 0.30）。
+   */
+  enum Preset : int { kPresetCurrent = 0, kPresetSource = 1 };
+
+  void SetPreset(Preset p) { preset_ = p; }
+  Preset GetPreset() const { return preset_; }
   void Prepare(float sample_rate) {
     sr_ = sample_rate > 0.0f ? sample_rate : 48000.0f;
     Reset();
@@ -120,6 +133,7 @@ class ParametricHrtf {
     hp_r_.Reset();
     el_notch_l_.Reset();
     el_notch_r_.Reset();
+    fs_notch_.Reset();
     rear_notch_l_.Reset();
     rear_notch_r_.Reset();
     bright_l_ = bright_r_ = 0.0f;
@@ -182,8 +196,12 @@ class ParametricHrtf {
       float el_fc = 8500.0f + (elevation_deg / 90.0f) * 5000.0f;
       el_notch_l_.SetNotch(el_fc, 3.0f, sr_);
       el_notch_r_.SetNotch(el_fc, 3.0f, sr_);
-      float g = 1.0f + 0.016f * elevation_deg;
-      if (g > 2.5f) g = 2.5f;
+      // 源模型：增强档 0.025 / 封顶 3.5；普通档 0.016 / 2.5
+      const bool enhanced = preset_ == kPresetSource;
+      float g = 1.0f + (enhanced ? 0.025f : 0.016f) * elevation_deg;
+      const float cap = enhanced ? 3.5f : 2.5f;
+      if (g > cap) g = cap;
+      el_notch_depth_ = enhanced ? 0.50f : 0.30f;
       bright_gain_ = g;
       bright_coeff_ = std::exp(-2.0f * Biquad::kPi * 3500.0f / sr_);
       el_notch_on_ = true;
@@ -195,6 +213,19 @@ class ParametricHrtf {
       el_notch_on_ = false;
     }
 
+    // ---- 前方/侧方谱陷波（仅源模型）：9k − (az_deg/90)·3.5k，Q=4，深度 0.30 ----
+    if (preset_ == kPresetSource && !rear) {
+      const float az_deg = std::fabs(az);
+      float fs_fc = 9000.0f - (az_deg / 90.0f) * 3500.0f;
+      if (fs_fc < 2000.0f) fs_fc = 2000.0f;
+      fs_notch_.SetNotch(fs_fc, 4.0f, sr_);
+      fs_on_ = true;
+      fs_depth_ = 0.30f;
+    } else {
+      fs_notch_ = Biquad{};
+      fs_on_ = false;
+    }
+
     // ---- 后方线索 ----
     if (rear) {
       const float rear_amount = (abs_az - Biquad::kPi * 0.5f) / (Biquad::kPi * 0.5f);
@@ -204,6 +235,7 @@ class ParametricHrtf {
       rear_notch_l_.SetNotch(7000.0f, 2.0f, sr_);
       rear_notch_r_.SetNotch(7000.0f, 2.0f, sr_);
       rear_on_ = true;
+      rear_notch_depth_ = preset_ == kPresetSource ? 0.40f : 1.0f;
     } else {
       rear_lp_coeff_ = 1.0f;
       rear_gain_ = 1.0f;
@@ -238,19 +270,37 @@ class ParametricHrtf {
     r = hp_r_.Process(r);
 
     if (el_notch_on_) {
-      const float bl = bright_l_ = bright_coeff_ * bright_l_ + (1.0f - bright_coeff_) * l;
-      const float br = bright_r_ = bright_coeff_ * bright_r_ + (1.0f - bright_coeff_) * r;
-      l += (bright_gain_ - 1.0f) * bl;
-      r += (bright_gain_ - 1.0f) * br;
-      l = el_notch_l_.Process(l);
-      r = el_notch_r_.Process(r);
+      // 源模型语义：**高频提升** —— out + (g−1)·(out − lowpass(out))
+      const float lp_l = bright_l_ = bright_coeff_ * bright_l_ + (1.0f - bright_coeff_) * l;
+      const float lp_r = bright_r_ = bright_coeff_ * bright_r_ + (1.0f - bright_coeff_) * r;
+      l += (bright_gain_ - 1.0f) * (l - lp_l);
+      r += (bright_gain_ - 1.0f) * (r - lp_r);
+      // 仰角陷波按深度混入（源模型 0.50 增强 / 0.30 普通，本地全量）
+      const float nl = el_notch_l_.Process(l);
+      const float nr = el_notch_r_.Process(r);
+      l = l * (1.0f - el_notch_depth_) + nl * el_notch_depth_;
+      r = r * (1.0f - el_notch_depth_) + nr * el_notch_depth_;
     }
 
-    if (rear_on_ && rear_lp_coeff_ < 0.999f) {
-      l = rear_lp_l_ = rear_lp_coeff_ * rear_lp_l_ + (1.0f - rear_lp_coeff_) * l;
-      r = rear_lp_r_ = rear_lp_coeff_ * rear_lp_r_ + (1.0f - rear_lp_coeff_) * r;
-      l = rear_notch_l_.Process(l) * rear_gain_;
-      r = rear_notch_r_.Process(r) * rear_gain_;
+    if (rear_on_) {
+      if (rear_lp_coeff_ < 0.999f) {
+        l = rear_lp_l_ = rear_lp_coeff_ * rear_lp_l_ + (1.0f - rear_lp_coeff_) * l;
+        r = rear_lp_r_ = rear_lp_coeff_ * rear_lp_r_ + (1.0f - rear_lp_coeff_) * r;
+      } else {
+        rear_lp_l_ = l;
+        rear_lp_r_ = r;
+      }
+      // 后方 7 kHz 陷波按深度混入（源模型 0.40 增强 / 0.30 普通）
+      const float nl = rear_notch_l_.Process(l);
+      const float nr = rear_notch_r_.Process(r);
+      l = (l * (1.0f - rear_notch_depth_) + nl * rear_notch_depth_) * rear_gain_;
+      r = (r * (1.0f - rear_notch_depth_) + nr * rear_notch_depth_) * rear_gain_;
+    } else if (fs_on_) {
+      // 前方/侧方谱陷波（仅源模型）：深度 0.30
+      const float nl = fs_notch_.Process(l);
+      const float nr = fs_notch_.Process(r);
+      l = l * (1.0f - fs_depth_) + nl * fs_depth_;
+      r = r * (1.0f - fs_depth_) + nr * fs_depth_;
     }
 
     *out_l = l;
@@ -303,6 +353,12 @@ class ParametricHrtf {
   float rear_lp_coeff_ = 1.0f, rear_gain_ = 1.0f;
   float bright_gain_ = 1.0f, bright_coeff_ = 0.0f;
   bool el_notch_on_ = false;
+  Preset preset_ = kPresetSource;   // 默认使用源模型参数
+  float el_notch_depth_ = 0.30f;
+  float rear_notch_depth_ = 1.0f;
+  Biquad fs_notch_;
+  bool fs_on_ = false;
+  float fs_depth_ = 0.30f;
   bool rear_on_ = false;
 
   float ild_lp_l_ = 0.0f, ild_lp_r_ = 0.0f;
