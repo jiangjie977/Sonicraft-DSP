@@ -82,6 +82,7 @@ class StereoSpatialDecoder {
     lfe_l_.Set(kLfeHz, sr_);
     lfe_r_.Set(kLfeHz, sr_);
     env_alpha_ = 1.0f - std::exp(-2.0f * Biquad::kPi * 50.0f / sr_);
+    for (int i = 0; i < 6; ++i) hp_main_[i].SetHighPass(80.0f, sr_);
     // 中置带通（人声带，Q≈1）
     center_bp_.b0 = 0.03830530494451523f;
     center_bp_.b1 = 0.07661060988903046f;
@@ -102,6 +103,7 @@ class StereoSpatialDecoder {
     lp_l_.Reset();
     lp_r_.Reset();
     center_bp_.Reset();
+    for (int i = 0; i < 6; ++i) hp_main_[i].Reset();
     for (int i = 0; i < kCsDelaySize; ++i) cs_delay_[i] = 0.0f;
     cs_pos_ = 0;
     surround_bp_l_.Reset();
@@ -269,6 +271,14 @@ class StereoSpatialDecoder {
       cs = 0.0f;
     }
 
+    // 低频管理（解码端）：6 条主声道 80 Hz 高通，与 LFE 低通互补
+    fl = hp_main_[0].Process(fl);
+    fr = hp_main_[1].Process(fr);
+    c = hp_main_[2].Process(c);
+    sl = hp_main_[3].Process(sl);
+    sr = hp_main_[4].Process(sr);
+    cs = hp_main_[5].Process(cs);
+
     out[kFL] = fl;
     out[kFR] = fr;
     out[kC] = c;
@@ -285,7 +295,8 @@ class StereoSpatialDecoder {
   static constexpr float kCrossoverHz = 2000.0f;
   static constexpr float kLfeHz = 80.0f;
   static constexpr float kSurroundLimit = 0.5623413f;  // −5 dB
-  static constexpr float kLfeScale = 0.8f;             // −1.9 dB
+  // LFE 规范电平：相对主声道带内 +10 dB（0.8 × 3.1623）
+  static constexpr float kLfeScale = 2.53f;
 
  private:
   static float DbToGain(float db) { return std::pow(10.0f, db / 20.0f); }
@@ -353,6 +364,8 @@ class StereoSpatialDecoder {
   // 分频段矩阵：中置与环绕各自先过带通，只取本声道的频段
   Biquad center_bp_;
   Biquad surround_bp_l_, surround_bp_r_;
+  // 主声道 80 Hz 高通：与 LFE 低通互补，避免低频重复叠加
+  Biquad hp_main_[6];
   int decode_mode_ = 0;                       // 0=Cine6.1 1=LCRS 2=Stereo 3=Mono
   static constexpr int kCsDelaySize = 1024;   // 20 ms @48k
   float cs_delay_[kCsDelaySize]{};
