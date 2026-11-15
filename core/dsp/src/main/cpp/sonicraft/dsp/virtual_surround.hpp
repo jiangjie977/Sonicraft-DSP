@@ -134,6 +134,7 @@ class VirtualSurroundNode final : public DspNode {
     decoder_.SetFrontGain(0.0f);
     decoder_.SetRearGain(0.0f);
     decoder_.SetRearSpace(param_[vs::kParamStereoExpand]);
+    decoder_.SetBs775(param_[vs::kParamBs775] > 0.5f);
 
     DecodeFrames(channels[0], channels[1], frames);
 

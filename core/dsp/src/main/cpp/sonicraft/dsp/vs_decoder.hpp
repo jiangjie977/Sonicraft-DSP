@@ -165,6 +165,9 @@ class StereoSpatialDecoder {
    * 1 = 完全走 5 级全通（相位最散，包围感最强，但过大时后方会"糊"）。
    * 中间值按比例混合，因此这是一个连续的"空间感"旋钮，而不是开关。
    */
+  /** BS.775 等响：环绕矩阵系数在 0.7008（现基准）与 2.487（+11 dB）之间切换 */
+  void SetBs775(bool on) { sur_matrix_ = on ? 2.487f : 0.7008f; }
+
   void SetRearSpace(float amount) {
     rear_space_ = amount < 0.0f ? 0.0f : (amount > 1.0f ? 1.0f : amount);
   }
@@ -215,8 +218,8 @@ class StereoSpatialDecoder {
     // 不再先缩半：差分本身已比单声道低，再乘 0.5 会让环绕掉 6 dB（实测偏低 15.6 dB）
     const float diff = in_l - in_r;
     // 宽频差分：高通 → 低通，再按 0.6094 与滤波损耗补偿
-    float sl = sur_lp_l_.Process(sur_hp_l_.Process(diff)) * 0.6094468235969543f * 1.15f * surround_gain_;
-    float sr = sur_lp_r_.Process(sur_hp_r_.Process(-diff)) * 0.6094468235969543f * 1.15f * surround_gain_;
+    float sl = sur_lp_l_.Process(sur_hp_l_.Process(diff)) * sur_matrix_ * surround_gain_;
+    float sr = sur_lp_r_.Process(sur_hp_r_.Process(-diff)) * sur_matrix_ * surround_gain_;
     // steering 仅用于"前置主导时抑制环绕"，不再决定左右分配
     float front_dom = std::fabs(steer_low);
     if (front_dom > 1.0f) front_dom = 1.0f;
@@ -376,6 +379,7 @@ class StereoSpatialDecoder {
   float front_gain_ = 1.0f;
   float rear_gain_ = 1.0f;
   float rear_space_ = 0.5f;
+  float sur_matrix_ = 0.7008f;
 
   LowPass4 lp_l_, lp_r_;
   // 分频段矩阵：中置与环绕各自先过带通，只取本声道的频段

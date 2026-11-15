@@ -269,6 +269,9 @@ interface AudioEngine {
         /** 仅解码测试：解码 → trim → 双耳，其余旁通 */
         const val VS_PARAM_DEBUG_RAW = 39
 
+        /** BS.775 等响：环绕补偿到与前置同响 */
+        const val VS_PARAM_BS775 = 40
+
         /**
          * 低音增强参数 id（与 native `BassEnhanceNode` 常量对齐）。
          * **跨语言契约**：任一侧改动都要同步。

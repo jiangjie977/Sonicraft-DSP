@@ -225,6 +225,11 @@ class AudioChainManager @Inject constructor(
                 f("vs_mode", 0f),
             )
             engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_SURROUND_GAIN, 0f)
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_BS775,
+                if (b("vs_bs775", false)) 1f else 0f,
+            )
             engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_CENTER_GAIN, 0f)
             engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_FRONT_GAIN, 0f)
             engine.setParam(

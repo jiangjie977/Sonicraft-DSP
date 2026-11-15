@@ -80,7 +80,10 @@ enum Param : int {
    */
   kParamDebugRaw = 39,
 
-  kParamCount = 40,
+  /** BS.775 等响：把环绕声道矩阵系数补到与前置同响（补偿约 +11 dB） */
+  kParamBs775 = 40,
+
+  kParamCount = 41,
 };
 
 /** 7 声道内部顺序：FL / FR / C / SL / SR / CS / LFE */
@@ -131,6 +134,7 @@ constexpr float kDefault[kParamCount] = {
     /* mute_cs            */ 0.0f,
     /* mute_lfe           */ 0.0f,
     /* debug_raw          */ 0.0f,
+    /* bs775              */ 0.0f,
 };
 
 }  // namespace sonicraft::dsp::vs

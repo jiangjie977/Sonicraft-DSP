@@ -1618,12 +1618,30 @@ class MainViewModel @Inject constructor(
     private fun saveVsFloats(key: String, arr: FloatArray) =
         prefs.edit().putString(key, arr.joinToString(",")).apply()
 
+    private val _vsBs775 = MutableStateFlow(prefs.getBoolean(KEY_VS_BS775, false))
+    val vsBs775: StateFlow<Boolean> = _vsBs775.asStateFlow()
+
+    fun setVsBs775(on: Boolean) {
+        _vsBs775.value = on
+        prefs.edit().putBoolean(KEY_VS_BS775, on).apply()
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_BS775,
+            if (on) 1f else 0f,
+        )
+    }
+
     private val _vsDebugRaw = MutableStateFlow(prefs.getBoolean(KEY_VS_DEBUG_RAW, false))
     val vsDebugRaw: StateFlow<Boolean> = _vsDebugRaw.asStateFlow()
 
     fun setVsDebugRaw(on: Boolean) {
         _vsDebugRaw.value = on
         prefs.edit().putBoolean(KEY_VS_DEBUG_RAW, on).apply()
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_BS775,
+            if (_vsBs775.value) 1f else 0f,
+        )
         engine.setParam(
             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
             AudioEngine.VS_PARAM_DEBUG_RAW,
@@ -6112,6 +6130,7 @@ class MainViewModel @Inject constructor(
     const val KEY_VS_TRIMS = "vs_trims"
     const val KEY_VS_MUTES = "vs_mutes"
     const val KEY_VS_DEBUG_RAW = "vs_debug_raw"
+    const val KEY_VS_BS775 = "vs_bs775"
     const val KEY_VS_ROOM_SIZE = "vs_room_size"
     const val KEY_VS_ROOM_WET = "vs_room_wet"
     const val KEY_VS_ENCODE_STRENGTH = "vs_encode_strength"

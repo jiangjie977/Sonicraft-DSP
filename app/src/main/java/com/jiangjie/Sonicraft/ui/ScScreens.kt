@@ -3796,6 +3796,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsMode by viewModel.vsMode.collectAsStateWithLifecycle()
 
     val vsRearSpace by viewModel.vsRearSpace.collectAsStateWithLifecycle()
+    val vsBs775 by viewModel.vsBs775.collectAsStateWithLifecycle()
     val vsDebugRaw by viewModel.vsDebugRaw.collectAsStateWithLifecycle()
     val vsTrims by viewModel.vsTrims.collectAsStateWithLifecycle()
     val vsMutes by viewModel.vsMutes.collectAsStateWithLifecycle()
@@ -3828,6 +3829,22 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     modifier = Modifier.padding(bottom = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "BS.775 等响（环绕补偿 +11 dB）",
+                            fontSize = 12.sp,
+                            color = ScColors.TextMain,
+                            modifier = Modifier.weight(1f),
+                        )
+                        ScTinySwitch(
+                            checked = vsBs775,
+                            onCheckedChange = { viewModel.setVsBs775(it) },
+                        )
+                    }
+
                     Text(text = "解码模式", fontSize = 12.sp, color = ScColors.TextMain)
                     VsChoiceRow(
                         options = listOf("Cine6.1", "LCRS", "StereoTrack", "Mono"),
