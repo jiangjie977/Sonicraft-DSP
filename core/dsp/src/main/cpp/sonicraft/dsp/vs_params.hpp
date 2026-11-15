@@ -74,7 +74,13 @@ enum Param : int {
   kParamMuteCS = 37,
   kParamMuteLFE = 38,
 
-  kParamCount = 39,
+  /**
+   * 仅解码测试：解码 → 声道 trim → 双耳渲染，其余环节全部旁通
+   * （Lt/Rt 往返、后处理、房间卷积都不参与），用于逐个确认 7 声道是否正常。
+   */
+  kParamDebugRaw = 39,
+
+  kParamCount = 40,
 };
 
 /** 7 声道内部顺序：FL / FR / C / SL / SR / CS / LFE */
@@ -124,6 +130,7 @@ constexpr float kDefault[kParamCount] = {
     /* mute_sr            */ 0.0f,
     /* mute_cs            */ 0.0f,
     /* mute_lfe           */ 0.0f,
+    /* debug_raw          */ 0.0f,
 };
 
 }  // namespace sonicraft::dsp::vs

@@ -135,7 +135,11 @@ class VirtualSurroundNode final : public DspNode {
 
     DecodeFrames(channels[0], channels[1], frames);
 
+    // 仅解码测试：跳过编解码往返、后处理与房间，只保留 解码 → trim → HRTF
+    const bool debug_raw = param_[vs::kParamDebugRaw] > 0.5f;
+
     // Lt/Rt 编解码往返：制造相位扩散（强度 0 = 直通）
+    if (!debug_raw)
     round_trip_.Process(ch_ptr_.data(), frames, param_[vs::kParamEncodeStrength],
                         decoder2_, param_[vs::kParamMode] > 0.5f,
                         param_[vs::kParamCenterGain], param_[vs::kParamSurroundGain]);
@@ -151,14 +155,14 @@ class VirtualSurroundNode final : public DspNode {
     pp.bass_enhancer_mode = param_[vs::kParamBassEnhancerMode];
     pp.rear_center_enabled = param_[vs::kParamRearCenterEnabled];
     pp.rear_delay_ms = param_[vs::kParamRearCenterDelayMs];
-    post_.Process(ch_ptr_.data(), frames, pp);
+    if (!debug_raw) post_.Process(ch_ptr_.data(), frames, pp);
 
     RenderFrames(channels[0], channels[1], frames, goal, step);
 
     // 房间卷积（湿声）：放在双耳渲染之后 —— 先空间化再进房间，房间才不会被 HRTF 染色串掉。
     // 预设映射：1=小房 2=客厅 3=音乐厅 4=大教堂；0=关（完全不跑，零开销）。
     const int room = static_cast<int>(param_[vs::kParamRoomSize] + 0.5f);
-    if (room >= 1 && room <= 4) {
+    if (!debug_raw && room >= 1 && room <= 4) {
       room_.SetParam(dsp::ConvolverNode::kParamPreset, static_cast<float>(room));
       room_.SetParam(dsp::ConvolverNode::kParamWet, param_[vs::kParamRoomWetDry]);
       room_.SetParam(dsp::ConvolverNode::kParamDry, 1.0f);

@@ -3799,6 +3799,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsFrontGain by viewModel.vsFrontGain.collectAsStateWithLifecycle()
     val vsRearGain by viewModel.vsRearGain.collectAsStateWithLifecycle()
     val vsRearSpace by viewModel.vsRearSpace.collectAsStateWithLifecycle()
+    val vsDebugRaw by viewModel.vsDebugRaw.collectAsStateWithLifecycle()
     val vsTrims by viewModel.vsTrims.collectAsStateWithLifecycle()
     val vsMutes by viewModel.vsMutes.collectAsStateWithLifecycle()
     val vsRoomSize by viewModel.vsRoomSize.collectAsStateWithLifecycle()
@@ -4000,9 +4001,26 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
             )
             if (trimExpanded.value) {
                 Column(modifier = Modifier.padding(bottom = 20.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "仅解码测试（旁通其余环节）",
+                            fontSize = 12.sp,
+                            color = ScColors.TextMain,
+                            modifier = Modifier.weight(1f),
+                        )
+                        ScTinySwitch(
+                            checked = vsDebugRaw,
+                            onCheckedChange = { viewModel.setVsDebugRaw(it) },
+                        )
+                    }
                     Text(
                         text = "逐声道校验：把某一路拉到 +12 dB 或静音，即可确认该声道是否真的在工作。" +
-                            "LFE 不走双耳渲染，直接混入双耳。",
+                            "LFE 不走双耳渲染，直接混入双耳。\n" +
+                            "打开「仅解码测试」后链路只剩：解码 → 声道 trim → 双耳渲染，" +
+                            "编解码往返、后处理与房间全部旁通。",
                         fontSize = 11.sp,
                         color = ScColors.TextSub,
                     )

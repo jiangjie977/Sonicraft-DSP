@@ -266,6 +266,9 @@ interface AudioEngine {
         const val VS_PARAM_MUTE_CS = 37
         const val VS_PARAM_MUTE_LFE = 38
 
+        /** 仅解码测试：解码 → trim → 双耳，其余旁通 */
+        const val VS_PARAM_DEBUG_RAW = 39
+
         /**
          * 低音增强参数 id（与 native `BassEnhanceNode` 常量对齐）。
          * **跨语言契约**：任一侧改动都要同步。
