@@ -116,6 +116,8 @@ class VirtualSurroundNode final : public DspNode {
 
     decoder_.SetMode(param_[vs::kParamMode] > 0.5f);
     decoder_.SetGains(param_[vs::kParamCenterGain], param_[vs::kParamSurroundGain], 0.0f);
+    // 前场补偿此前只接线未生效（参数下发到节点却没人使用）—— 这里补上
+    decoder_.SetFrontGain(param_[vs::kParamFrontGain]);
 
     DecodeFrames(channels[0], channels[1], frames);
 

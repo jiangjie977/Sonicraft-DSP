@@ -114,6 +114,14 @@ class StereoSpatialDecoder {
     lfe_gain_ = DbToGain(lfe_db);
   }
 
+  /**
+   * 前场补偿：只作用于 FL/FR。
+   *
+   * 空间化后前端常显得变薄（能量被中置与环绕分走），这里给前置一个独立补偿量。
+   * 注意它**不是**总增益：改它不会动中置与环绕，也不影响 LFE。
+   */
+  void SetFrontGain(float front_db) { front_gain_ = DbToGain(front_db); }
+
   /** 单样本解码；out 长度为 7（FL/FR/C/SL/SR/CS/LFE） */
   void ProcessSample(float in_l, float in_r, float* out) {
     if (!std::isfinite(in_l)) in_l = 0.0f;
@@ -161,8 +169,8 @@ class StereoSpatialDecoder {
     }
 
     // ---- 前置：扣掉已进中置的部分（避免重复计入）----
-    float fl = in_l - c * 0.5f;
-    float fr = in_r - c * 0.5f;
+    float fl = (in_l - c * 0.5f) * front_gain_;
+    float fr = (in_r - c * 0.5f) * front_gain_;
 
     // ---- 后中置：环绕之和 ----
     const float ms_gain = movie_ ? 0.25f : 0.15f;
@@ -266,6 +274,7 @@ class StereoSpatialDecoder {
   float sr_ = 48000.0f;
   bool movie_ = false;
   float center_gain_ = 1.0f, surround_gain_ = 1.0f, lfe_gain_ = 1.0f;
+  float front_gain_ = 1.0f;
 
   LowPass4 lp_l_, lp_r_;
   LowPass4 lfe_l_, lfe_r_;
