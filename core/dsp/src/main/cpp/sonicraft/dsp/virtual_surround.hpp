@@ -144,7 +144,9 @@ class VirtualSurroundNode final : public DspNode {
     pp.center_mode = param_[vs::kParamCenterMode];
     pp.dialog_db = param_[vs::kParamDialog];
     pp.dialog_enabled = param_[vs::kParamDialogEnabled];
-    pp.bass_enhancer = param_[vs::kParamBassEnhancer];
+    // 低音谐波（BassEnhancer）实测有问题（低频发糊/电平异常），**临时禁用**，
+    // 待问题定位后恢复：此处强制 0，参数与 UI 保留，恢复时删掉这一行即可。
+    pp.bass_enhancer = 0.0f;
     pp.bass_enhancer_mode = param_[vs::kParamBassEnhancerMode];
     pp.rear_center_enabled = param_[vs::kParamRearCenterEnabled];
     pp.rear_delay_ms = param_[vs::kParamRearCenterDelayMs];

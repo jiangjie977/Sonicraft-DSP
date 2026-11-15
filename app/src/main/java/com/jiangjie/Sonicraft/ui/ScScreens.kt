@@ -3814,7 +3814,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             ScSlotHeader(
-                title = "空间环绕",
+                title = "矩阵环绕",
                 checked = vsEnabled,
                 onCheckedChange = { viewModel.setVsEnabled(!vsEnabled) },
                 switchEnabled = true,
@@ -3965,8 +3965,36 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         color = ScColors.TextSub,
                     )
 
-                    // 定位自检：测 7 个方位的 ITD/ILD，校验左右手性与镜像对称，
-                    // 并把偏差写回渲染器做自动校正（结果与 harness 里那 10 项断言同一套代码）
+
+                }
+            }
+        }
+    }
+
+    // 定位自检独立成卡（放最下方）：它是"验证工具"，不属于日常调音参数
+    val testExpanded = rememberExpandedFollowing(true, "vs_selftest_card")
+    ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            ScSlotHeader(
+                title = "定位自检",
+                checked = false,
+                onCheckedChange = {},
+                switchEnabled = false,
+                expanded = testExpanded.value,
+                onToggleExpand = { testExpanded.value = !testExpanded.value },
+                showSwitch = false,
+            )
+            if (testExpanded.value) {
+                Column(
+                    modifier = Modifier.padding(bottom = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "用带限噪声测 7 个方位的 ITD/ILD，校验左右手性与镜像对称，" +
+                            "并把偏差写回渲染器做自动校正。与构建期 harness 断言同一套代码。",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                    )
                     TextButton(
                         onClick = {
                             if (vsTesting) return@TextButton
@@ -3979,11 +4007,10 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         },
                     ) {
                         Text(
-                            text = if (vsTesting) "自检中…" else "定位自检（含自动校正）",
+                            text = if (vsTesting) "自检中…" else "开始自检（含自动校正）",
                             fontSize = 12.sp,
                         )
                     }
-
                     vsReport?.let { report ->
                         androidx.compose.material3.AlertDialog(
                             onDismissRequest = { vsReport = null },
