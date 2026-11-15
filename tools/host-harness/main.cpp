@@ -70,6 +70,54 @@ int main(int argc, char** argv) {
             if (l[static_cast<size_t>(i)] != 0.25f || r[static_cast<size_t>(i)] != -0.25f) { same = false; break; }
         }
         Check(same, "virtual surround: 默认旁路时逐样本透传");
+
+        // ---- 解码 + 渲染：开启后必须真的改变信号，且定位方向正确 ----
+        vs_node.SetBypass(false);
+        vs_node.SetParam(sonicraft::dsp::vs::kParamEnabled, 1.0f);
+        vs_node.SetParam(sonicraft::dsp::vs::kParamCenterGain, 0.0f);
+        vs_node.SetParam(sonicraft::dsp::vs::kParamSurroundGain, 0.0f);
+
+        // 用 500 Hz 正弦做探针：HRTF 有 25 Hz 高通，直流会被滤掉，只剩 LFE 等量加到
+        // 双耳，会把左右差异掩盖（第一版断言就是因为用常量而失败）。
+        auto run_blocks = [&](float amp_l, float amp_r, int blocks, double* out_l, double* out_r) {
+            std::vector<float> bl(512), br(512);
+            double acc_l = 0.0, acc_r = 0.0;
+            double phase = 0.0;
+            const double w = 2.0 * 3.141592653589793 * 500.0 / 48000.0;
+            for (int b = 0; b < blocks; ++b) {
+                for (int i = 0; i < 512; ++i) {
+                    const float v = static_cast<float>(std::sin(phase));
+                    phase += w;
+                    bl[static_cast<size_t>(i)] = v * amp_l;
+                    br[static_cast<size_t>(i)] = v * amp_r;
+                }
+                float* ch[2] = {bl.data(), br.data()};
+                vs_node.Process(ch, 512);
+                if (b >= 2) {   // 跳过交叉淡化爬升段
+                    for (int i = 0; i < 512; ++i) {
+                        const double l = bl[static_cast<size_t>(i)], r = br[static_cast<size_t>(i)];
+                        acc_l += l * l; acc_r += r * r;
+                    }
+                }
+            }
+            *out_l = std::sqrt(acc_l);
+            *out_r = std::sqrt(acc_r);
+        };
+
+        double ml = 0.0, mr = 0.0;
+        run_blocks(0.3f, 0.3f, 6, &ml, &mr);       // 居中（左右同相）
+        Check(std::isfinite(ml) && std::isfinite(mr) && (ml + mr) > 0.0,
+              "virtual surround: 开启后输出有效（非 NaN 且非静音）");
+        const double center_balance = std::fabs(ml - mr) / (ml + mr + 1e-12);
+        Check(center_balance < 0.15, "virtual surround: 居中信号双耳能量接近（|<L-R| 小于 15%）");
+
+        double ll = 0.0, lr = 0.0;
+        run_blocks(0.4f, 0.0f, 6, &ll, &lr);       // 纯左声道
+        Check(ll > lr, "virtual surround: 纯左输入时左耳能量更大（方向正确）");
+
+        double rl = 0.0, rr = 0.0;
+        run_blocks(0.0f, 0.4f, 6, &rl, &rr);       // 纯右声道
+        Check(rr > rl, "virtual surround: 纯右输入时右耳能量更大（方向正确）");
     }
 
     // 独立 RBJ peaking + TDF2 验证：抛开节点/图，直接验证滤波器数学
