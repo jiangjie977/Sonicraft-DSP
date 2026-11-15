@@ -108,11 +108,17 @@ class StereoSpatialDecoder {
   }
 
   void SetMode(bool movie) { movie_ = movie; }
+  /**
+   * @param rear_db 后中置（CS）增益。此前 CS 只有固定 ms_gain，参数表里的
+   *                rear_gain 一直是死参数 —— 这里补上。
+   */
   void SetGains(float center_db, float surround_db, float lfe_db) {
     center_gain_ = DbToGain(center_db);
     surround_gain_ = DbToGain(surround_db);
     lfe_gain_ = DbToGain(lfe_db);
   }
+
+  void SetRearGain(float rear_db) { rear_gain_ = DbToGain(rear_db); }
 
   /**
    * 前场补偿：只作用于 FL/FR。
@@ -174,7 +180,7 @@ class StereoSpatialDecoder {
 
     // ---- 后中置：环绕之和 ----
     const float ms_gain = movie_ ? 0.25f : 0.15f;
-    const float cs = (sl + sr) * ms_gain;
+    const float cs = (sl + sr) * ms_gain * rear_gain_;
 
     // ---- LFE ----
     const float lfe_l = lfe_l_.Process(in_l);
@@ -275,6 +281,7 @@ class StereoSpatialDecoder {
   bool movie_ = false;
   float center_gain_ = 1.0f, surround_gain_ = 1.0f, lfe_gain_ = 1.0f;
   float front_gain_ = 1.0f;
+  float rear_gain_ = 1.0f;
 
   LowPass4 lp_l_, lp_r_;
   LowPass4 lfe_l_, lfe_r_;

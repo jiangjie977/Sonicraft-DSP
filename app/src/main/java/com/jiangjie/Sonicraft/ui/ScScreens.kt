@@ -3796,6 +3796,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsSurroundGain by viewModel.vsSurroundGain.collectAsStateWithLifecycle()
     val vsCenterGain by viewModel.vsCenterGain.collectAsStateWithLifecycle()
     val vsFrontGain by viewModel.vsFrontGain.collectAsStateWithLifecycle()
+    val vsRearGain by viewModel.vsRearGain.collectAsStateWithLifecycle()
     val vsRoomSize by viewModel.vsRoomSize.collectAsStateWithLifecycle()
     val vsRoomWet by viewModel.vsRoomWet.collectAsStateWithLifecycle()
     val vsEncodeStrength by viewModel.vsEncodeStrength.collectAsStateWithLifecycle()
@@ -3854,10 +3855,17 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         onChange = viewModel::setVsCenterGain,
                     )
                     VsGainRow(
-                        label = "前场补偿",
+                        label = "前声道增益",
                         value = vsFrontGain,
                         enabled = vsEnabled,
                         onChange = viewModel::setVsFrontGain,
+                    )
+
+                    VsGainRow(
+                        label = "后中置增益",
+                        value = vsRearGain,
+                        enabled = vsEnabled,
+                        onChange = viewModel::setVsRearGain,
                     )
 
                     // ---- 房间（RIR 卷积，预设名与卷积器一致：小房间/客厅/音乐厅/大教堂）----
@@ -3881,7 +3889,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
 
                     // 参数名沿用源码：encode_strength（Lt/Rt 往返强度）
                     VsGainRow(
-                        label = "编码强度",
+                        label = "下混编码强度",
                         value = vsEncodeStrength,
                         range = 0f..1f,
                         suffix = "",
@@ -4020,11 +4028,14 @@ private fun VsGainRow(
                 color = ScColors.TextSub,
             )
         }
+        // 滑条收窄到 78%：右侧留出手势安全区。
+        // 否则整页几乎都是滑条，用户想上下滚动页面时会把参数拖走（实测踩过）。
         Slider(
             value = value,
             onValueChange = onChange,
             valueRange = range,
             enabled = enabled,
+            modifier = Modifier.fillMaxWidth(0.78f),
         )
     }
 }

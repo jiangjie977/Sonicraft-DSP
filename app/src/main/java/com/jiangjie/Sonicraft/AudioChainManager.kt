@@ -241,6 +241,11 @@ class AudioChainManager @Inject constructor(
             )
             engine.setParam(
                 AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_REAR_GAIN,
+                f("vs_rear_gain", -6f),
+            )
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
                 AudioEngine.VS_PARAM_ROOM_SIZE,
                 f("vs_room_size", 0f),
             )
