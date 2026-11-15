@@ -82,12 +82,28 @@ class StereoSpatialDecoder {
     lfe_l_.Set(kLfeHz, sr_);
     lfe_r_.Set(kLfeHz, sr_);
     env_alpha_ = 1.0f - std::exp(-2.0f * Biquad::kPi * 50.0f / sr_);
+    // 中置带通（人声带，Q≈1）
+    center_bp_.b0 = 0.03830530494451523f;
+    center_bp_.b1 = 0.07661060988903046f;
+    center_bp_.b2 = 0.03830530494451523f;
+    center_bp_.a1 = -1.3751437664031982f;
+    center_bp_.a2 = 0.5283650159835815f;
+    // 环绕带通（窄带，用于左右分离）
+    surround_bp_l_.b0 = 0.012153510935604572f;
+    surround_bp_l_.b1 = 0.0f;
+    surround_bp_l_.b2 = -0.012153510935604572f;
+    surround_bp_l_.a1 = -1.9491368532180786f;
+    surround_bp_l_.a2 = 0.9537650346755981f;
+    surround_bp_r_ = surround_bp_l_;
     Reset();
   }
 
   void Reset() {
     lp_l_.Reset();
     lp_r_.Reset();
+    center_bp_.Reset();
+    surround_bp_l_.Reset();
+    surround_bp_r_.Reset();
     lfe_l_.Reset();
     lfe_r_.Reset();
     level_low_l_ = level_low_r_ = 0.0f;
@@ -152,8 +168,9 @@ class StereoSpatialDecoder {
     if ((steer_tick_++ & 0x3f) == 0) UpdateSteering(lp_l, lp_r, hp_l, hp_r, in_l, in_r);
 
     // ---- 中置 ----
-    const float center_input_gain = movie_ ? 0.5011872f : 0.35f;  // −6 dB / −9 dB
-    float c = (in_l + in_r) * center_input_gain * center_gain_;
+    // 中置：只取人声频段（带通），避免整条频谱的乐器一起灌进中置
+    const float sum = (in_l + in_r) * 0.5f;
+    float c = center_bp_.Process(sum) * 0.9117735624313354f * center_gain_;
 
     // ---- 细粒度 bias（高频包络差 → 左右偏置）----
     const float fine_left = fs_lx_ + fs_rx_;
@@ -169,29 +186,23 @@ class StereoSpatialDecoder {
     const float steer_high = dir_high_ * (1.0f - mix) + fine_bias_ * mix;
 
     // ---- 环绕：由 (L−R) 按 steering 分配到左右 ----
-    const float diff = in_l - in_r;
-    const float sl_low = diff * (0.5f + steer_low * 0.5f);
-    const float sr_low = diff * (0.5f - steer_low * 0.5f);
-    const float sl_high = diff * (0.5f + steer_high * 0.5f);
-    const float sr_high = diff * (0.5f - steer_high * 0.5f);
-
+    // 环绕：差分先缩到半幅，再各自过带通 —— 频段外的东西不会串到侧后，左右分离更干净
+    const float diff = (in_l - in_r) * 0.5f;
+    float sl = surround_bp_l_.Process(diff) * 0.6094468235969543f * surround_gain_;
+    float sr = surround_bp_r_.Process(-diff) * 0.6094468235969543f * surround_gain_;
+    // steering 仅用于"前置主导时抑制环绕"，不再决定左右分配
     float front_dom = std::fabs(steer_low);
     if (front_dom > 1.0f) front_dom = 1.0f;
-    const float surround_damp = 1.0f - 0.7f * front_dom;
-    float sl = (sl_low + sl_high) * 0.5f * surround_gain_ * kSurroundLimit * surround_damp;
-    float sr = (sr_low + sr_high) * 0.5f * surround_gain_ * kSurroundLimit * surround_damp;
-    if (!movie_) {
-      sl *= 0.9f;
-      sr *= 0.9f;
-    }
+    const float surround_damp = 1.0f - 0.35f * front_dom;
+    sl *= surround_damp;
+    sr *= surround_damp;
 
     // ---- 前置：扣掉已进中置的部分（避免重复计入）----
     float fl = (in_l - c * 0.5f) * front_gain_;
     float fr = (in_r - c * 0.5f) * front_gain_;
 
     // ---- 后中置：环绕之和 ----
-    const float ms_gain = movie_ ? 0.25f : 0.15f;
-    const float cs = (sl + sr) * ms_gain * rear_gain_;
+    const float cs = (sl + sr) * 0.5f * 0.9831886887550354f * rear_gain_;
 
     // ---- LFE ----
     const float lfe_l = lfe_l_.Process(in_l);
@@ -304,6 +315,9 @@ class StereoSpatialDecoder {
   float rear_space_ = 0.5f;
 
   LowPass4 lp_l_, lp_r_;
+  // 分频段矩阵：中置与环绕各自先过带通，只取本声道的频段
+  Biquad center_bp_;
+  Biquad surround_bp_l_, surround_bp_r_;
   LowPass4 lfe_l_, lfe_r_;
 
   float env_alpha_ = 0.0f;
