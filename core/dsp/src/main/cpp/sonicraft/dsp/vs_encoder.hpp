@@ -120,7 +120,8 @@ class LtRtRoundTrip {
     const float r_hp = std::pow(std::sqrt(kA2), ratio);
     const float a1 = -2.0f * r_hp;
     const float a2 = r_hp * r_hp;
-    const float k_hp = (1.0f + a1 + a2) * 0.25f;
+    // 高通按 Nyquist 增益 1 归一：(1 − a1 + a2)/4
+    const float k_hp = (1.0f - a1 + a2) * 0.25f;
 
     const float r_lp = std::pow(std::sqrt(kA2), ratio);
     const float b1 = -2.0f * r_lp;
