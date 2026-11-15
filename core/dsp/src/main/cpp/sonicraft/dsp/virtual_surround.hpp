@@ -139,10 +139,17 @@ class VirtualSurroundNode final : public DspNode {
     const bool debug_raw = param_[vs::kParamDebugRaw] > 0.5f;
 
     // Lt/Rt 编解码往返：制造相位扩散（强度 0 = 直通）
-    if (!debug_raw)
+    // 【仅解码测试】也保留这一级：trim 作用在**第二级解码器（decoder2）输出**上，
+    // 这样测到的才是"解码 → 再解码"之后的真实 7 声道。
     round_trip_.Process(ch_ptr_.data(), frames, param_[vs::kParamEncodeStrength],
                         decoder2_, param_[vs::kParamMode] > 0.5f,
                         param_[vs::kParamCenterGain], param_[vs::kParamSurroundGain]);
+
+    // TODO(试听待修，2026-11-15，暂不动算法)：
+    //  1. FL/FR 里残留的中置人声过多 —— 中置提取后的扣除比例（C/2）偏小；
+    //  2. C 声道人声偏弱、夹带乐器过多 —— 中置输入增益与相干度加权不足；
+    //  3. 后环绕方向基本正确，但左右分离度不足、声场偏窄 —— 环绕差分分配比例待调；
+    //  4. 低频正常，无需改动。
 
     // 7 声道后处理：中置三态 / 人声清晰度 / 低音谐波 / 后中置
     vs::PostStage::Params pp;
