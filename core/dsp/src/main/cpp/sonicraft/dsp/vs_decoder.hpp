@@ -89,13 +89,26 @@ class StereoSpatialDecoder {
     center_bp_.b2 = 0.03830530494451523f;
     center_bp_.a1 = -1.3751437664031982f;
     center_bp_.a2 = 0.5283650159835815f;
-    // 环绕带通（窄带，用于左右分离）
-    surround_bp_l_.b0 = 0.012153510935604572f;
-    surround_bp_l_.b1 = 0.0f;
-    surround_bp_l_.b2 = -0.012153510935604572f;
-    surround_bp_l_.a1 = -1.9491368532180786f;
-    surround_bp_l_.a2 = 0.9537650346755981f;
-    surround_bp_r_ = surround_bp_l_;
+    // 环绕：200 Hz 高通 + 6 kHz 低通。
+    // 原实现是中心约 500 Hz 的窄带谐振，宽带素材(音乐/影视)落在该带内的能量很少，
+    // 表现为"环绕非常弱"；放宽成宽频差分后既有乐器质感、电平也正常。
+    sur_hp_l_.SetHighPass(200.0f, sr_);
+    sur_hp_r_ = sur_hp_l_;
+    {
+      // 二阶低通（RBJ, Q=0.707）
+      const float w = 2.0f * Biquad::kPi * 6000.0f / sr_;
+      const float cw = std::cos(w);
+      const float alpha = std::sin(w) / 1.41421356f;
+      const float a0 = 1.0f + alpha;
+      const float b0 = (1.0f - cw) * 0.5f / a0;
+      const float b1 = (1.0f - cw) / a0;
+      const float b2 = b0;
+      const float a1 = (-2.0f * cw) / a0;
+      const float a2 = (1.0f - alpha) / a0;
+      sur_lp_l_.b0 = b0; sur_lp_l_.b1 = b1; sur_lp_l_.b2 = b2;
+      sur_lp_l_.a1 = a1; sur_lp_l_.a2 = a2;
+      sur_lp_r_ = sur_lp_l_;
+    }
     Reset();
   }
 
@@ -106,8 +119,10 @@ class StereoSpatialDecoder {
     for (int i = 0; i < 6; ++i) hp_main_[i].Reset();
     for (int i = 0; i < kCsDelaySize; ++i) cs_delay_[i] = 0.0f;
     cs_pos_ = 0;
-    surround_bp_l_.Reset();
-    surround_bp_r_.Reset();
+    sur_hp_l_.Reset();
+    sur_hp_r_.Reset();
+    sur_lp_l_.Reset();
+    sur_lp_r_.Reset();
     lfe_l_.Reset();
     lfe_r_.Reset();
     level_low_l_ = level_low_r_ = 0.0f;
@@ -197,9 +212,11 @@ class StereoSpatialDecoder {
 
     // ---- 环绕：由 (L−R) 按 steering 分配到左右 ----
     // 环绕：差分先缩到半幅，再各自过带通 —— 频段外的东西不会串到侧后，左右分离更干净
-    const float diff = (in_l - in_r) * 0.5f;
-    float sl = surround_bp_l_.Process(diff) * 0.6094468235969543f * surround_gain_;
-    float sr = surround_bp_r_.Process(-diff) * 0.6094468235969543f * surround_gain_;
+    // 不再先缩半：差分本身已比单声道低，再乘 0.5 会让环绕掉 6 dB（实测偏低 15.6 dB）
+    const float diff = in_l - in_r;
+    // 宽频差分：高通 → 低通，再按 0.6094 与滤波损耗补偿
+    float sl = sur_lp_l_.Process(sur_hp_l_.Process(diff)) * 0.6094468235969543f * 1.15f * surround_gain_;
+    float sr = sur_lp_r_.Process(sur_hp_r_.Process(-diff)) * 0.6094468235969543f * 1.15f * surround_gain_;
     // steering 仅用于"前置主导时抑制环绕"，不再决定左右分配
     float front_dom = std::fabs(steer_low);
     if (front_dom > 1.0f) front_dom = 1.0f;
@@ -363,7 +380,8 @@ class StereoSpatialDecoder {
   LowPass4 lp_l_, lp_r_;
   // 分频段矩阵：中置与环绕各自先过带通，只取本声道的频段
   Biquad center_bp_;
-  Biquad surround_bp_l_, surround_bp_r_;
+  // 环绕：200 Hz 高通 + 6 kHz 低通（宽频差分成份），取代原来的窄带谐振
+  Biquad sur_hp_l_, sur_hp_r_, sur_lp_l_, sur_lp_r_;
   // 主声道 80 Hz 高通：与 LFE 低通互补，避免低频重复叠加
   Biquad hp_main_[6];
   int decode_mode_ = 0;                       // 0=Cine6.1 1=LCRS 2=Stereo 3=Mono
