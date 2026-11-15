@@ -3783,6 +3783,113 @@ internal fun ScWidthDetailContent(viewModel: MainViewModel) {
     }
 }
 
+/**
+ * 空间环绕详情内容。
+ *
+ * 三块：总控（模式/距离）、声场（环绕/中置/前场增益）、说明。
+ * 参数全部实时下发（节点内 20ms 平滑），开关走交叉淡化，无爆音。
+ */
+@Composable
+internal fun ScVsDetailContent(viewModel: MainViewModel) {
+    val vsEnabled by viewModel.vsEnabled.collectAsStateWithLifecycle()
+    val vsMode by viewModel.vsMode.collectAsStateWithLifecycle()
+    val vsSurroundGain by viewModel.vsSurroundGain.collectAsStateWithLifecycle()
+    val vsCenterGain by viewModel.vsCenterGain.collectAsStateWithLifecycle()
+    val vsFrontGain by viewModel.vsFrontGain.collectAsStateWithLifecycle()
+    val vsExpanded = rememberExpandedFollowing(vsEnabled, "vs_card")
+
+    ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            ScSlotHeader(
+                title = "空间环绕",
+                checked = vsEnabled,
+                onCheckedChange = { viewModel.setVsEnabled(!vsEnabled) },
+                switchEnabled = true,
+                expanded = vsExpanded.value,
+                onToggleExpand = { vsExpanded.value = !vsExpanded.value },
+            )
+            if (vsExpanded.value) {
+                Column(
+                    modifier = Modifier.padding(bottom = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "电影模式（更强的方向分离）",
+                            fontSize = 12.sp,
+                            color = ScColors.TextMain,
+                            modifier = Modifier.weight(1f),
+                        )
+                        ScTinySwitch(
+                            checked = vsMode == 1,
+                            onCheckedChange = { viewModel.setVsMode(if (it) 1 else 0) },
+                        )
+                    }
+
+                    VsGainRow(
+                        label = "环绕增益",
+                        value = vsSurroundGain,
+                        enabled = vsEnabled,
+                        onChange = viewModel::setVsSurroundGain,
+                    )
+                    VsGainRow(
+                        label = "中置增益",
+                        value = vsCenterGain,
+                        enabled = vsEnabled,
+                        onChange = viewModel::setVsCenterGain,
+                    )
+                    VsGainRow(
+                        label = "前场补偿",
+                        value = vsFrontGain,
+                        enabled = vsEnabled,
+                        onChange = viewModel::setVsFrontGain,
+                    )
+
+                    Text(
+                        text = "立体声先解码成 7 声道虚拟布局（前左/前右/中置/侧左/侧右/后中/低频），" +
+                            "再逐声道过双耳模型渲染到耳机。环绕增益决定后方包裹感，中置增益决定人声贴脸程度，" +
+                            "前场补偿用于空间化后前端变薄的场合。",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 单个增益滑条：标签 + 数值 + 滑块 */
+@Composable
+private fun VsGainRow(
+    label: String,
+    value: Float,
+    enabled: Boolean,
+    onChange: (Float) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(text = label, fontSize = 12.sp, color = ScColors.TextMain)
+            Text(
+                text = "%+.1f dB".format(value),
+                fontSize = 11.sp,
+                color = ScColors.TextSub,
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = -12f..12f,
+            enabled = enabled,
+        )
+    }
+}
+
 /** U7 算法混响（FDN）详情内容：六参数滑块（原主页 FDN 区迁入） */
 @Composable
 internal fun ScFdnDetailContent(viewModel: MainViewModel) {

@@ -273,6 +273,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     var eqOpen by remember { mutableStateOf(false) }
     var bandOpen by remember { mutableStateOf(false) }
     var widthOpen by remember { mutableStateOf(false) }
+    var vsOpen by remember { mutableStateOf(false) }
     // 混响组详情：卷积混响与算法混响合并到同一页，共用一个开合状态
     var reverbOpen by remember { mutableStateOf(false) }
     var limiterOpen by remember { mutableStateOf(false) }
@@ -305,7 +306,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             scriptEditorOpen = false
         }
     } else if (eqOpen || bandOpen || widthOpen || reverbOpen || limiterOpen || dynBassOpen ||
-        rackOpen
+        rackOpen || vsOpen
     ) {
         // ---- U7 效果详情页（参量均衡/多频段压限/立体声宽度/算法混响）：同 P2 形态，覆盖 Tab 层 ----
         Column(
@@ -328,6 +329,8 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             val limiterEnabled by viewModel.limiterEnabled.collectAsStateWithLifecycle()
             // 机架总闸：按草图放到详情页页头
             val scriptEnabled by viewModel.scriptEffectEnabled.collectAsStateWithLifecycle()
+    // 空间环绕总闸：音效库「空间环绕」卡片的开关
+    val vsEnabled by viewModel.vsEnabled.collectAsStateWithLifecycle()
             when {
                 eqOpen -> ScEffectDetailPage(
                     // 总开关**下沉到均衡器卡片内**（同压限器处理：卡片标题行右侧），
@@ -353,6 +356,12 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                     onEnabledChange = viewModel::setStereoWidthEnabled,
                     onBack = { widthOpen = false },
                 ) { ScWidthDetailContent(viewModel) }
+                // 空间环绕：总开关下沉到卡片内（与均衡器一致），页头只留标题
+                vsOpen -> ScEffectDetailPage(
+                    title = "空间环绕",
+                    subtitle = "",
+                    onBack = { vsOpen = false },
+                ) { ScVsDetailContent(viewModel) }
                 limiterOpen -> ScEffectDetailPage(
                     title = "限幅器",
                     subtitle = "末级防削波安全网 · 输出上限钳位",
@@ -662,6 +671,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         onOpenLimiter = { limiterOpen = true },
                         onOpenDynBass = { dynBassOpen = true },
         onOpenRack = { rackOpen = true },
+        onOpenVs = { vsOpen = true },
                     )
                 }
                 1 -> ScFavoritesScreen(viewModel = viewModel, onOpenEq = { eqOpen = true })
@@ -692,6 +702,7 @@ private fun P1LibrarySection(
     onOpenLimiter: () -> Unit,
     onOpenDynBass: () -> Unit,
     onOpenRack: () -> Unit,
+    onOpenVs: () -> Unit,
 ) {
     // U4：原「设置」区整体迁 P5 我的屏（ScSettingsSection）；U9m gateThreshold 亦迁限幅器详情页
     val takeoverError by viewModel.takeoverError.collectAsStateWithLifecycle()
@@ -886,6 +897,17 @@ private fun P1LibrarySection(
                 modifier = Modifier.weight(1f),
             )
         }
+        // 空间环绕：全宽卡片（输入是整条立体声总线，不是单点效果）
+        val vsEnabled = viewModel.vsEnabled.collectAsStateWithLifecycle().value
+        ScEffectCard(
+            title = "空间环绕",
+            subtitle = "7 声道虚拟布局 · 双耳 HRTF 渲染",
+            icon = ScEffectIconKind.WAVE,
+            enabled = vsEnabled,
+            onClick = onOpenVs,
+            onToggle = { viewModel.setVsEnabled(!vsEnabled) },
+            modifier = Modifier.fillMaxWidth(),
+        )
         // 机架：脚本机架自设置页迁来，全宽卡片；开关为整机总闸
         ScEffectCard(
             title = "机架",
