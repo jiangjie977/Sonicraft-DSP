@@ -393,6 +393,9 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
         runCatching { nativeEngine?.setBufferFrames(frames) }
     }
 
+    override fun vsSelfTest(): String =
+        withNative { it.runVsSelfTest() } ?: "engine not ready"
+
     override fun setBypass(nodeIndex: Int, bypass: Boolean) {
         if (nodeIndex == com.jiangjie.Sonicraft.core.engine.AudioEngine.EQ_NODE_INDEX) {
             runCatching {

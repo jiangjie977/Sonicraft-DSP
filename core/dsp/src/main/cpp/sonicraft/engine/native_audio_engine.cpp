@@ -557,6 +557,39 @@ float NativeAudioEngine::GetScriptRackWet() {
   return node != nullptr ? node->rack_wet() : 1.0f;
 }
 
+std::string NativeAudioEngine::RunVirtualSurroundSelfTest() {
+  if (!graph_) return "engine not ready";
+  auto* node = dynamic_cast<dsp::VirtualSurroundNode*>(graph_->node_at(kNodeVirtualSurround));
+  if (node == nullptr) return "virtual surround node missing";
+
+  const auto rep = node->RunLocalizationSelfTest(true);
+
+  char line[160];
+  std::string out;
+  // 报告只写 ASCII：JNI 侧对非 ASCII 字节统一替换为 '?'（防止 NewStringUTF 收到非法
+  // UTF-8 直接 abort），若这里写中文，界面上会整片变成问号。
+  out += rep.pass ? "result: PASS\n" : "result: FAIL\n";
+  std::snprintf(line, sizeof(line), "ITD err %.2f -> %.2f samples\n",
+                rep.itd_rms_error_before, rep.itd_rms_error_after);
+  out += line;
+  std::snprintf(line, sizeof(line), "ILD err %.2f -> %.2f dB\n",
+                rep.ild_rms_error_before, rep.ild_rms_error_after);
+  out += line;
+  std::snprintf(line, sizeof(line), "handedness %s / symmetry %s / itd_scale %.3f / ild_trim %.3f\n",
+                rep.handedness_ok ? "OK" : "FAIL",
+                rep.symmetric_ok ? "OK" : "FAIL",
+                rep.itd_scale, rep.ild_trim);
+  out += line;
+  out += "azimuth   ITD_th  ITD_me  ILD_tg  ILD_me\n";
+  for (int i = 0; i < dsp::vs::LocalizationSelfTest::kAngleCount; ++i) {
+    const auto& a = rep.angles[i];
+    std::snprintf(line, sizeof(line), "%+5.0f %8.2f %8.2f %8.2f %8.2f\n",
+                  a.azimuth, a.itd_expected, a.itd_measured, a.ild_target_db, a.ild_measured_db);
+    out += line;
+  }
+  return out;
+}
+
 std::string NativeAudioEngine::CheckScript(const std::string& source) {
   dsp::cvm::Program tmp;
   std::string err;

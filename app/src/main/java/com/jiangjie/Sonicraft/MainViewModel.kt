@@ -1542,6 +1542,12 @@ class MainViewModel @Inject constructor(
     private val _vsFrontGain = MutableStateFlow(prefs.getFloat(KEY_VS_FRONT_GAIN, 0f))
     val vsFrontGain: StateFlow<Float> = _vsFrontGain.asStateFlow()
 
+    /**
+     * 空间环绕声像定位自检：跑一次测量 + 自动校正，返回可展示的多行文本。
+     * 非实时（会分配内存、跑 7 个方位 × 2 轮），必须在后台线程调用。
+     */
+    fun runVirtualSurroundSelfTest(): String = engine.vsSelfTest()
+
     fun setVsEnabled(enabled: Boolean) {
         _vsEnabled.value = enabled
         prefs.edit().putBoolean(KEY_VS_ENABLED, enabled).apply()

@@ -102,6 +102,12 @@ class NativeAudioEngine {
   /** 只做编译检查（不改变当前运行的脚本）；返回错误串，空 = 通过。 */
   std::string CheckScript(const std::string& source);
 
+  /**
+   * 空间环绕声像定位自检（**非实时**：内部有内存分配与大量运算，禁止在音频线程调用）。
+   * 返回可直接展示的多行文本：每个方位的理论/实测 ITD、ILD 与总体判定。
+   */
+  std::string RunVirtualSurroundSelfTest();
+
   /** 启停某个脚本 lane（0..2）。启用时节点会补一次 Prepare。 */
   void SetScriptLaneEnabled(int instance, bool enabled);
   bool IsScriptLaneEnabled(int instance);

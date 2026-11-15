@@ -67,6 +67,9 @@ interface AudioEngine {
     /** 运行时切换节点旁路（A/B 标尺）。默认空实现。 */
     fun setBypass(nodeIndex: Int, bypass: Boolean) {}
 
+    /** 空间环绕声像定位自检（非实时；返回多行文本报告）。默认空实现。 */
+    fun vsSelfTest(): String = ""
+
     /**
      * 自定义脚本效果器（2026-11-12 原型）：下发类 C（SCVM）脚本源。非实时线程调用；
      * 旁路状态下即时重载，否则下次引擎重建生效。默认空实现。

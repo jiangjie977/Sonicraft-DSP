@@ -3797,6 +3797,9 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsCenterGain by viewModel.vsCenterGain.collectAsStateWithLifecycle()
     val vsFrontGain by viewModel.vsFrontGain.collectAsStateWithLifecycle()
     val vsExpanded = rememberExpandedFollowing(vsEnabled, "vs_card")
+    // 自检在后台线程跑（会分配内存、算 7 个方位 × 2 轮），结果写回 State 再弹窗
+    var vsReport by remember { mutableStateOf<String?>(null) }
+    var vsTesting by remember { mutableStateOf(false) }
 
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
@@ -3855,6 +3858,42 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         fontSize = 11.sp,
                         color = ScColors.TextSub,
                     )
+
+                    // 定位自检：测 7 个方位的 ITD/ILD，校验左右手性与镜像对称，
+                    // 并把偏差写回渲染器做自动校正（结果与 harness 里那 10 项断言同一套代码）
+                    TextButton(
+                        onClick = {
+                            if (vsTesting) return@TextButton
+                            vsTesting = true
+                            Thread {
+                                val r = viewModel.runVirtualSurroundSelfTest()
+                                vsReport = r.ifBlank { "引擎未就绪，无法自检" }
+                                vsTesting = false
+                            }.start()
+                        },
+                    ) {
+                        Text(
+                            text = if (vsTesting) "自检中…" else "定位自检（含自动校正）",
+                            fontSize = 12.sp,
+                        )
+                    }
+
+                    vsReport?.let { report ->
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { vsReport = null },
+                            title = { Text("声像定位自检", fontSize = 14.sp) },
+                            text = {
+                                Text(
+                                    text = report,
+                                    fontSize = 11.sp,
+                                    color = ScColors.TextSub,
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { vsReport = null }) { Text("好") }
+                            },
+                        )
+                    }
                 }
             }
         }

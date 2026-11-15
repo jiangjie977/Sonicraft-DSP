@@ -503,7 +503,19 @@ Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeGetScriptControls(
   return env->NewStringUTF(json.c_str());
 }
 
-JNIEXPORT jstring JNICALL
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeVsSelfTest(
+    JNIEnv* env, jclass /*clazz*/, jlong handle) {
+  auto* engine = reinterpret_cast<sonicraft::engine::NativeAudioEngine*>(handle);
+  const std::string raw = engine != nullptr ? engine->RunVirtualSurroundSelfTest() : std::string();
+  // 与其他字符串返回一致：非 ASCII 一律替换，避免 NewStringUTF 收到非法 UTF-8
+  std::string safe;
+  safe.reserve(raw.size());
+  for (unsigned char c : raw) safe += (c < 0x80) ? static_cast<char>(c) : '?';
+  return env->NewStringUTF(safe.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
 Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeGetScriptError(
     JNIEnv* env, jclass /*clazz*/, jlong handle) {
   auto* engine = reinterpret_cast<sonicraft::engine::NativeAudioEngine*>(handle);

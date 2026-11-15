@@ -117,6 +117,12 @@ class NativeAudioEngine private constructor(private var handle: Long) : AutoClos
     fun getScriptControls(instance: Int = 0): String =
         if (handle != 0L) nativeGetScriptControlsI(handle, instance) else "[]"
 
+    /**
+     * 空间环绕声像定位自检（**非实时**：内部有分配与大量运算，勿在音频线程调用）。
+     * 返回多行文本报告；引擎未就绪时返回空串。
+     */
+    fun runVsSelfTest(): String = if (handle != 0L) nativeVsSelfTest(handle) else ""
+
     /** 自定义脚本效果器：各 slider 默认值（out[0..7]=值,[8..15]=是否声明） */
     fun getScriptSliderDefaults(out: FloatArray, instance: Int = 0): Boolean =
         handle != 0L && nativeGetScriptSliderDefaultsI(handle, instance, out)
@@ -248,6 +254,7 @@ class NativeAudioEngine private constructor(private var handle: Long) : AutoClos
     private external fun nativeGetScriptSliderMask(handle: Long): Int
     private external fun nativeGetScriptSliderRanges(handle: Long, out: FloatArray): Boolean
     private external fun nativeGetScriptControls(handle: Long): String
+    private external fun nativeVsSelfTest(handle: Long): String
     private external fun nativeCheckScript(handle: Long, source: String): String
     private external fun nativeGetScriptSliderDefaults(handle: Long, out: FloatArray): Boolean
     private external fun nativeGetScriptError(handle: Long): String
