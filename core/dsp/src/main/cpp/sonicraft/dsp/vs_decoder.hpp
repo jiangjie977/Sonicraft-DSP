@@ -175,7 +175,10 @@ class StereoSpatialDecoder {
     // ---- 中置 ----
     // 中置：只取人声频段（带通），避免整条频谱的乐器一起灌进中置
     const float sum = (in_l + in_r) * 0.5f;
-    float c = center_bp_.Process(sum) * 0.9117735624313354f * center_gain_;
+    // 中置源（带通后、未加增益）：既用于 C 声道，也用于前置的等量扣除
+    const float c_src = center_bp_.Process(sum);
+    // C 比扣除量低 3 dB，避免补位时抢眼
+    float c = c_src * 0.7071068f * center_gain_;
 
     // ---- 细粒度 bias（高频包络差 → 左右偏置）----
     const float fine_left = fs_lx_ + fs_rx_;
@@ -204,8 +207,10 @@ class StereoSpatialDecoder {
 
     // ---- 前置：扣掉已进中置的部分（避免重复计入）----
     float cs = 0.0f;
-    float fl = (in_l - c * 0.5f) * front_gain_;
-    float fr = (in_r - c * 0.5f) * front_gain_;
+    // 前置把中置频段**整量**扣掉：单听 FL/FR 时中间应出现明显空洞，
+    // 只有补上 C 才填平 —— 这正是三声道该有的分离感。
+    float fl = (in_l - c_src) * front_gain_;
+    float fr = (in_r - c_src) * front_gain_;
 
     // ---- 后中置：环绕之和 ----
     // 后中置：两侧环绕互为反相（线性滤波），直接相加恒为 0 ——
