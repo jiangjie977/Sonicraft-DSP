@@ -729,9 +729,13 @@ fun ScTabBar(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
+                // 按压涟漪收进一个**圆角块**里：只给这个 Tab 自身的内缩区域，
+                // 不再铺满整条 bar（原先的四角是直角块，用户反馈像"未实现的选中态"）。
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .padding(horizontal = 6.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(ScRadius.Inset))
                     .clickable { onSelect(index) },
             ) {
                 ScTabIcon(kind = icon, tint = tint)
