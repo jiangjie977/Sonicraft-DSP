@@ -1433,18 +1433,6 @@ fun ScSettingsSection(viewModel: MainViewModel) {
         }
     }
 
-    // 脚本机架已迁至「音效库 → 机架」详情页
-    ScSectionTitle("脚本机架")
-    ScCard {
-        Column {
-            ScSettingBlock(
-                title = "已移至「音效库 → 机架」",
-                subtitle = "脚本编辑、槽位切换、参数与导入导出都在那里。",
-                showDivider = false,
-            ) {}
-        }
-    }
-
     ScSectionTitle("音频链路")
     ScCard {
         Column {
