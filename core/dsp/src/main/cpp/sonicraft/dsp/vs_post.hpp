@@ -143,19 +143,18 @@ class PostStage {
    * 对数域多项式谐波生成（全波整流 → 归一化 → 多项式 → 还原幅度 → 恢复符号）。
    * 系数按"低次谐波为主、不刺耳"整定；输入超过 ±1 时先钳位，避免多项式爆掉。
    */
+  /**
+   * 偶次谐波生成：y = sign(x)·x² × 1.5
+   *
+   * 早先的多项式带常数项（−0.082826），小信号时输出为负 → 谐波里混进直流与
+   * 反相成分，听感是"低频发糊、电平被抬高"。这里改为奇对称映射：
+   * 零输入→零输出，正负对称 → 不产生直流，只生成二次谐波。
+   */
   static float Harmonics(float x) {
     const float sign = x < 0.0f ? -1.0f : 1.0f;
     float a = std::fabs(x);
     if (a > 1.0f) a = 1.0f;
-    if (a < 1e-6f) return 0.0f;
-    int scale = 0;
-    while (a < 0.5f && scale > -20) {
-      a *= 2.0f;
-      --scale;
-    }
-    const float y = (0.124774f - a * 0.042153f) * a - 0.082826f;
-    const float restored = y * std::pow(2.0f, static_cast<float>(scale));
-    return restored * sign;
+    return sign * a * a * 1.5f;
   }
 
   float sr_ = 48000.0f;

@@ -3798,6 +3798,8 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsMode by viewModel.vsMode.collectAsStateWithLifecycle()
 
     val vsRearSpace by viewModel.vsRearSpace.collectAsStateWithLifecycle()
+    val vsHeight by viewModel.vsHeight.collectAsStateWithLifecycle()
+    val vsDistance by viewModel.vsDistance.collectAsStateWithLifecycle()
     val vsBs775 by viewModel.vsBs775.collectAsStateWithLifecycle()
     val vsDebugRaw by viewModel.vsDebugRaw.collectAsStateWithLifecycle()
     val vsTrims by viewModel.vsTrims.collectAsStateWithLifecycle()
@@ -3856,6 +3858,26 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     )
 
 
+
+                    // ---- 距离（早期反射比例，0~1；越远反射越多）----
+                    VsGainRow(
+                        label = "距离",
+                        value = vsDistance,
+                        range = 0f..1f,
+                        suffix = "",
+                        enabled = vsEnabled,
+                        onChange = viewModel::setVsDistance,
+                    )
+
+                    // ---- 高度感（>3 kHz 重定向到上方 4 路，0~1）----
+                    VsGainRow(
+                        label = "高度感",
+                        value = vsHeight,
+                        range = 0f..1f,
+                        suffix = "",
+                        enabled = vsEnabled,
+                        onChange = viewModel::setVsHeight,
+                    )
 
                     // ---- 后环绕空间感（环绕去相关深度 0~1）----
                     VsGainRow(

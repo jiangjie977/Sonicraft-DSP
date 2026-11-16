@@ -55,6 +55,12 @@ class VirtualSurroundNode final : public DspNode {
       hrtf_ch_[static_cast<std::size_t>(c)].Prepare(sr);
       hrtf_ch_[static_cast<std::size_t>(c)].Configure(vs::kAzimuthDeg[c], 0.0f);
     }
+    static constexpr float kUpAz[4] = {-30.0f, 30.0f, -110.0f, 110.0f};
+    for (int i = 0; i < 4; ++i) {
+      hrtf_up_[static_cast<std::size_t>(i)].Prepare(sr);
+      hrtf_up_[static_cast<std::size_t>(i)].Configure(kUpAz[i], 35.0f);
+      hf_hp_[static_cast<std::size_t>(i)].SetHighPass(3000.0f, sr);
+    }
     hrtf_model_.Prepare(sr);
     post_.Prepare(sr);
     // 房间卷积复用现成的 ConvolverNode：它已内置 Dry/小房/客厅/音乐厅/大教堂 五档 RIR，
@@ -75,9 +81,15 @@ class VirtualSurroundNode final : public DspNode {
     decoder2_.Reset();
     round_trip_.Reset();
     for (auto& h : hrtf_ch_) h.Reset();
+    for (auto& h : hrtf_up_) h.Reset();
+    for (auto& b : hf_hp_) b.Reset();
     hrtf_model_.Reset();
     post_.Reset();
     room_.Reset();
+    for (int i = 0; i < kErSize; ++i) { er_l_[i] = 0.0f; er_r_[i] = 0.0f; }
+    er_pos_ = 0;
+    er_lp_l_ = 0.0f;
+    er_lp_r_ = 0.0f;
   }
 
   void SetBypass(bool bypass) override { bypass_ = bypass; }
@@ -171,9 +183,8 @@ class VirtualSurroundNode final : public DspNode {
     pp.center_mode = param_[vs::kParamCenterMode];
     pp.dialog_db = param_[vs::kParamDialog];
     pp.dialog_enabled = param_[vs::kParamDialogEnabled];
-    // 低音谐波（BassEnhancer）实测有问题（低频发糊/电平异常），**临时禁用**，
-    // 待问题定位后恢复：此处强制 0，参数与 UI 保留，恢复时删掉这一行即可。
-    pp.bass_enhancer = 0.0f;
+    // 低音谐波已恢复（根因是多项式常数项产生直流，已改为奇对称映射）
+    pp.bass_enhancer = param_[vs::kParamBassEnhancer];
     pp.bass_enhancer_mode = param_[vs::kParamBassEnhancerMode];
     pp.rear_center_enabled = param_[vs::kParamRearCenterEnabled];
     pp.rear_delay_ms = param_[vs::kParamRearCenterDelayMs];
@@ -191,6 +202,44 @@ class VirtualSurroundNode final : public DspNode {
       room_.SetParam(dsp::ConvolverNode::kParamWet, param_[vs::kParamRoomWetDry]);
       room_.SetParam(dsp::ConvolverNode::kParamDry, 1.0f);
       room_.Process(channels, frames);
+    }
+
+    // 早期反射：给双耳输出叠几路衰减抽头（同侧 + 交叉），制造房间边界感。
+    // 距离参数越大，反射越多、越远；0 时完全不参与（零开销）。
+    const float er_amt = debug_raw ? 0.0f
+        : (param_[vs::kParamDistance] > 0.0f ? param_[vs::kParamDistance] : 0.0f);
+    if (er_amt > 0.01f) {
+      // 距离越大：反射延迟拉长（房间更大）、高频吸收更强（空气衰减）、直达声略降
+      const float tap_scale = 1.0f + 0.8f * er_amt;
+      const int kTap[4] = {
+          static_cast<int>(384 * tap_scale), static_cast<int>(624 * tap_scale),
+          static_cast<int>(1008 * tap_scale), static_cast<int>(1632 * tap_scale)};
+      static constexpr float kGain[4] = {0.50f, 0.35f, 0.25f, 0.18f};
+      // 反射路径一阶低通：12 kHz（近）→ 3.5 kHz（远），这是"远=暗"的主要线索
+      const float cutoff = 12000.0f - 8500.0f * er_amt;
+      const float lp_a = 1.0f - std::exp(-2.0f * 3.14159265f * cutoff / sample_rate_);
+      const float direct_gain = 1.0f - 0.25f * er_amt;
+
+      float* cl = channels[0];
+      float* cr = channels[1];
+      for (int i = 0; i < frames; ++i) {
+        er_pos_ = (er_pos_ + 1) % kErSize;
+        er_l_[er_pos_] = cl[i];
+        er_r_[er_pos_] = cr[i];
+        float acc_l = 0.0f, acc_r = 0.0f;
+        for (int k = 0; k < 4; ++k) {
+          const int d_same = kTap[k] % kErSize;
+          const int d_cross = (kTap[k] * 23 / 20) % kErSize;
+          const int i_same = (er_pos_ - d_same + kErSize) % kErSize;
+          const int i_cross = (er_pos_ - d_cross + kErSize) % kErSize;
+          acc_l += er_l_[i_same] * kGain[k] + er_r_[i_cross] * kGain[k] * 0.6f;
+          acc_r += er_r_[i_same] * kGain[k] + er_l_[i_cross] * kGain[k] * 0.6f;
+        }
+        er_lp_l_ += lp_a * (acc_l - er_lp_l_);
+        er_lp_r_ += lp_a * (acc_r - er_lp_r_);
+        cl[i] = cl[i] * direct_gain + er_lp_l_ * er_amt * 1.1f;
+        cr[i] = cr[i] * direct_gain + er_lp_r_ * er_amt * 1.1f;
+      }
     }
   }
 
@@ -223,6 +272,10 @@ class VirtualSurroundNode final : public DspNode {
       gain[c] = param_[mute_id] > 0.5f ? 0.0f : std::pow(10.0f, param_[trim_id] / 20.0f);
     }
 
+    const float height = param_[vs::kParamHeightStrength] > 0.0f
+                             ? param_[vs::kParamHeightStrength] : 0.0f;
+    static constexpr int kUpSrc[4] = {vs::kFL, vs::kFR, vs::kSL, vs::kSR};
+
     for (int i = 0; i < frames; ++i) {
       float wet_l = 0.0f;
       float wet_r = 0.0f;
@@ -251,6 +304,19 @@ class VirtualSurroundNode final : public DspNode {
           wet_l += hl;
           wet_r += hr;
         }
+
+        // 高度重定向：从 FL/FR/SL/SR 提取 3 kHz 以上，送到上方 4 路（仰角 +35°）
+        if (height > 0.01f) {
+          for (int k = 0; k < 4; ++k) {
+            const int src = kUpSrc[k];
+            const float x = layout_[static_cast<std::size_t>(src) * max_frames_ + i] * gain[src];
+            const float hf = hf_hp_[static_cast<std::size_t>(k)].Process(x) * height * 0.5f;
+            float ul = 0.0f, ur = 0.0f;
+            hrtf_up_[static_cast<std::size_t>(k)].ProcessSample(hf, &ul, &ur);
+            wet_l += ul;
+            wet_r += ur;
+          }
+        }
       }
 
       // 交叉淡化：dry*(1−g) + wet*g（g 逐样本推进，开关无爆音）
@@ -277,8 +343,19 @@ class VirtualSurroundNode final : public DspNode {
   vs::LtRtRoundTrip round_trip_;
   vs::PostStage post_;
   dsp::ConvolverNode room_;
+  // 早期反射：4 个抽头（8/13/21/34 ms）+ 每耳一路交叉，距离越远反射越多
+  static constexpr int kErSize = 2400;   // 50 ms @48k
+  float er_l_[kErSize]{};
+  float er_r_[kErSize]{};
+  int er_pos_ = 0;
+  // 反射路径的高频吸收（距离越远越暗）与直达声衰减
+  float er_lp_l_ = 0.0f;
+  float er_lp_r_ = 0.0f;
   std::array<float*, vs::kChannelCount> ch_ptr_{};
   std::array<vs::ParametricHrtf, vs::kChannelCount> hrtf_ch_{};
+  // 上方 4 个虚拟声源（±30° / ±110°，仰角 +35°）与其 3 kHz 高通
+  std::array<vs::ParametricHrtf, 4> hrtf_up_{};
+  std::array<vs::Biquad, 4> hf_hp_{};
   vs::ParametricHrtf hrtf_model_;
   vs::LocalizationSelfTest::Report last_report_{};
 };

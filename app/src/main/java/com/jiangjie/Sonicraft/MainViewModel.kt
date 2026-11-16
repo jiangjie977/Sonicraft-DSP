@@ -1702,6 +1702,30 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    private val _vsDistance = MutableStateFlow(saneFloat(KEY_VS_DISTANCE, 0.5f, 0f, 1f))
+    val vsDistance: StateFlow<Float> = _vsDistance.asStateFlow()
+
+    fun setVsDistance(v0: Float) {
+        val v = if (v0.isFinite()) v0.coerceIn(0f, 1f) else _vsDistance.value
+        _vsDistance.value = v
+        prefs.edit().putFloat(KEY_VS_DISTANCE, v).apply()
+        engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_DISTANCE, v)
+    }
+
+    private val _vsHeight = MutableStateFlow(saneFloat(KEY_VS_HEIGHT, 0.5f, 0f, 1f))
+    val vsHeight: StateFlow<Float> = _vsHeight.asStateFlow()
+
+    fun setVsHeight(v0: Float) {
+        val v = if (v0.isFinite()) v0.coerceIn(0f, 1f) else _vsHeight.value
+        _vsHeight.value = v
+        prefs.edit().putFloat(KEY_VS_HEIGHT, v).apply()
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_HEIGHT_STRENGTH,
+            v,
+        )
+    }
+
     private val _vsRearSpace = MutableStateFlow(saneFloat(KEY_VS_REAR_SPACE, 0.5f, 0f, 1f))
     val vsRearSpace: StateFlow<Float> = _vsRearSpace.asStateFlow()
 
@@ -2356,6 +2380,8 @@ class MainViewModel @Inject constructor(
             "vs_encode_strength" -> setVsEncodeStrength(v)
             "vs_room_size" -> setVsRoomSize(v.toInt())
             "vs_rear_space" -> setVsRearSpace(v)
+            "vs_height" -> setVsHeight(v)
+            "vs_distance" -> setVsDistance(v)
             "vs_room_wet" -> setVsRoomWet(v)
             "vs_center_mode" -> setVsCenterMode(v.toInt())
             "vs_dialog" -> setVsDialog(v)
@@ -2504,6 +2530,8 @@ class MainViewModel @Inject constructor(
         "vs_encode_strength" to _vsEncodeStrength.value,
         "vs_room_size" to _vsRoomSize.value.toFloat(),
         "vs_rear_space" to _vsRearSpace.value,
+        "vs_height" to _vsHeight.value,
+        "vs_distance" to _vsDistance.value,
         "vs_room_wet" to _vsRoomWet.value,
         "vs_center_mode" to _vsCenterMode.value.toFloat(),
         "vs_dialog" to _vsDialog.value,
@@ -6140,6 +6168,8 @@ class MainViewModel @Inject constructor(
     const val KEY_VS_FRONT_GAIN = "vs_front_gain"
     const val KEY_VS_REAR_GAIN = "vs_rear_gain"
     const val KEY_VS_REAR_SPACE = "vs_rear_space"
+    const val KEY_VS_HEIGHT = "vs_height"
+    const val KEY_VS_DISTANCE = "vs_distance"
     const val KEY_VS_TRIMS = "vs_trims"
     const val KEY_VS_MUTES = "vs_mutes"
     const val KEY_VS_DEBUG_RAW = "vs_debug_raw"
