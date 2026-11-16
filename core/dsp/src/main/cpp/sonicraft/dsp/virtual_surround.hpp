@@ -142,7 +142,9 @@ class VirtualSurroundNode final : public DspNode {
   // 净增益 +2 dB（输出归一化 0.5625，相对 unity 0.5 即 +12dB 补回是按错误标定写的）。
   // 实测内部固有增益 +21 dB，若按 +12 dB 补回则净增益 +19 dB → 输出长期顶满、
   // 软限幅深度介入（听感"过曝/发扁"）。这里收敛到 +2 dB，开关 A/B 差稳定 +3 dB。
-  static constexpr float kOutputMakeup = 0.5625f;  // +12 dB 补回（净 −2 dB，配合输出增益即可复原）
+  // 净增益 +5 dB（折中）：+2dB 用户反馈偏小，+10dB 用户反馈 A/B 差太大。
+  // 实测内部固有增益 +21 dB：0.1995(入口−14dB) × 11.2(+21dB) × 0.7943 = 1.778 (+5dB)。
+  static constexpr float kOutputMakeup = 0.7943f;  // +12 dB 补回（净 −2 dB，配合输出增益即可复原）
   static constexpr float kSoftenPoint = 0.94f;   // 仅在峰值轻收（0.85 会压掉 30%+ 样本）        // 软限幅拐点
   static constexpr float kSoftenK = 6.0f;             // 软限幅陡度   // −14 dB（基准峰值 1.22 → 1.03，越界基本清零）
     if (channels[0] != nullptr && channels[1] != nullptr) {
