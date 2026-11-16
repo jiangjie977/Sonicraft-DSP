@@ -166,7 +166,7 @@ class StereoSpatialDecoder {
    * 中间值按比例混合，因此这是一个连续的"空间感"旋钮，而不是开关。
    */
   /** BS.775 等响：环绕矩阵系数在 0.7008（现基准）与 2.487（+11 dB）之间切换 */
-  void SetBs775(bool on) { sur_matrix_ = on ? 2.487f : 0.7008f; }
+  void SetBs775(bool on) { sur_matrix_target_ = on ? 1.5849f : 0.7008f; }
 
   /** 瞬态保护开关（默认开）：关闭后退回固定深度去相关，便于对比 */
   void SetTransientProtect(bool on) { trans_protect_ = on; }
@@ -221,6 +221,9 @@ class StereoSpatialDecoder {
     // 不再先缩半：差分本身已比单声道低，再乘 0.5 会让环绕掉 6 dB（实测偏低 15.6 dB）
     const float diff = in_l - in_r;
     // 宽频差分：高通 → 低通，再按 0.6094 与滤波损耗补偿
+    // 环绕矩阵系数平滑推进：开关切换时不能阶跃（原实现 0.7008 <-> 2.487 直接赋值，
+    // 相差 11 dB，切换瞬间就是"咔"一声爆音，并把环绕推到过载产生毛刺）。
+    sur_matrix_ += kSurMatrixSmooth * (sur_matrix_target_ - sur_matrix_);
     float sl = sur_lp_l_.Process(sur_hp_l_.Process(diff)) * sur_matrix_ * surround_gain_;
     float sr = sur_lp_r_.Process(sur_hp_r_.Process(-diff)) * sur_matrix_ * surround_gain_;
     // steering 仅用于"前置主导时抑制环绕"，不再决定左右分配
@@ -407,6 +410,8 @@ class StereoSpatialDecoder {
   float front_gain_ = 1.0f;
   float rear_gain_ = 1.0f;
   float rear_space_ = 0.5f;
+  float sur_matrix_target_ = 0.7008f;   // 目标值（由 BS.775 开关设定）
+  static constexpr float kSurMatrixSmooth = 0.004f;   // ≈5 ms 时间常数 @48k
   float sur_matrix_ = 0.7008f;
 
   LowPass4 lp_l_, lp_r_;
