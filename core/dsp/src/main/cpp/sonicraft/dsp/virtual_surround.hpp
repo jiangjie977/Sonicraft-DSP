@@ -138,7 +138,7 @@ class VirtualSurroundNode final : public DspNode {
     // 峰值冲到 +8~9 dBFS（实测 2.79），相邻样本跳变 0.76 → 明显过曝与毛刺。
     // 实测衰减扫描：−9 dB 后峰值 1.46、跳变 0.28、越界样本 3770→999（余量交给链末限幅器）。
     // 必须放在旁路判断之后：完全旁路时要保持逐样本透传，不能被衰减。
-    static constexpr float kInputTrim = 0.3548134f;   // −9 dB
+    static constexpr float kInputTrim = 0.1995262f;   // −14 dB（基准峰值 1.22 → 1.03，越界基本清零）
     if (channels[0] != nullptr && channels[1] != nullptr) {
       for (int i = 0; i < frames; ++i) {
         channels[0][i] *= kInputTrim;
