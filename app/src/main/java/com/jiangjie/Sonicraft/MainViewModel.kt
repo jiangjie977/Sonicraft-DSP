@@ -4346,19 +4346,11 @@ class MainViewModel @Inject constructor(
                             runCatching { engine.stop(StopReason.USER_REQUESTED) }
                             takeover.stopAndRollback()
                             delay(600)
-                            // E1（2026-11-05 实验）：**先静音、后建链**。
-                            // 现状是「建链(≈2s) → 轮询 → 等副本电平>0.01 → 才静音」，
-                            // 用户能听到 2.5~4s 双声。DP 是会话级效果（不像 appops 作用在
-                            // 流产生端），理论上先静音不会让副本失源；若成立双声窗口≈0.3s。
-                            // 建链失败时下方 takeover.stopAndRollback 会回滚静音。
-                            val preSids = activeMediaSids()
-                            if (preSids.isNotEmpty()) {
-                                // app 侧建效果（服务端建会 -3，见 preMuteLocal 注释）
-                                val n = takeover.preMuteLocal(preSids)
-                                writeDiag("预静音(建链前) sids=${preSids.joinToString(",")} 成功=$n")
-                            } else {
-                                writeDiag("预静音(建链前) 无活跃媒体会话，跳过")
-                            }
+                            // 撤销 E1（2026-11-16 全无声事故复盘）：
+                            // 「先静音、后建链」在重路由失败（rerouted=false）时，
+                            // 副本恒为 0 而原声已被压掉 —— 用户听到彻底无声；
+                            // 而下方安全网只在"有活跃音源"时才撤销静音，没音源就永久静音。
+                            // 恢复正确顺序：先建链 → 确认副本电平 → 再压原声。
                             // 16k 特权静音器（实验，默认关）：只有 allowPrivilegedPlaybackCapture
                             // 的 mix 才会把 BY_SYSTEM 流重路由进 submix，但框架限制该标志 ≤16kHz
                             // ——它只负责搬走原声、音质无关，48k 仍靠下面的 LOOP_BACK 复制。
@@ -4462,7 +4454,10 @@ class MainViewModel @Inject constructor(
                                         _loopbackUnsupported.value = null
                                     }
                                 }
-                                if (hasSource && lvlAfterStart < 0.01f && lastInputLevel() < 0.01f) {
+                                // 无条件兜底：只要副本没数据就撤销静音。
+                                // 原先要求"有活跃音源"才撤销，没音源时静音会永久挂着
+                                // —— 这是 2026-11-16 全无声事故的第二个成因。
+                                if (lvlAfterStart < 0.01f && lastInputLevel() < 0.01f) {
                                     // **先取快照**：下面的 releaseLoopbackMutesNow() 会把
                                     // loopbackRerouted 重置为 false（那是给"引擎停止"用的），
                                     // 若在那之后判断，就永远走不到"跳过重建"分支 ——
@@ -4483,7 +4478,9 @@ class MainViewModel @Inject constructor(
                                     // 电源键闪灰 —— 就是这里误判“无数据”触发的重建）。
                                     if (wasRerouted || takeover.loopbackRerouted) {
                                         writeDiag("跳过自动重建：重路由已成立（轮询会确认数据）")
-                                    } else if (nowMs - lastChainRetryAt > 60_000L) {
+                                    } else if (hasSource && nowMs - lastChainRetryAt > 60_000L) {
+                                        // 只有"有音源却拿不到数据"才值得重建；
+                                        // 没音源时重建没有意义，还会反复打断接管
                                         lastChainRetryAt = nowMs
                                         writeDiag("链路无数据（有音源）→ 自动重建一次（P0-3）")
                                         runCatching { loopbackProbe?.stop() }
@@ -4494,6 +4491,22 @@ class MainViewModel @Inject constructor(
                                     // **绝不能据此判定设备不支持** —— 电平为 0 可能只是没音源、
                                     // 或 REROUTE 还没生效。能力判定只看通路是否建成（见上方 ok）。
                                 } else {
+                                    // 副本已确认有数据 → 此时才压原声：
+                                    // 既不会"压了原声却没副本"（全无声），也不会双声。
+                                    runCatching {
+                                        val sids = activeMediaSids()
+                                        if (sids.isNotEmpty()) {
+                                            val n = takeover.preMuteLocal(sids)
+                                            writeDiag(
+                                                "建链后静音 sids=${sids.joinToString(",")} " +
+                                                    "成功=$n（副本电平=$lvlAfterStart）",
+                                            )
+                                        } else {
+                                            writeDiag("建链后无活跃媒体会话，暂不静音")
+                                        }
+                                    }.onFailure {
+                                        writeDiag("建链后静音异常: ${it.javaClass.simpleName}")
+                                    }
                                     writeDiag(
                                         "预静音保留：建链后副本电平=$lvlAfterStart（进入正常接管）",
                                     )
