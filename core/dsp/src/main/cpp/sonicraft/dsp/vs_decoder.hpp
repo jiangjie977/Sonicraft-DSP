@@ -168,6 +168,9 @@ class StereoSpatialDecoder {
   /** BS.775 等响：环绕矩阵系数在 0.7008（现基准）与 2.487（+11 dB）之间切换 */
   void SetBs775(bool on) { sur_matrix_ = on ? 2.487f : 0.7008f; }
 
+  /** 瞬态保护开关（默认开）：关闭后退回固定深度去相关，便于对比 */
+  void SetTransientProtect(bool on) { trans_protect_ = on; }
+
   void SetRearSpace(float amount) {
     rear_space_ = amount < 0.0f ? 0.0f : (amount > 1.0f ? 1.0f : amount);
   }
@@ -251,13 +254,36 @@ class StereoSpatialDecoder {
     const float lfe_r = lfe_r_.Process(in_r);
     const float lfe = (lfe_l + lfe_r) * kLfeScale * lfe_gain_;
 
+    // ---- 环绕瞬态检测（必须用**未平滑**的信号）----
+    // 倾斜滤波与全通链都会抹平瞬态前沿（听感是鼓点"软、糊"），
+    // 所以检测要放在两者之前，检测结果同时用于抑制倾斜与去相关。
+    // 用包络二阶差分近似上升沿：只有"变化在加速"才算瞬态（稳态/衰减段不计入）。
+    {
+      const float env = std::fabs(sl) + std::fabs(sr);
+      const float d1 = std::fabs(env - trans_prev_);
+      const float d2 = std::fabs(trans_prev_ - trans_prev2_);
+      trans_prev2_ = trans_prev_;
+      trans_prev_ = env;
+      const float onset = d1 > d2 ? (d1 - d2) : 0.0f;
+      const float target = Clamp(onset * kTransOnsetGain, 0.0f, 1.0f);
+      // 攻击快（约 2 个样本到 75%）、释放慢（约 60 ms），避免逐样本抖动
+      const float coef = target > trans_gain_ ? kTransAttack
+                                              : (1.0f / (kTransReleaseSec * sr_));
+      trans_gain_ += (target - trans_gain_) * coef;
+    }
+    // 瞬态抑制系数（0 = 稳态、1 = 强瞬态）
+    const float trans_on = trans_protect_ ? trans_gain_ : 0.0f;
+
     // ---- 中置/环绕微倾斜（一阶平滑，避免中置过于"贴脸"）----
     center_tilt_ = c * 0.3f + center_tilt_ * 0.7f;
     c = c + center_tilt_ * 0.2f;
     surr_tilt_l_ = sl * 0.25f + surr_tilt_l_ * 0.75f;
-    sl = sl * 0.8f + surr_tilt_l_ * 0.2f;
     surr_tilt_r_ = sr * 0.25f + surr_tilt_r_ * 0.75f;
-    sr = sr * 0.8f + surr_tilt_r_ * 0.2f;
+    // 倾斜量随瞬态降低（瞬态时直接输出原信号，保住攻击前沿）
+    const float tilt_l_amt = 0.2f * (1.0f - trans_on);
+    const float tilt_r_amt = 0.2f * (1.0f - trans_on);
+    sl = sl * (1.0f - tilt_l_amt) + surr_tilt_l_ * tilt_l_amt;
+    sr = sr * (1.0f - tilt_r_amt) + surr_tilt_r_ * tilt_r_amt;
 
     // ---- 环绕去相关：5 级一阶全通（左右系数反号）----
     static constexpr float kAp[5] = {-0.6f, 0.5f, -0.4f, 0.3f, -0.25f};
@@ -271,7 +297,9 @@ class StereoSpatialDecoder {
         wet_r = ap_r_[i].Process(wet_r);
       }
       // 注意：全通链即使 wet=0 也必须继续跑，否则切回时状态是旧的（会「啵」一声）
-      const float w = rear_space_;
+      // 瞬态段把去相关深度压到 30%（kTransDepth=0.7），保住攻击前沿；
+      // 稳态仍按 rear_space_ 全量去相关，包围感不受影响。
+      const float w = rear_space_ * (1.0f - kTransDepth * trans_on);
       sl = dry_l * (1.0f - w) + wet_l * w;
       sr = dry_r * (1.0f - w) + wet_r * w;
     }
@@ -407,6 +435,16 @@ class StereoSpatialDecoder {
 
   float center_tilt_ = 0.0f, surr_tilt_l_ = 0.0f, surr_tilt_r_ = 0.0f;
   AllPass1 ap_l_[5], ap_r_[5];
+
+  // 瞬态保护参数：上升沿归一化系数 / 攻击系数 / 释放时间 / 去相关压制深度
+  static constexpr float kTransOnsetGain = 9.0f;
+  static constexpr float kTransAttack = 0.75f;
+  static constexpr float kTransReleaseSec = 0.06f;
+  static constexpr float kTransDepth = 1.0f;   // 瞬态时完全关闭去相关
+  float trans_prev_ = 0.0f;
+  float trans_prev2_ = 0.0f;
+  float trans_gain_ = 0.0f;
+  bool trans_protect_ = true;
   int steer_tick_ = 0;
 };
 
