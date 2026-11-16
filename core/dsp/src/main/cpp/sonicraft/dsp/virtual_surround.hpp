@@ -147,7 +147,10 @@ class VirtualSurroundNode final : public DspNode {
   // 净增益 +12 dB（用户指定）：0.1995(入口−14dB) × 11.2(+21dB) × 1.7777 = 3.981 (+12dB)。
   // 注意：输出峰值会到约 4×满刻度，全部由软限幅（拐点 0.94）压回 1.0，
   // 介入率预计 35~45% —— 听感是"很响但被压紧、动态变小"。
-  static constexpr float kOutputMakeup = 1.7777f;  // +12 dB 补回（净 −2 dB，配合输出增益即可复原）
+  // 净增益 +18 dB（用户指定）：0.1995(入口−14dB) × 11.2(+21dB) × 3.549 = 7.94 (+18dB)。
+  // 警告：输出峰值会到 8× 满刻度，全靠软限幅（拐点 0.94）压回 1.0，
+  // 相当于一个固定 18 dB 的压限器 —— 安静段爆响、爆满段被压成近似方波（失真）。
+  static constexpr float kOutputMakeup = 3.549f;  // +12 dB 补回（净 −2 dB，配合输出增益即可复原）
   static constexpr float kSoftenPoint = 0.94f;   // 仅在峰值轻收（0.85 会压掉 30%+ 样本）        // 软限幅拐点
   static constexpr float kSoftenK = 6.0f;             // 软限幅陡度   // −14 dB（基准峰值 1.22 → 1.03，越界基本清零）
     if (channels[0] != nullptr && channels[1] != nullptr) {
