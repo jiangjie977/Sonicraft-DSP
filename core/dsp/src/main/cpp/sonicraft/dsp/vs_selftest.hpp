@@ -47,7 +47,15 @@ class LocalizationSelfTest {
   static constexpr int kAngleCount = 7;
   /** 校正迭代轮数：一轮修一次，两轮足够收敛（实测残差 < 0.3 dB） */
   static constexpr int kCalibrationPasses = 2;
-  static constexpr float kAngles[kAngleCount] = {-90.0f, -60.0f, -30.0f, 0.0f, 30.0f, 60.0f, 90.0f};
+  /**
+   * 测量方位：与渲染用的声道方位一一对应，覆盖真实 5.1 布局而不是前半圆。
+   *
+   * 排列必须**首尾镜像**（CheckSymmetry 按 k 与 kAngleCount-1-k 配对）：
+   *   (-110,110) / (-30,30) / (0,0) 成对，180 放正中（自对称、不参与配对）。
+   * 旧表是 ±90 步进 30°，只能覆盖前半圆，测不到侧后方与正后方 —— 自检通过
+   * 也不代表 ±110/180 的渲染正确。
+   */
+  static constexpr float kAngles[kAngleCount] = {-110.0f, -30.0f, 0.0f, 180.0f, 0.0f, 30.0f, 110.0f};
 
   struct Report {
     AzimuthResult angles[kAngleCount];
@@ -234,8 +242,15 @@ class LocalizationSelfTest {
   static bool CheckHandedness(const Report& rep) {
     for (int k = 0; k < kAngleCount; ++k) {
       const AzimuthResult& a = rep.angles[k];
-      if (a.azimuth > 5.0f && !(a.ild_measured_db < 0.0f && a.itd_measured > 0.0f)) return false;
-      if (a.azimuth < -5.0f && !(a.ild_measured_db > 0.0f && a.itd_measured < 0.0f)) return false;
+      // 正后方（±180 附近）左右对称：ITD 理论为 0、ILD 也为 0，不适用"右响右耳早"判据
+      if (a.azimuth > 5.0f && a.azimuth < 175.0f &&
+          !(a.ild_measured_db < 0.0f && a.itd_measured > 0.0f)) {
+        return false;
+      }
+      if (a.azimuth < -5.0f && a.azimuth > -175.0f &&
+          !(a.ild_measured_db > 0.0f && a.itd_measured < 0.0f)) {
+        return false;
+      }
     }
     return true;
   }
