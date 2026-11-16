@@ -147,6 +147,26 @@ class MainViewModel @Inject constructor(
         // 就是全静音（2026-11-05 事故同族）。
         viewModelScope.launch {
             engine.state.collect { st ->
+                // 引擎（重新）就绪后，节点内参数已回到默认值 → 开关类参数会"显示开启却无效"，
+                // 必须把开关切一次才生效（BS.775 / 矩阵环绕都踩过）。这里在 Running 时直接补发。
+                if (st is com.jiangjie.Sonicraft.core.engine.EngineState.Running) {
+                    runCatching {
+                        engine.setBypass(
+                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                            !_vsEnabled.value,
+                        )
+                        engine.setParam(
+                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                            AudioEngine.VS_PARAM_ENABLED,
+                            if (_vsEnabled.value) 1f else 0f,
+                        )
+                        engine.setParam(
+                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                            AudioEngine.VS_PARAM_BS775,
+                            if (_vsBs775.value) 1f else 0f,
+                        )
+                    }
+                }
                 // 只在「明确停止/失败」时释放。**不能用「非 Running 就释放」**：
                 // start 过程会经过 Ready/Preparing，那样会把建链前的预静音当场撤销
                 // （2026-11-05 实测：预静音成功=1，但随即 DP=0、副本也没了）。
