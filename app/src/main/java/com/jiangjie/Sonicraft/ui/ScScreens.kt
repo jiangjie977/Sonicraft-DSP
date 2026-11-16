@@ -4124,11 +4124,24 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                             onDismissRequest = { vsReport = null },
                             title = { Text("声像定位自检", fontSize = 14.sp) },
                             text = {
-                                Text(
-                                    text = report,
-                                    fontSize = 11.sp,
-                                    color = ScColors.TextSub,
-                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        text = report,
+                                        fontSize = 9.sp,
+                                        lineHeight = 13.sp,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                        softWrap = false,
+                                        color = ScColors.TextMain,
+                                    )
+                                    Text(
+                                        text = "声道：SL/SR 侧后 ±110°　FL/FR 前置 ±30°　C 中置 0°　CS 正后 180°\n" +
+                                            "ITD_me/th = 实测/期望耳间时延（样本）\n" +
+                                            "ILD_me/tg = 实测/目标耳间电平差（dB）\n" +
+                                            "LFE 不参与 HRTF，与 C 同为 0°，仅作参考",
+                                        fontSize = 10.sp,
+                                        color = ScColors.TextSub,
+                                    )
+                                }
                             },
                             confirmButton = {
                                 TextButton(onClick = { vsReport = null }) { Text("好") }

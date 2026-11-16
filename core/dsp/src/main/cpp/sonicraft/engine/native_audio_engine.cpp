@@ -580,11 +580,20 @@ std::string NativeAudioEngine::RunVirtualSurroundSelfTest() {
                 rep.symmetric_ok ? "OK" : "FAIL",
                 rep.itd_scale, rep.ild_trim);
   out += line;
-  out += "azimuth   ITD_th  ITD_me  ILD_tg  ILD_me\n";
+  // 声道标注：顺序与 LocalizationSelfTest::kAngles 一一对应
+  //   kAngles = {-110, -30, 0, 180, 0, 30, 110}
+  static const char* kChan[dsp::vs::LocalizationSelfTest::kAngleCount] = {
+      "SL", "FL", "C", "CS", "LFE", "FR", "SR"};
+  out += "chan  azim   ITD_me  ITD_th  ILD_me  ILD_tg  dev\n";
+  out += "----- ------ -------- -------- ------- ------- -----\n";
   for (int i = 0; i < dsp::vs::LocalizationSelfTest::kAngleCount; ++i) {
     const auto& a = rep.angles[i];
-    std::snprintf(line, sizeof(line), "%+5.0f %8.2f %8.2f %8.2f %8.2f\n",
-                  a.azimuth, a.itd_expected, a.itd_measured, a.ild_target_db, a.ild_measured_db);
+    const float ditd = a.itd_measured - a.itd_expected;
+    const float dild = a.ild_measured_db - a.ild_target_db;
+    const bool ok = std::fabs(ditd) <= 1.5f && std::fabs(dild) <= 1.5f;
+    std::snprintf(line, sizeof(line), "%-5s %6.0f %8.2f %8.2f %7.2f %7.2f  %s\n",
+                  kChan[i], a.azimuth, a.itd_measured, a.itd_expected,
+                  a.ild_measured_db, a.ild_target_db, ok ? "OK" : "CHECK");
     out += line;
   }
   return out;
