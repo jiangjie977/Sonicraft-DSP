@@ -82,8 +82,9 @@ enum Param : int {
 
   /** BS.775 等响：把环绕声道矩阵系数补到与前置同响（补偿约 +11 dB） */
   kParamBs775 = 40,
+  kParamTransientProtect = 41,   // 0/1 环绕瞬态保护（瞬态段抑制倾斜与去相关）
 
-  kParamCount = 41,
+  kParamCount = 42,
 };
 
 /** 7 声道内部顺序：FL / FR / C / SL / SR / CS / LFE */
@@ -134,6 +135,7 @@ constexpr float kDefault[kParamCount] = {
     /* mute_cs            */ 0.0f,
     /* mute_lfe           */ 0.0f,
     /* debug_raw          */ 0.0f,
+    /* transient_protect  */ 1.0f,   // 默认开启
     /* bs775              */ 0.0f,
 };
 

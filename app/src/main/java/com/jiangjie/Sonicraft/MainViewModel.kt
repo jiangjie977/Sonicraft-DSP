@@ -1732,6 +1732,18 @@ class MainViewModel @Inject constructor(
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_DISTANCE, v)
     }
 
+    private val _vsTransProtect = MutableStateFlow(true)
+    val vsTransProtect: StateFlow<Boolean> = _vsTransProtect.asStateFlow()
+
+    fun setVsTransProtect(on: Boolean) {
+        _vsTransProtect.value = on
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_TRANSIENT_PROTECT,
+            if (on) 1f else 0f,
+        )
+    }
+
     private val _vsHeight = MutableStateFlow(saneFloat(KEY_VS_HEIGHT, 0.5f, 0f, 1f))
     val vsHeight: StateFlow<Float> = _vsHeight.asStateFlow()
 

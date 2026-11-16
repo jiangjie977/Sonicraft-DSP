@@ -271,6 +271,7 @@ interface AudioEngine {
 
         /** BS.775 等响：环绕补偿到与前置同响 */
         const val VS_PARAM_BS775 = 40
+    const val VS_PARAM_TRANSIENT_PROTECT = 41
 
         /**
          * 低音增强参数 id（与 native `BassEnhanceNode` 常量对齐）。

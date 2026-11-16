@@ -3799,6 +3799,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
 
     val vsRearSpace by viewModel.vsRearSpace.collectAsStateWithLifecycle()
     val vsHeight by viewModel.vsHeight.collectAsStateWithLifecycle()
+    val vsTransProtect by viewModel.vsTransProtect.collectAsStateWithLifecycle()
     val vsDistance by viewModel.vsDistance.collectAsStateWithLifecycle()
     val vsBs775 by viewModel.vsBs775.collectAsStateWithLifecycle()
     val vsDebugRaw by viewModel.vsDebugRaw.collectAsStateWithLifecycle()
@@ -3868,6 +3869,19 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         enabled = vsEnabled,
                         onChange = viewModel::setVsDistance,
                     )
+
+                    // ---- 瞬态保护（瞬态段抑制倾斜与去相关，保住鼓点前沿）----
+                    TextButton(
+                        onClick = { viewModel.setVsTransProtect(!vsTransProtect) },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                    ) {
+                        Text(
+                            text = "瞬态保护：" +
+                                if (vsTransProtect) "开（鼓点保真）" else "关（全量去相关）",
+                            fontSize = 12.sp,
+                            color = if (vsTransProtect) ScColors.Primary else ScColors.TextSub,
+                        )
+                    }
 
                     // ---- 高度感（>3 kHz 重定向到上方 4 路，0~1）----
                     VsGainRow(
