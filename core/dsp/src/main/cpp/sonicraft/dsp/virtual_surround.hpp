@@ -138,7 +138,10 @@ class VirtualSurroundNode final : public DspNode {
     // 峰值冲到 +8~9 dBFS（实测 2.79），相邻样本跳变 0.76 → 明显过曝与毛刺。
     // 实测衰减扫描：−9 dB 后峰值 1.46、跳变 0.28、越界样本 3770→999（余量交给链末限幅器）。
     // 必须放在旁路判断之后：完全旁路时要保持逐样本透传，不能被衰减。
-    static constexpr float kInputTrim = 0.1995262f;   // −14 dB（基准峰值 1.22 → 1.03，越界基本清零）
+    static constexpr float kInputTrim = 0.1995262f;
+  static constexpr float kOutputMakeup = 3.9810717f;  // +12 dB 补回（净 −2 dB，配合输出增益即可复原）
+  static constexpr float kSoftenPoint = 0.85f;        // 软限幅拐点
+  static constexpr float kSoftenK = 6.0f;             // 软限幅陡度   // −14 dB（基准峰值 1.22 → 1.03，越界基本清零）
     if (channels[0] != nullptr && channels[1] != nullptr) {
       for (int i = 0; i < frames; ++i) {
         channels[0][i] *= kInputTrim;
@@ -241,6 +244,27 @@ class VirtualSurroundNode final : public DspNode {
         cr[i] = cr[i] * direct_gain + er_lp_r_ * er_amt * 1.1f;
       }
     }
+    // ---- 输出级：补回入口衰减的响度 + 软限幅收峰 ----
+    // 入口 −14 dB 是为了让解码矩阵/LFE/编码曲线/7 路 HRTF 叠加有足够余量，
+    // 但会让整体小 14 dB。这里在 HRTF（含房间/反射）之后统一补回，并用软限幅
+    // 把峰值压在 1.0 以内：稳态信号完全线性放大，只有峰被平滑压住（不产生硬削波谐波）。
+    if (channels[0] != nullptr && channels[1] != nullptr) {
+      for (int c = 0; c < 2; ++c) {
+        float* p = channels[c];
+        for (int i = 0; i < frames; ++i) {
+          const float x = p[i] * kOutputMakeup;
+          const float a = std::fabs(x);
+          if (a > kSoftenPoint) {
+            const float y = kSoftenPoint + (1.0f - kSoftenPoint) *
+                                              std::tanh((a - kSoftenPoint) * kSoftenK);
+            p[i] = (x < 0.0f) ? -y : y;
+          } else {
+            p[i] = x;
+          }
+        }
+      }
+    }
+
   }
 
  private:
