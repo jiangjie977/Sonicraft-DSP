@@ -5,6 +5,7 @@
 #pragma once
 
 #include "sonicraft/dsp/dsp_node.hpp"
+#include "sonicraft/dsp/loudness_meter.hpp"
 
 #include <cmath>
 #include <vector>
@@ -56,7 +57,15 @@ class LimiterNode : public DspNode {
 
   std::string_view id() const override { return "limiter"; }
 
+  /** 积分响度（LUFS，ITU-R BS.1770-4）；未攒满 400 ms 块时返回 NaN */
+  float Lufs() const { return meter_.IntegratedLufs(); }
+  /** 短时响度（3 s 窗） */
+  float ShortTermLufs() const { return meter_.ShortTermLufs(); }
+  /** 采样峰值（dBFS） */
+  float PeakDb() const { return meter_.PeakDb(); }
+
   void Prepare(int sample_rate, int /*max_frames*/) override {
+    meter_.Prepare(sample_rate);
     sample_rate_ = sample_rate;
     look_ahead_ = static_cast<int>(kLookAheadMs * 0.001f * static_cast<float>(sample_rate));
     if (look_ahead_ < 1) look_ahead_ = 1;
@@ -80,6 +89,9 @@ class LimiterNode : public DspNode {
   }
 
   void Process(float* const* channels, int frames) override {
+    // 响度计量放在最前面：**旁路时也照常统计**，否则关掉限幅器就看不到响度了。
+    // 只读不改，不影响信号路径。
+    meter_.Process(channels, frames);
     const std::size_t cap = static_cast<std::size_t>(ring_capacity_);
     const std::size_t look = static_cast<std::size_t>(look_ahead_);
     for (int c = 0; c < channels_; ++c) {
@@ -189,6 +201,7 @@ class LimiterNode : public DspNode {
 
   int sample_rate_ = 48000;
   int channels_ = 2;
+  LoudnessMeter meter_;
   bool bypass_ = true;  // 默认透传；UI 持久化状态由引擎 Running 后补发
   int look_ahead_ = 120;
   int ring_capacity_ = 248;
