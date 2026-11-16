@@ -122,6 +122,18 @@ class VirtualSurroundNode final : public DspNode {
 
     const bool want = param_[vs::kParamEnabled] > 0.5f && !bypass_;
     if (!want && render_gain_ <= 0.0f) return;  // 完全旁路：逐样本透传，零开销
+    // 入口 −9 dB：解码矩阵、LFE +10 dB、编码电平曲线、7 路 HRTF 叠加会让节点输出
+    // 峰值冲到 +8~9 dBFS（实测 2.79），相邻样本跳变 0.76 → 明显过曝与毛刺。
+    // 实测衰减扫描：−9 dB 后峰值 1.46、跳变 0.28、越界样本 3770→999（余量交给链末限幅器）。
+    // 必须放在旁路判断之后：完全旁路时要保持逐样本透传，不能被衰减。
+    static constexpr float kInputTrim = 0.3548134f;   // −9 dB
+    if (channels[0] != nullptr && channels[1] != nullptr) {
+      for (int i = 0; i < frames; ++i) {
+        channels[0][i] *= kInputTrim;
+        channels[1][i] *= kInputTrim;
+      }
+    }
+
 
     const float step = 1.0f / std::max(1.0f, static_cast<float>(sample_rate_) * 0.02f);
     const float goal = want ? 1.0f : 0.0f;

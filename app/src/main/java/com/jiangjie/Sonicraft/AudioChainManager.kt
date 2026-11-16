@@ -219,6 +219,13 @@ class AudioChainManager @Inject constructor(
                 f("stereo_width", 1f),
             )
             engine.setBypass(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, !b("vs_enabled", false))
+            // 必须同时下发 enabled：节点内该参数默认 0，仅解除 bypass 仍会直通，
+            // 表现为"开关显示开启却没有效果、手动切一次才生效"（开机初始化缺陷）。
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_ENABLED,
+                if (b("vs_enabled", false)) 1f else 0f,
+            )
             engine.setParam(
                 AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
                 AudioEngine.VS_PARAM_MODE,
