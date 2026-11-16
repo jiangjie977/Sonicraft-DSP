@@ -328,6 +328,18 @@ class StereoSpatialDecoder {
       cs = 0.0f;
     }
 
+    // ---- 环绕延迟（Dolby 惯例 10~20 ms）----
+    // 侧后方与前置完全同相时会"贴在一起"，缺乏距离感。给 SL/SR 加约 12 ms 延迟，
+    // 让后方听起来来自更远处；CS 保持自身的 10 ms 延迟，不叠加（避免后中置过晚）。
+    {
+      sur_dly_l_[sur_dly_pos_] = sl;
+      sur_dly_r_[sur_dly_pos_] = sr;
+      const int read = (sur_dly_pos_ - kSurDelay + kSurDelaySize) & (kSurDelaySize - 1);
+      sl = sur_dly_l_[read];
+      sr = sur_dly_r_[read];
+      sur_dly_pos_ = (sur_dly_pos_ + 1) & (kSurDelaySize - 1);
+    }
+
     // 低频管理（解码端）：6 条主声道 80 Hz 高通，与 LFE 低通互补
     fl = hp_main_[0].Process(fl);
     fr = hp_main_[1].Process(fr);
@@ -417,6 +429,13 @@ class StereoSpatialDecoder {
   float rear_gain_ = 1.0f;
   float rear_space_ = 0.5f;
   float sur_matrix_target_ = 0.7008f;   // 目标值（由 BS.775 开关设定）
+  // 环绕延迟：12 ms @48k = 576 样本；缓冲取 2 的幂便于位与取模
+  static constexpr int kSurDelay = 576;
+  static constexpr int kSurDelaySize = 2048;
+  float sur_dly_l_[kSurDelaySize]{};
+  float sur_dly_r_[kSurDelaySize]{};
+  int sur_dly_pos_ = 0;
+
   static constexpr float kSurroundSideMix = 0.25f;   // 同侧主声道混入比例（0~0.5）
   static constexpr float kSurMatrixSmooth = 0.004f;   // ≈5 ms 时间常数 @48k
   float sur_matrix_ = 0.7008f;
