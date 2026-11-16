@@ -233,6 +233,12 @@ class StereoSpatialDecoder {
     sl *= surround_damp;
     sr *= surround_damp;
 
+    // 混入**同侧**主声道：纯差分环绕（SL=L−R、SR=R−L）左右两侧承载的是同一个信号，
+    // 双耳渲染后听起来"后方就一团、贴在中间"（单声道感）。各自混入本侧内容后，
+    // 左后方才带左声道信息、右后方带右声道信息，后方才有左右分布。
+    sl += in_l * kSurroundSideMix;
+    sr += in_r * kSurroundSideMix;
+
     // ---- 前置：扣掉已进中置的部分（避免重复计入）----
     float cs = 0.0f;
     // 前置把中置频段**整量**扣掉：单听 FL/FR 时中间应出现明显空洞，
@@ -411,6 +417,7 @@ class StereoSpatialDecoder {
   float rear_gain_ = 1.0f;
   float rear_space_ = 0.5f;
   float sur_matrix_target_ = 0.7008f;   // 目标值（由 BS.775 开关设定）
+  static constexpr float kSurroundSideMix = 0.25f;   // 同侧主声道混入比例（0~0.5）
   static constexpr float kSurMatrixSmooth = 0.004f;   // ≈5 ms 时间常数 @48k
   float sur_matrix_ = 0.7008f;
 
