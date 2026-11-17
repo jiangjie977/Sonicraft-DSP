@@ -4084,7 +4084,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         )
                     }
                     ScKnob(
-                        label = "对话",
+                        label = "对话清晰度",
                         value = vsDialog,
                         min = -6f,
                         max = 6f,
