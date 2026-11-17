@@ -159,10 +159,31 @@ class ParametricHrtf {
     const float itd = (kHeadRadius / kSpeedOfSound) * (front_az + std::sin(front_az));
     const float itd_samples = itd * sr_;
     itd_l_ = (az > 0.001f && !at_pole) ? itd_samples : 0.0f;
+    // 正后方：左右完全对称，ILD 必须为 0（否则会与 itd=0 矛盾，产生"偏侧"错觉）
     itd_r_ = (az < -0.001f && !at_pole) ? itd_samples : 0.0f;
 
     // ---- ILD ----
-    const float x_az = front_az / (Biquad::kPi * 0.5f);
+    // 前方（0~90°）用 abs_az 正常加深阴影；
+    // 后方（90~180°）**不能套用"前方镜像"**（那会让 110° 的 ILD 掉到 5 dB，
+    // 而实测头模在 110° 仍有 8~15 dB）。真实原因是耳廓朝前，后方对侧耳遮挡更强。
+    // 这里改用「90° 处峰值 → 180° 归零」的形状（cos 收口）：
+    //   90°  → 1.00（ILD ≈ 10.8 dB）
+    //   110° → 0.94（ILD ≈ 9~10 dB）
+    //   180° → 0.00（正后方左右对称，ILD 必须为 0）
+    float x_az;
+    if (rear) {
+      // 90~130°：维持峰值阴影（真实头模 110° 仍有 8~15 dB，只有 90° 附近才是峰值）
+      // 130~180°：cos 收口到 0（正后方左右对称，ILD 必须归零）
+      const float deg = abs_az * 180.0f / Biquad::kPi;
+      if (deg <= 130.0f) {
+        x_az = 1.0f;
+      } else {
+        const float t = (deg - 130.0f) / 50.0f;
+        x_az = std::cos(t * Biquad::kPi * 0.5f);
+      }
+    } else {
+      x_az = front_az / (Biquad::kPi * 0.5f);
+    }
     float fc_ild = 20000.0f - 8000.0f * x_az;
     if (fc_ild < 5000.0f) fc_ild = 5000.0f;
     const float coeff = std::exp(-2.0f * Biquad::kPi * fc_ild / sr_);
