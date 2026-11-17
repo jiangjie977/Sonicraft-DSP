@@ -3977,16 +3977,6 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         enabled = vsEnabled,
                         onSelect = viewModel::setVsRoomSize,
                     )
-                    if (vsRoomSize > 0) {
-                        VsGainRow(
-                            label = "混响量",
-                            value = vsRoomWet,
-                            range = 0f..1f,
-                            suffix = "",
-                            enabled = vsEnabled,
-                            onChange = viewModel::setVsRoomWet,
-                        )
-                    }
 
                     // ---- 中置模式（关 / 直通 / 混入前置）----
                     Text(
@@ -3995,53 +3985,67 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         color = ScColors.TextMain,
                         modifier = Modifier.padding(top = 4.dp),
                     )
-                    VsChoiceRow(
-                        options = listOf("关闭", "直通", "混入前置"),
-                        selected = vsCenterMode,
-                        enabled = vsEnabled,
-                        onSelect = viewModel::setVsCenterMode,
-                    )
-
-                    VsGainRow(
-                        label = "对话清晰度",
-                        value = vsDialog,
-                        range = -6f..6f,
-                        enabled = vsEnabled,
-                        onChange = viewModel::setVsDialog,
-                    )
-
-                    // ---- 低音增强（对数域谐波）----
-                    VsGainRow(
-                        label = "低音增强",
-                        value = vsBassEnh,
-                        range = 0f..1f,
-                        suffix = "",
-                        enabled = vsEnabled,
-                        onChange = viewModel::setVsBassEnh,
-                    )
-                    VsChoiceRow(
-                        options = listOf("取自 LFE", "取自前置"),
-                        selected = vsBassEnhMode,
-                        enabled = vsEnabled,
-                        onSelect = viewModel::setVsBassEnhMode,
-                    )
-
-                    // ---- 后中置 ----
+                    // 中置模式三选项 + 后中置开关，同一行四个按钮
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(
-                            text = "后中置（延迟 + 全通）",
-                            fontSize = 12.sp,
-                            color = ScColors.TextMain,
-                            modifier = Modifier.weight(1f),
-                        )
-                        ScTinySwitch(
+                        listOf("关闭", "直通", "混入前置").forEachIndexed { index, text ->
+                            val active = index == vsCenterMode
+                            val shape = RoundedCornerShape(10.dp)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(shape)
+                                    .background(
+                                        when {
+                                            !vsEnabled -> Color(0xFFF2F4F7)
+                                            active -> ScColors.Primary
+                                            else -> Color(0xFFF6F9FC)
+                                        },
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = when {
+                                            !vsEnabled -> Color(0xFFE6EBF1)
+                                            active -> ScColors.Primary
+                                            else -> Color(0xFFD9E1EA)
+                                        },
+                                        shape = shape,
+                                    )
+                                    .then(
+                                        if (vsEnabled) {
+                                            Modifier.scNoRippleClick { viewModel.setVsCenterMode(index) }
+                                        } else {
+                                            Modifier
+                                        },
+                                    )
+                                    .padding(vertical = 10.dp, horizontal = 2.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = text,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                                    color = when {
+                                        !vsEnabled -> ScColors.TextSub.copy(alpha = 0.5f)
+                                        active -> Color.White
+                                        else -> ScColors.TextSub
+                                    },
+                                )
+                            }
+                        }
+                        VsButtonToggle(
+                            label = "后中置",
                             checked = vsRearCenter,
+                            enabled = vsEnabled,
+                            modifier = Modifier.weight(1f),
                             onCheckedChange = { viewModel.setVsRearCenter(it) },
                         )
                     }
+
+                    // ---- 低音增强（对数域谐波）：滑条改为最下方旋钮 ----
                     if (vsRearCenter) {
                         VsGainRow(
                             label = "后中置延迟",
@@ -4052,6 +4056,61 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                             onChange = viewModel::setVsRearDelay,
                         )
                     }
+
+                    VsChoiceRow(
+                        options = listOf("取自 LFE", "取自前置"),
+                        selected = vsBassEnhMode,
+                        enabled = vsEnabled,
+                        onSelect = viewModel::setVsBassEnhMode,
+                    )
+
+
+                // 三个连续量用旋钮（与矩阵环绕卡同一套 ScKnob 样式）
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    // 房间为「关」时混响量不生效，旋钮置灰避免误导
+                    val roomWetEnabled = vsEnabled && vsRoomSize > 0
+                    Box(modifier = Modifier.alpha(if (roomWetEnabled) 1f else 0.45f)) {
+                        ScKnob(
+                            label = "混响量",
+                            value = vsRoomWet,
+                            min = 0f,
+                            max = 1f,
+                            sizeDp = 94,
+                            textScale = 0.60f,
+                            format = { "%.2f".format(it) },
+                            resetValue = 0.3f,
+                            onValueChange = viewModel::setVsRoomWet,
+                        )
+                    }
+                    ScKnob(
+                        label = "对话",
+                        value = vsDialog,
+                        min = -6f,
+                        max = 6f,
+                        sizeDp = 94,
+                        textScale = 0.60f,
+                        bipolar = true,
+                        format = { "%+.1f dB".format(it) },
+                        resetValue = 0f,
+                        onValueChange = viewModel::setVsDialog,
+                    )
+                    ScKnob(
+                        label = "低音增强",
+                        value = vsBassEnh,
+                        min = 0f,
+                        max = 1f,
+                        sizeDp = 94,
+                        textScale = 0.60f,
+                        format = { "%.2f".format(it) },
+                        resetValue = 0f,
+                        onValueChange = viewModel::setVsBassEnh,
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
             }
