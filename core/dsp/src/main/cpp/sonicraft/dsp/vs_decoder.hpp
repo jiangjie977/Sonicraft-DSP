@@ -83,6 +83,9 @@ class StereoSpatialDecoder {
     lfe_r_.Set(kLfeHz, sr_);
     env_alpha_ = 1.0f - std::exp(-2.0f * Biquad::kPi * 50.0f / sr_);
     for (int i = 0; i < 6; ++i) hp_main_[i].SetHighPass(80.0f, sr_);
+  corr_alpha_ = 1.0f - std::exp(-1.0f / (0.05f * sr_));   // 50 ms 时间常数
+  e_sum_ = e_diff_ = 0.0f;
+  corr_ = 1.0f;
     // 中置带通（人声带，Q≈1）
     center_bp_.b0 = 0.03830530494451523f;
     center_bp_.b1 = 0.07661060988903046f;
@@ -220,6 +223,19 @@ class StereoSpatialDecoder {
     // 环绕：差分先缩到半幅，再各自过带通 —— 频段外的东西不会串到侧后，左右分离更干净
     // 不再先缩半：差分本身已比单声道低，再乘 0.5 会让环绕掉 6 dB（实测偏低 15.6 dB）
     const float diff = in_l - in_r;
+
+    // 相关性估计：用于「侧向混入」的自适应加权（居中不混、宽声场才混）
+    {
+      const float e_s = sum * sum;
+      const float e_d = diff * diff;
+      e_sum_ += corr_alpha_ * (e_s - e_sum_);
+      e_diff_ += corr_alpha_ * (e_d - e_diff_);
+      if (e_sum_ > 1e-9f) {
+        const float kk = e_diff_ / e_sum_;
+        const float rho = Clamp((4.0f - kk) / (4.0f + kk), -1.0f, 1.0f);
+        corr_ += corr_alpha_ * (rho - corr_);
+      }
+    }
     // 宽频差分：高通 → 低通，再按 0.6094 与滤波损耗补偿
     // 环绕矩阵系数平滑推进：开关切换时不能阶跃（原实现 0.7008 <-> 2.487 直接赋值，
     // 相差 11 dB，切换瞬间就是"咔"一声爆音，并把环绕推到过载产生毛刺）。
@@ -236,8 +252,16 @@ class StereoSpatialDecoder {
     // 混入**同侧**主声道：纯差分环绕（SL=L−R、SR=R−L）左右两侧承载的是同一个信号，
     // 双耳渲染后听起来"后方就一团、贴在中间"（单声道感）。各自混入本侧内容后，
     // 左后方才带左声道信息、右后方带右声道信息，后方才有左右分布。
-    sl += in_l * kSurroundSideMix;
-    sr += in_r * kSurroundSideMix;
+    // 侧向混入：**按相关性加权**。原实现固定 0.25，导致居中人声也被混进环绕
+    // （实测人声 SL/SR 仅 −0.4 dB，几乎全额泄漏）。改为 (1−ρ)/2：
+    //   ρ=+1 居中 → 0（不混，人声不糊到后方）
+    //   ρ=0  不相关 → 0.5（半量，保留宽声场的后方立体感）
+    //   ρ=−1 反相 → 1.0（全量）
+    {
+      const float side_mix = kSurroundSideMix * (1.0f - corr_) * 0.5f;
+      sl += in_l * side_mix;
+      sr += in_r * side_mix;
+    }
 
     // ---- 前置：扣掉已进中置的部分（避免重复计入）----
     float cs = 0.0f;
@@ -436,7 +460,13 @@ class StereoSpatialDecoder {
   float sur_dly_r_[kSurDelaySize]{};
   int sur_dly_pos_ = 0;
 
-  static constexpr float kSurroundSideMix = 0.25f;   // 同侧主声道混入比例（0~0.5）
+  static constexpr float kSurroundSideMix = 0.25f;   // 同侧主声道混入上限（0~0.5）
+  // 相关性估计（50 ms）：k = E[diff²]/E[sum²] → ρ = (4−k)/(4+k)
+  // 居中 k=0 → ρ=1；不相关 k=4 → ρ=0；反相 k→∞ → ρ=−1
+  float e_sum_ = 0.0f;
+  float e_diff_ = 0.0f;
+  float corr_ = 1.0f;    // 初值取 1（按居中处理）：首帧不混入，避免开头泄漏人声
+  float corr_alpha_ = 0.000417f;
   static constexpr float kSurMatrixSmooth = 0.004f;   // ≈5 ms 时间常数 @48k
   float sur_matrix_ = 0.7008f;
 
