@@ -3928,14 +3928,6 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         )
                     }
 
-                    Text(
-                        text = "立体声先解码成 7 声道虚拟布局（前左/前右/中置/侧左/侧右/后中/低频），" +
-                            "再逐声道过双耳模型渲染到耳机。环绕增益决定后方包裹感，中置增益决定人声贴脸程度，" +
-                            "前场补偿用于空间化后前端变薄的场合。",
-                        fontSize = 11.sp,
-                        color = ScColors.TextSub,
-                    )
-
 
                 }
             }
