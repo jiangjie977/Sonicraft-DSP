@@ -3946,22 +3946,26 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
 
     // 空间环绕 · 公共接口：以下参数对**所有**环绕模式生效（房间 / 中置 / 对话 /
     // 低音 / 后中置），新增环绕模式时直接复用，不必重复实现。
+    val publicExpanded = rememberExpandedFollowing(false, "vs_public_card")
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-            Text(
-                text = "公共接口",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = ScColors.TextMain,
-                modifier = Modifier.padding(top = 18.dp, bottom = 4.dp),
+            ScSlotHeader(
+                title = "公共接口",
+                checked = false,
+                onCheckedChange = {},
+                switchEnabled = false,
+                expanded = publicExpanded.value,
+                onToggleExpand = { publicExpanded.value = !publicExpanded.value },
+                showSwitch = false,
             )
-            Text(
-                text = "以下参数对「所有」环绕模式生效，新增模式无需重复实现。" +
-                    "声道 Trim 与声像定位自检同属公共能力（见下方两卡）。",
-                fontSize = 11.sp,
-                color = ScColors.TextSub,
-                modifier = Modifier.padding(bottom = 12.dp),
-            )
+            if (publicExpanded.value) {
+                Text(
+                    text = "以下参数对「所有」环绕模式生效，新增模式无需重复实现。" +
+                        "声道 Trim 与声像定位自检同属公共能力（见下方两卡）。",
+                    fontSize = 11.sp,
+                    color = ScColors.TextSub,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
                     // ---- 房间（RIR 卷积，预设名与卷积器一致：小房间/客厅/音乐厅/大教堂）----
                     Text(text = "房间", fontSize = 12.sp, color = ScColors.TextMain)
                     VsChoiceRow(
@@ -4041,7 +4045,8 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         )
                     }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
     }
 
