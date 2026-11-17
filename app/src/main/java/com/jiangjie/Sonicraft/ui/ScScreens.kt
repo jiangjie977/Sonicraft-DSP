@@ -168,6 +168,9 @@ import com.jiangjie.Sonicraft.ui.theme.ScElevation
 import com.jiangjie.Sonicraft.ui.theme.ScPrimaryBrush
 import com.jiangjie.Sonicraft.ui.theme.ScRadius
 import com.jiangjie.Sonicraft.ui.theme.ScStarBrush
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 
 // ---------------------------------------------------------------- P4 收藏屏
 
@@ -3834,25 +3837,37 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     modifier = Modifier.padding(bottom = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    // 三个开关并排（按下=启用，弹起=禁用）
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(
-                            text = "BS.775 等响（环绕补偿 +11 dB）",
-                            fontSize = 12.sp,
-                            color = ScColors.TextMain,
-                            modifier = Modifier.weight(1f),
-                        )
-                        ScTinySwitch(
+                        VsButtonToggle(
+                            label = "BS.775 等响",
                             checked = vsBs775,
+                            enabled = vsEnabled,
+                            modifier = Modifier.weight(1f),
                             onCheckedChange = { viewModel.setVsBs775(it) },
+                        )
+                        VsButtonToggle(
+                            label = "瞬态保护",
+                            checked = vsTransProtect,
+                            enabled = vsEnabled,
+                            modifier = Modifier.weight(1f),
+                            onCheckedChange = { viewModel.setVsTransProtect(it) },
+                        )
+                        VsButtonToggle(
+                            label = "二级解码",
+                            checked = vsEncodeStrength > 0.01f,
+                            enabled = vsEnabled,
+                            modifier = Modifier.weight(1f),
+                            onCheckedChange = { viewModel.setVsSecondDecodeEnabled(it) },
                         )
                     }
 
-                    Text(text = "解码模式", fontSize = 12.sp, color = ScColors.TextMain)
+                    Text(text = "声场模式", fontSize = 12.sp, color = ScColors.TextMain)
                     VsChoiceRow(
-                        options = listOf("Cine6.1", "LCRS", "StereoTrack", "Mono"),
+                        options = listOf("全景声", "LCRS", "立体声", "单声道"),
                         selected = vsMode,
                         enabled = vsEnabled,
                         onSelect = viewModel::setVsMode,
@@ -3861,65 +3876,38 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
 
 
 
-                    // ---- 距离（早期反射比例，0~1；越远反射越多）----
-                    VsGainRow(
-                        label = "距离",
-                        value = vsDistance,
-                        range = 0f..1f,
-                        suffix = "",
-                        enabled = vsEnabled,
-                        onChange = viewModel::setVsDistance,
-                    )
-
-                    // ---- 瞬态保护（瞬态段抑制倾斜与去相关，保住鼓点前沿）----
-                    TextButton(
-                        onClick = { viewModel.setVsTransProtect(!vsTransProtect) },
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                    ) {
-                        Text(
-                            text = "瞬态保护：" +
-                                if (vsTransProtect) "开（鼓点保真）" else "关（全量去相关）",
-                            fontSize = 12.sp,
-                            color = if (vsTransProtect) ScColors.Primary else ScColors.TextSub,
-                        )
-                    }
-
-                    // ---- 高度感（>3 kHz 重定向到上方 4 路，0~1）----
-                    VsGainRow(
-                        label = "高度感",
-                        value = vsHeight,
-                        range = 0f..1f,
-                        suffix = "",
-                        enabled = vsEnabled,
-                        onChange = viewModel::setVsHeight,
-                    )
-
-                    // ---- 后环绕空间感（环绕去相关深度 0~1）----
-                    VsGainRow(
-                        label = "后环绕空间感",
-                        value = vsRearSpace,
-                        range = 0f..1f,
-                        suffix = "",
-                        enabled = vsEnabled,
-                        onChange = viewModel::setVsRearSpace,
-                    )
-
-                    // 二级解码：7 声道 → Lt/Rt → 再解一次；关闭时只走一级解码
+                    // 三个连续量用旋钮：竖直拖动调值 / 双击复位 / 长按精调
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
-                        Text(
-                            text = "二级解码（Lt/Rt 往返）",
-                            fontSize = 12.sp,
-                            color = ScColors.TextMain,
-                            modifier = Modifier.weight(1f),
+                        VsKnob(
+                            label = "距离",
+                            value = vsDistance,
+                            range = 0f..1f,
+                            enabled = vsEnabled,
+                            onChange = viewModel::setVsDistance,
+                            defaultValue = 0.5f,
                         )
-                        ScTinySwitch(
-                            checked = vsEncodeStrength > 0.01f,
-                            onCheckedChange = { viewModel.setVsSecondDecodeEnabled(it) },
+                        VsKnob(
+                            label = "高度感",
+                            value = vsHeight,
+                            range = 0f..1f,
+                            enabled = vsEnabled,
+                            onChange = viewModel::setVsHeight,
+                            defaultValue = 0.5f,
+                        )
+                        VsKnob(
+                            label = "空间感",
+                            value = vsRearSpace,
+                            range = 0f..1f,
+                            enabled = vsEnabled,
+                            onChange = viewModel::setVsRearSpace,
+                            defaultValue = 0.5f,
                         )
                     }
+
+                    // （二级解码开关已并入顶部按钮排）
                     if (vsEncodeStrength > 0.01f) {
                         VsGainRow(
                             label = "下混编码强度",
@@ -7423,5 +7411,165 @@ private class EditorHistory {
         val next = redoStack.removeLastOrNull() ?: return null
         undoStack.add(current)
         return next
+    }
+}
+
+
+/**
+ * 按钮式开关：按下（高亮）= 启用，弹起（灰底）= 禁用。
+ * 与滑动开关 [ScTinySwitch] 的区别是横向占位小，适合三个并排放一排。
+ */
+@Composable
+private fun VsButtonToggle(
+    label: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                when {
+                    !enabled -> Color(0xFFF2F4F7)
+                    checked -> ScColors.Primary
+                    else -> Color(0xFFE7ECF2)
+                },
+            )
+            .then(
+                if (enabled) {
+                    Modifier.scNoRippleClick { onCheckedChange(!checked) }
+                } else {
+                    Modifier
+                },
+            )
+            .padding(vertical = 11.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            maxLines = 1,
+            fontWeight = if (checked) FontWeight.Bold else FontWeight.Normal,
+            color = when {
+                !enabled -> ScColors.TextSub.copy(alpha = 0.5f)
+                checked -> Color.White
+                else -> ScColors.TextSub
+            },
+        )
+    }
+}
+
+/**
+ * 旋钮（三个调谐特征）：
+ *  1. 竖直拖动调值（上下 220dp 走完全量程）
+ *  2. 双击复位到默认值
+ *  3. 长按切换精调（灵敏度降为 1/5，再长按退出）
+ *
+ * 为什么用竖直拖动：页面本身竖直滚动，横向拖动会和返回手势/翻页冲突；
+ * 竖直拖动在旋钮区域内被消费，不影响外层滚动。
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun VsKnob(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    enabled: Boolean,
+    onChange: (Float) -> Unit,
+    suffix: String = "",
+    defaultValue: Float? = null,
+) {
+    var fine by remember { mutableStateOf(false) }
+    val span = (range.endInclusive - range.start).takeIf { it > 1e-6f } ?: 1f
+    val norm = ((value - range.start) / span).coerceIn(0f, 1f)
+    val def = defaultValue ?: ((range.start + range.endInclusive) / 2f)
+    val accent = if (enabled) ScColors.Primary else ScColors.TextSub.copy(alpha = 0.35f)
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.width(92.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(74.dp)
+                .draggable(
+                    orientation = Orientation.Vertical,
+                    enabled = enabled,
+                    state = rememberDraggableState { dy ->
+                        val perPx = span / (if (fine) 1100f else 220f)
+                        onChange((value - dy * perPx).coerceIn(range.start, range.endInclusive))
+                    },
+                )
+                .combinedClickable(
+                    enabled = enabled,
+                    onClick = {},
+                    onDoubleClick = { onChange(def) },
+                    onLongClick = { fine = !fine },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val stroke = 7.dp.toPx()
+                val inset = stroke / 2f + 3.dp.toPx()
+                val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
+                val topLeft = Offset(inset, inset)
+                drawArc(
+                    color = Color(0xFFE2E7ED),
+                    startAngle = 135f,
+                    sweepAngle = 270f,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = stroke, cap = StrokeCap.Round),
+                )
+                if (norm > 0.001f) {
+                    drawArc(
+                        color = accent,
+                        startAngle = 135f,
+                        sweepAngle = 270f * norm,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = Stroke(width = stroke, cap = StrokeCap.Round),
+                    )
+                }
+                val ang = Math.toRadians(135.0 + 270.0 * norm)
+                val cx = size.width / 2f
+                val cy = size.height / 2f
+                val rOuter = size.width / 2f - inset - stroke * 0.6f
+                val rInner = rOuter - 13.dp.toPx()
+                drawLine(
+                    color = accent,
+                    start = Offset(
+                        cx + (rOuter * Math.cos(ang)).toFloat(),
+                        cy + (rOuter * Math.sin(ang)).toFloat(),
+                    ),
+                    end = Offset(
+                        cx + (rInner * Math.cos(ang)).toFloat(),
+                        cy + (rInner * Math.sin(ang)).toFloat(),
+                    ),
+                    strokeWidth = 3.5.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+            }
+        }
+        Text(
+            text = when {
+                suffix.isEmpty() -> "%.2f".format(value)
+                suffix == " dB" -> "%+.1f dB".format(value)
+                else -> "%.1f%s".format(value, suffix)
+            },
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (enabled) ScColors.TextMain else ScColors.TextSub,
+        )
+        Text(
+            text = if (fine) label + "（精调）" else label,
+            fontSize = 11.sp,
+            color = if (fine) ScColors.Primary else ScColors.TextSub,
+            maxLines = 1,
+        )
     }
 }
