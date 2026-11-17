@@ -3865,7 +3865,12 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         )
                     }
 
-                    Text(text = "声场模式", fontSize = 12.sp, color = ScColors.TextMain)
+                    Text(
+                        text = "声场模式",
+                        fontSize = 12.sp,
+                        color = ScColors.TextMain,
+                        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
+                    )
                     VsChoiceRow(
                         options = listOf("全景声", "LCRS", "立体声", "单声道"),
                         selected = vsMode,
@@ -3957,7 +3962,12 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     modifier = Modifier.padding(bottom = 12.dp),
                 )
                     // ---- 房间（RIR 卷积，预设名与卷积器一致：小房间/客厅/音乐厅/大教堂）----
-                    Text(text = "房间", fontSize = 12.sp, color = ScColors.TextMain)
+                    Text(
+                        text = "房间",
+                        fontSize = 12.sp,
+                        color = ScColors.TextMain,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                     VsChoiceRow(
                         options = listOf("关", "小房间", "客厅", "音乐厅", "大教堂"),
                         selected = vsRoomSize,
@@ -3976,7 +3986,12 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     }
 
                     // ---- 中置模式（关 / 直通 / 混入前置）----
-                    Text(text = "中置模式", fontSize = 12.sp, color = ScColors.TextMain)
+                    Text(
+                        text = "中置模式",
+                        fontSize = 12.sp,
+                        color = ScColors.TextMain,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                     VsChoiceRow(
                         options = listOf("关闭", "直通", "混入前置"),
                         selected = vsCenterMode,
@@ -4111,7 +4126,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     }
 
     // 公共接口 · 声像定位自检：验证 7 声道布局的 ITD/ILD，与模式无关，故同属公共能力
-    val testExpanded = rememberExpandedFollowing(true, "vs_selftest_card")
+    val testExpanded = rememberExpandedFollowing(false, "vs_selftest_card")
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             ScSlotHeader(
