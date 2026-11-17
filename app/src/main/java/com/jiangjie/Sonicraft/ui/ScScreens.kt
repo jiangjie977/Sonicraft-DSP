@@ -3903,25 +3903,6 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         onChange = viewModel::setVsRearSpace,
                     )
 
-                    // ---- 房间（RIR 卷积，预设名与卷积器一致：小房间/客厅/音乐厅/大教堂）----
-                    Text(text = "房间", fontSize = 12.sp, color = ScColors.TextMain)
-                    VsChoiceRow(
-                        options = listOf("关", "小房间", "客厅", "音乐厅", "大教堂"),
-                        selected = vsRoomSize,
-                        enabled = vsEnabled,
-                        onSelect = viewModel::setVsRoomSize,
-                    )
-                    if (vsRoomSize > 0) {
-                        VsGainRow(
-                            label = "混响量",
-                            value = vsRoomWet,
-                            range = 0f..1f,
-                            suffix = "",
-                            enabled = vsEnabled,
-                            onChange = viewModel::setVsRoomWet,
-                        )
-                    }
-
                     // 二级解码：7 声道 → Lt/Rt → 再解一次；关闭时只走一级解码
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -3946,6 +3927,56 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                             suffix = "",
                             enabled = vsEnabled,
                             onChange = viewModel::setVsEncodeStrength,
+                        )
+                    }
+
+                    Text(
+                        text = "立体声先解码成 7 声道虚拟布局（前左/前右/中置/侧左/侧右/后中/低频），" +
+                            "再逐声道过双耳模型渲染到耳机。环绕增益决定后方包裹感，中置增益决定人声贴脸程度，" +
+                            "前场补偿用于空间化后前端变薄的场合。",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                    )
+
+
+                }
+            }
+        }
+    }
+
+    // 空间环绕 · 公共接口：以下参数对**所有**环绕模式生效（房间 / 中置 / 对话 /
+    // 低音 / 后中置），新增环绕模式时直接复用，不必重复实现。
+    ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            Text(
+                text = "公共接口",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = ScColors.TextMain,
+                modifier = Modifier.padding(top = 18.dp, bottom = 4.dp),
+            )
+            Text(
+                text = "以下参数对「所有」环绕模式生效，新增模式无需重复实现。",
+                fontSize = 11.sp,
+                color = ScColors.TextSub,
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
+                    // ---- 房间（RIR 卷积，预设名与卷积器一致：小房间/客厅/音乐厅/大教堂）----
+                    Text(text = "房间", fontSize = 12.sp, color = ScColors.TextMain)
+                    VsChoiceRow(
+                        options = listOf("关", "小房间", "客厅", "音乐厅", "大教堂"),
+                        selected = vsRoomSize,
+                        enabled = vsEnabled,
+                        onSelect = viewModel::setVsRoomSize,
+                    )
+                    if (vsRoomSize > 0) {
+                        VsGainRow(
+                            label = "混响量",
+                            value = vsRoomWet,
+                            range = 0f..1f,
+                            suffix = "",
+                            enabled = vsEnabled,
+                            onChange = viewModel::setVsRoomWet,
                         )
                     }
 
@@ -4009,17 +4040,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         )
                     }
 
-                    Text(
-                        text = "立体声先解码成 7 声道虚拟布局（前左/前右/中置/侧左/侧右/后中/低频），" +
-                            "再逐声道过双耳模型渲染到耳机。环绕增益决定后方包裹感，中置增益决定人声贴脸程度，" +
-                            "前场补偿用于空间化后前端变薄的场合。",
-                        fontSize = 11.sp,
-                        color = ScColors.TextSub,
-                    )
-
-
-                }
-            }
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 
