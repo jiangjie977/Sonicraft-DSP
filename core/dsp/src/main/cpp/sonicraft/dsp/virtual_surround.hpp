@@ -49,6 +49,8 @@ class VirtualSurroundNode final : public DspNode {
 
     const float sr = static_cast<float>(sample_rate_);
     decoder_.Prepare(sr);
+    width_lp_.Set(200.0f, sr);
+    width_hp_.SetHighPass(4000.0f, sr);
     decoder2_.Prepare(sr);
     round_trip_.Prepare(sr);
     for (int c = 0; c < vs::kChannelCount; ++c) {
@@ -134,6 +136,28 @@ class VirtualSurroundNode final : public DspNode {
 
     const bool want = param_[vs::kParamEnabled] > 0.5f && !bypass_;
     if (!want && render_gain_ <= 0.0f) return;  // 完全旁路：逐样本透传，零开销
+
+    // ---- 三段立体声展宽（低 / 中 / 高独立权重）----
+    // 为什么分段：低频展宽会破坏单声道兼容（左右反相成分在单声道折叠时抵消），
+    // 而高频展宽几乎不影响兼容性、却最容易被感知为"空间感"。
+    // 单一宽度做不到这个区分（WEcho 的 ExtStereoImager 就是三段式）。
+    // 权重：低 0.35 / 中 1.0 / 高 1.45，再乘用户的总强度 kParamStereoExpand。
+    if (param_[vs::kParamStereoExpand] > 0.01f && channels[1] != nullptr) {
+      float* pl = channels[0];
+      float* pr = channels[1];
+      const float raw_w = param_[vs::kParamStereoExpand];
+      const float w = (raw_w < 0.0f) ? 0.0f : ((raw_w > 1.5f) ? 1.5f : raw_w);
+      for (int i = 0; i < frames; ++i) {
+        const float m = (pl[i] + pr[i]) * 0.5f;
+        const float sd = (pl[i] - pr[i]) * 0.5f;
+        const float s_low = width_lp_.Process(sd);
+        const float s_high = width_hp_.Process(sd);
+        const float s_mid = sd - s_low - s_high;
+        const float s_out = (s_low * 0.35f + s_mid * 1.0f + s_high * 1.45f) * w;
+        pl[i] = m + s_out;
+        pr[i] = m - s_out;
+      }
+    }
     // 入口 −9 dB：解码矩阵、LFE +10 dB、编码电平曲线、7 路 HRTF 叠加会让节点输出
     // 峰值冲到 +8~9 dBFS（实测 2.79），相邻样本跳变 0.76 → 明显过曝与毛刺。
     // 实测衰减扫描：−9 dB 后峰值 1.46、跳变 0.28、越界样本 3770→999（余量交给链末限幅器）。
@@ -375,6 +399,8 @@ class VirtualSurroundNode final : public DspNode {
   std::vector<float> layout_;  // 7 声道 × max_frames（planar 展开存储）
 
   vs::StereoSpatialDecoder decoder_;
+  vs::LowPass2 width_lp_;   // 三段展宽的 200 Hz 低通（只作用于 S 支路）
+  vs::Biquad width_hp_;     // 三段展宽的 4 kHz 高通（只作用于 S 支路）
   vs::StereoSpatialDecoder decoder2_;
   vs::LtRtRoundTrip round_trip_;
   vs::PostStage post_;

@@ -83,9 +83,13 @@ class StereoSpatialDecoder {
     lfe_r_.Set(kLfeHz, sr_);
     env_alpha_ = 1.0f - std::exp(-2.0f * Biquad::kPi * 50.0f / sr_);
     for (int i = 0; i < 6; ++i) hp_main_[i].SetHighPass(80.0f, sr_);
+  sur_dly_hp_l_.SetHighPass(250.0f, sr_);
+  sur_dly_hp_r_.SetHighPass(250.0f, sr_);
   corr_alpha_ = 1.0f - std::exp(-1.0f / (0.05f * sr_));   // 50 ms 时间常数
   e_sum_ = e_diff_ = 0.0f;
   corr_ = 1.0f;
+  e_sum_low_ = e_diff_low_ = 0.0f;
+  corr_low_ = 1.0f;
     // 中置带通（人声带，Q≈1）
     center_bp_.b0 = 0.03830530494451523f;
     center_bp_.b1 = 0.07661060988903046f;
@@ -236,6 +240,19 @@ class StereoSpatialDecoder {
         corr_ += corr_alpha_ * (rho - corr_);
       }
     }
+    // **双频段相关性**：低频段单独估计。低频与高频的方向性常不一致
+    // （贝斯居中、镲片在两侧），单一全频段 ρ 会把混合判成中间态。
+    {
+      const float s_low = (lp_l + lp_r) * 0.5f;
+      const float d_low = lp_l - lp_r;
+      e_sum_low_ += corr_alpha_ * (s_low * s_low - e_sum_low_);
+      e_diff_low_ += corr_alpha_ * (d_low * d_low - e_diff_low_);
+      if (e_sum_low_ > 1e-9f) {
+        const float kl = e_diff_low_ / e_sum_low_;
+        const float rho_l = Clamp((4.0f - kl) / (4.0f + kl), -1.0f, 1.0f);
+        corr_low_ += corr_alpha_ * (rho_l - corr_low_);
+      }
+    }
     // 宽频差分：高通 → 低通，再按 0.6094 与滤波损耗补偿
     // 环绕矩阵系数平滑推进：开关切换时不能阶跃（原实现 0.7008 <-> 2.487 直接赋值，
     // 相差 11 dB，切换瞬间就是"咔"一声爆音，并把环绕推到过载产生毛刺）。
@@ -258,7 +275,9 @@ class StereoSpatialDecoder {
     //   ρ=0  不相关 → 0.5（半量，保留宽声场的后方立体感）
     //   ρ=−1 反相 → 1.0（全量）
     {
-      const float side_mix = kSurroundSideMix * (1.0f - corr_) * 0.5f;
+      // 低频门控（平滑）：低频居中时禁止侧向混入，避免贝斯/底鼓被抹到后方
+  const float low_gate = Clamp((0.7f - corr_low_) / 0.4f, 0.0f, 1.0f);
+  const float side_mix = kSurroundSideMix * (1.0f - corr_) * 0.5f * low_gate;
       sl += in_l * side_mix;
       sr += in_r * side_mix;
     }
@@ -356,11 +375,18 @@ class StereoSpatialDecoder {
     // 侧后方与前置完全同相时会"贴在一起"，缺乏距离感。给 SL/SR 加约 12 ms 延迟，
     // 让后方听起来来自更远处；CS 保持自身的 10 ms 延迟，不叠加（避免后中置过晚）。
     {
-      sur_dly_l_[sur_dly_pos_] = sl;
-      sur_dly_r_[sur_dly_pos_] = sr;
+      // **分频延迟**：只延迟 250 Hz 以上，低频直通。
+      // 依据：低频定位主要靠 ILD 与相位差，整体延迟会打乱低频方向感；
+      // 而扩散感来自高频的时延散布。WEcho 的 DiffSurroundingEffect 也是这个做法。
+      const float sl_hi = sur_dly_hp_l_.Process(sl);
+      const float sl_lo = sl - sl_hi;
+      const float sr_hi = sur_dly_hp_r_.Process(sr);
+      const float sr_lo = sr - sr_hi;
+      sur_dly_l_[sur_dly_pos_] = sl_hi;
+      sur_dly_r_[sur_dly_pos_] = sr_hi;
       const int read = (sur_dly_pos_ - kSurDelay + kSurDelaySize) & (kSurDelaySize - 1);
-      sl = sur_dly_l_[read];
-      sr = sur_dly_r_[read];
+      sl = sur_dly_l_[read] + sl_lo;
+      sr = sur_dly_r_[read] + sr_lo;
       sur_dly_pos_ = (sur_dly_pos_ + 1) & (kSurDelaySize - 1);
     }
 
@@ -456,6 +482,7 @@ class StereoSpatialDecoder {
   // 环绕延迟：12 ms @48k = 576 样本；缓冲取 2 的幂便于位与取模
   static constexpr int kSurDelay = 576;
   static constexpr int kSurDelaySize = 2048;
+  Biquad sur_dly_hp_l_, sur_dly_hp_r_;    // 250 Hz 分频高通（延迟支路）
   float sur_dly_l_[kSurDelaySize]{};
   float sur_dly_r_[kSurDelaySize]{};
   int sur_dly_pos_ = 0;
@@ -465,7 +492,10 @@ class StereoSpatialDecoder {
   // 居中 k=0 → ρ=1；不相关 k=4 → ρ=0；反相 k→∞ → ρ=−1
   float e_sum_ = 0.0f;
   float e_diff_ = 0.0f;
-  float corr_ = 1.0f;    // 初值取 1（按居中处理）：首帧不混入，避免开头泄漏人声
+  float corr_ = 1.0f;
+  float corr_low_ = 1.0f;   // 低频段相关性（双频段方向控制）
+  float e_sum_low_ = 0.0f;
+  float e_diff_low_ = 0.0f;    // 初值取 1（按居中处理）：首帧不混入，避免开头泄漏人声
   float corr_alpha_ = 0.000417f;
   static constexpr float kSurMatrixSmooth = 0.004f;   // ≈5 ms 时间常数 @48k
   float sur_matrix_ = 0.7008f;
