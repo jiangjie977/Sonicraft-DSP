@@ -3819,6 +3819,42 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     var vsReport by remember { mutableStateOf<String?>(null) }
     var vsTesting by remember { mutableStateOf(false) }
 
+    // 解码器：决定立体声如何解成多声道布局。信号流上位于矩阵环绕**之前**，
+    // 因此独立成卡，后续新增的环绕模式也共用这一层解码选择。
+    val decoderExpanded = rememberExpandedFollowing(true, "vs_decoder_card")
+    ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            ScSlotHeader(
+                title = "解码器",
+                checked = false,
+                onCheckedChange = {},
+                switchEnabled = false,
+                expanded = decoderExpanded.value,
+                onToggleExpand = { decoderExpanded.value = !decoderExpanded.value },
+                showSwitch = false,
+            )
+            if (decoderExpanded.value) {
+                Column(
+                    modifier = Modifier.padding(bottom = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "决定立体声如何解成多声道布局；此步在矩阵环绕之前执行，所有环绕模式共用。",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                    )
+                    Text(text = "解码模式", fontSize = 12.sp, color = ScColors.TextMain)
+                    VsChoiceRow(
+                        options = listOf("Cine6.1", "LCRS", "StereoTrack", "Mono"),
+                        selected = vsMode,
+                        enabled = vsEnabled,
+                        onSelect = viewModel::setVsMode,
+                    )
+                }
+            }
+        }
+    }
+
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             ScSlotHeader(
@@ -3850,13 +3886,6 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         )
                     }
 
-                    Text(text = "解码模式", fontSize = 12.sp, color = ScColors.TextMain)
-                    VsChoiceRow(
-                        options = listOf("Cine6.1", "LCRS", "StereoTrack", "Mono"),
-                        selected = vsMode,
-                        enabled = vsEnabled,
-                        onSelect = viewModel::setVsMode,
-                    )
 
 
 
