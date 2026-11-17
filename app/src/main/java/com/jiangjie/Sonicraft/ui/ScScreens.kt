@@ -3966,7 +3966,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                 )
                     // ---- 房间（RIR 卷积，预设名与卷积器一致：小房间/客厅/音乐厅/大教堂）----
                     Text(
-                        text = "房间",
+                        text = "环境声场",
                         fontSize = 12.sp,
                         color = ScColors.TextMain,
                         modifier = Modifier.padding(top = 4.dp),
