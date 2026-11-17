@@ -4046,17 +4046,13 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     }
 
                     // ---- 低音增强（对数域谐波）：滑条改为最下方旋钮 ----
-                    if (vsRearCenter) {
-                        VsGainRow(
-                            label = "后中置延迟",
-                            value = vsRearDelay,
-                            range = 0f..15f,
-                            suffix = " ms",
-                            enabled = vsEnabled,
-                            onChange = viewModel::setVsRearDelay,
-                        )
-                    }
 
+                    Text(
+                        text = "低音增强获取通道",
+                        fontSize = 12.sp,
+                        color = ScColors.TextMain,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                     VsChoiceRow(
                         options = listOf("取自 LFE", "取自前置"),
                         selected = vsBassEnhMode,
@@ -4111,6 +4107,17 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         onValueChange = viewModel::setVsBassEnh,
                     )
                 }
+
+                    if (vsRearCenter) {
+                        VsGainRow(
+                            label = "后中置延迟",
+                            value = vsRearDelay,
+                            range = 0f..15f,
+                            suffix = " ms",
+                            enabled = vsEnabled,
+                            onChange = viewModel::setVsRearDelay,
+                        )
+                    }
 
                 Spacer(modifier = Modifier.height(16.dp))
             }
