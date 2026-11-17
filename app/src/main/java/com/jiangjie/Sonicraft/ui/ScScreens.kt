@@ -3881,29 +3881,38 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
-                        VsKnob(
+                        ScKnob(
                             label = "距离",
                             value = vsDistance,
-                            range = 0f..1f,
-                            enabled = vsEnabled,
-                            onChange = viewModel::setVsDistance,
-                            defaultValue = 0.5f,
+                            min = 0f,
+                            max = 1f,
+                            sizeDp = 72,
+                            textScale = 0.62f,
+                            format = { "%.2f".format(it) },
+                            resetValue = 0.5f,
+                            onValueChange = viewModel::setVsDistance,
                         )
-                        VsKnob(
+                        ScKnob(
                             label = "高度感",
                             value = vsHeight,
-                            range = 0f..1f,
-                            enabled = vsEnabled,
-                            onChange = viewModel::setVsHeight,
-                            defaultValue = 0.5f,
+                            min = 0f,
+                            max = 1f,
+                            sizeDp = 72,
+                            textScale = 0.62f,
+                            format = { "%.2f".format(it) },
+                            resetValue = 0.5f,
+                            onValueChange = viewModel::setVsHeight,
                         )
-                        VsKnob(
+                        ScKnob(
                             label = "空间感",
                             value = vsRearSpace,
-                            range = 0f..1f,
-                            enabled = vsEnabled,
-                            onChange = viewModel::setVsRearSpace,
-                            defaultValue = 0.5f,
+                            min = 0f,
+                            max = 1f,
+                            sizeDp = 72,
+                            textScale = 0.62f,
+                            format = { "%.2f".format(it) },
+                            resetValue = 0.5f,
+                            onValueChange = viewModel::setVsRearSpace,
                         )
                     }
 
@@ -7461,115 +7470,3 @@ private fun VsButtonToggle(
     }
 }
 
-/**
- * 旋钮（三个调谐特征）：
- *  1. 竖直拖动调值（上下 220dp 走完全量程）
- *  2. 双击复位到默认值
- *  3. 长按切换精调（灵敏度降为 1/5，再长按退出）
- *
- * 为什么用竖直拖动：页面本身竖直滚动，横向拖动会和返回手势/翻页冲突；
- * 竖直拖动在旋钮区域内被消费，不影响外层滚动。
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun VsKnob(
-    label: String,
-    value: Float,
-    range: ClosedFloatingPointRange<Float>,
-    enabled: Boolean,
-    onChange: (Float) -> Unit,
-    suffix: String = "",
-    defaultValue: Float? = null,
-) {
-    var fine by remember { mutableStateOf(false) }
-    val span = (range.endInclusive - range.start).takeIf { it > 1e-6f } ?: 1f
-    val norm = ((value - range.start) / span).coerceIn(0f, 1f)
-    val def = defaultValue ?: ((range.start + range.endInclusive) / 2f)
-    val accent = if (enabled) ScColors.Primary else ScColors.TextSub.copy(alpha = 0.35f)
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(92.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(74.dp)
-                .draggable(
-                    orientation = Orientation.Vertical,
-                    enabled = enabled,
-                    state = rememberDraggableState { dy ->
-                        val perPx = span / (if (fine) 1100f else 220f)
-                        onChange((value - dy * perPx).coerceIn(range.start, range.endInclusive))
-                    },
-                )
-                .combinedClickable(
-                    enabled = enabled,
-                    onClick = {},
-                    onDoubleClick = { onChange(def) },
-                    onLongClick = { fine = !fine },
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val stroke = 7.dp.toPx()
-                val inset = stroke / 2f + 3.dp.toPx()
-                val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
-                val topLeft = Offset(inset, inset)
-                drawArc(
-                    color = Color(0xFFE2E7ED),
-                    startAngle = 135f,
-                    sweepAngle = 270f,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round),
-                )
-                if (norm > 0.001f) {
-                    drawArc(
-                        color = accent,
-                        startAngle = 135f,
-                        sweepAngle = 270f * norm,
-                        useCenter = false,
-                        topLeft = topLeft,
-                        size = arcSize,
-                        style = Stroke(width = stroke, cap = StrokeCap.Round),
-                    )
-                }
-                val ang = Math.toRadians(135.0 + 270.0 * norm)
-                val cx = size.width / 2f
-                val cy = size.height / 2f
-                val rOuter = size.width / 2f - inset - stroke * 0.6f
-                val rInner = rOuter - 13.dp.toPx()
-                drawLine(
-                    color = accent,
-                    start = Offset(
-                        cx + (rOuter * Math.cos(ang)).toFloat(),
-                        cy + (rOuter * Math.sin(ang)).toFloat(),
-                    ),
-                    end = Offset(
-                        cx + (rInner * Math.cos(ang)).toFloat(),
-                        cy + (rInner * Math.sin(ang)).toFloat(),
-                    ),
-                    strokeWidth = 3.5.dp.toPx(),
-                    cap = StrokeCap.Round,
-                )
-            }
-        }
-        Text(
-            text = when {
-                suffix.isEmpty() -> "%.2f".format(value)
-                suffix == " dB" -> "%+.1f dB".format(value)
-                else -> "%.1f%s".format(value, suffix)
-            },
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (enabled) ScColors.TextMain else ScColors.TextSub,
-        )
-        Text(
-            text = if (fine) label + "（精调）" else label,
-            fontSize = 11.sp,
-            color = if (fine) ScColors.Primary else ScColors.TextSub,
-            maxLines = 1,
-        )
-    }
-}
