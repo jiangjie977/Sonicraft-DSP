@@ -3956,7 +3956,8 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                 modifier = Modifier.padding(top = 18.dp, bottom = 4.dp),
             )
             Text(
-                text = "以下参数对「所有」环绕模式生效，新增模式无需重复实现。",
+                text = "以下参数对「所有」环绕模式生效，新增模式无需重复实现。" +
+                    "声道 Trim 与声像定位自检同属公共能力（见下方两卡）。",
                 fontSize = 11.sp,
                 color = ScColors.TextSub,
                 modifier = Modifier.padding(bottom = 12.dp),
@@ -4044,12 +4045,12 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
         }
     }
 
-    // 声道 Trim：7 路独立增益 + 静音，用于确认"某一路是否真的在工作"
+    // 公共接口 · 声道 Trim：7 路独立增益 + 静音（所有环绕模式共用同一套 7 声道布局）
     val trimExpanded = rememberExpandedFollowing(false, "vs_trim_card")
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             ScSlotHeader(
-                title = "声道 Trim",
+                title = "公共接口 · 声道 Trim",
                 checked = false,
                 onCheckedChange = {},
                 switchEnabled = false,
@@ -4114,12 +4115,12 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
         }
     }
 
-    // 定位自检独立成卡（放最下方）：它是"验证工具"，不属于日常调音参数
+    // 公共接口 · 声像定位自检：验证 7 声道布局的 ITD/ILD，与模式无关，故同属公共能力
     val testExpanded = rememberExpandedFollowing(true, "vs_selftest_card")
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             ScSlotHeader(
-                title = "定位自检",
+                title = "公共接口 · 声像定位自检",
                 checked = false,
                 onCheckedChange = {},
                 switchEnabled = false,
