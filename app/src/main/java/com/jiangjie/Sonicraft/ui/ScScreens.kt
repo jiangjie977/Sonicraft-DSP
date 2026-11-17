@@ -4278,16 +4278,47 @@ private fun VsChoiceRow(
     ) {
         options.forEachIndexed { index, text ->
             val active = index == selected
-            TextButton(
-                onClick = { onSelect(index) },
-                enabled = enabled,
-                modifier = Modifier.weight(1f),
+            val shape = RoundedCornerShape(10.dp)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(shape)
+                    .background(
+                        when {
+                            !enabled -> Color(0xFFF2F4F7)
+                            active -> ScColors.Primary
+                            else -> Color(0xFFF6F9FC)
+                        },
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = when {
+                            !enabled -> Color(0xFFE6EBF1)
+                            active -> ScColors.Primary
+                            else -> Color(0xFFD9E1EA)
+                        },
+                        shape = shape,
+                    )
+                    .then(
+                        if (enabled) {
+                            Modifier.scNoRippleClick { onSelect(index) }
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = text,
                     fontSize = 12.sp,
+                    maxLines = 1,
                     fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                    color = if (active) ScColors.Primary else ScColors.TextSub,
+                    color = when {
+                        !enabled -> ScColors.TextSub.copy(alpha = 0.5f)
+                        active -> Color.White
+                        else -> ScColors.TextSub
+                    },
                 )
             }
         }
