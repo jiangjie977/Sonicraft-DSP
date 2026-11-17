@@ -3882,8 +3882,11 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
 
 
                     // 三个连续量用旋钮：竖直拖动调值 / 双击复位 / 长按精调
+                    // 与上方「声场模式」按钮留出间距，避免旋钮顶部贴住按钮底边
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 14.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
                         ScKnob(
