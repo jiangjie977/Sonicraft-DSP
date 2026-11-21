@@ -4145,7 +4145,8 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     // 房间为「关」时混响量不生效，旋钮置灰避免误导
-                    val roomWetEnabled = vsEnabled && vsRoomSize > 0
+                    // 两个引擎互斥：任一开启且房间不为「关」时，混响量都可调
+                    val roomWetEnabled = (vsEnabled || s71Enabled) && vsRoomSize > 0
                     Box(modifier = Modifier.alpha(if (roomWetEnabled) 1f else 0.45f)) {
                         ScKnob(
                             label = "混响量",
