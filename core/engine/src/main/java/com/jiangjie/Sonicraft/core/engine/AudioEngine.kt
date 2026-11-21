@@ -233,6 +233,21 @@ interface AudioEngine {
 
         // ---- 虚拟环绕参数 id（与 native `vs::Param` 一一对应，跨语言契约）----
         const val VS_PARAM_ENABLED = 0
+
+    /**
+     * Surround71 环绕节点的参数 id（与 C++ `sonicraft::dsp::s71::Param` 一一对应）。
+     * 注意与 VS_PARAM_* 是**独立命名空间**（引擎按节点分发），可以重号。
+     */
+    const val S71_PARAM_ENABLED = 0
+    const val S71_PARAM_HEADPHONE_MODE = 1
+    const val S71_PARAM_UPMIX = 2
+    const val S71_PARAM_EXTERNALIZE = 3
+    const val S71_PARAM_WIDTH = 4
+    const val S71_PARAM_OUTPUT_GAIN_DB = 5
+    const val S71_PARAM_BASS_BOOST_DB = 6
+    const val S71_PARAM_BASS_MANAGEMENT = 7
+    const val S71_PARAM_SURROUND_LEVEL_DB = 8
+    const val S71_PARAM_CENTER_LEVEL_DB = 9
         const val VS_PARAM_MODE = 1
         const val VS_PARAM_SURROUND_GAIN = 2
         const val VS_PARAM_CENTER_GAIN = 3

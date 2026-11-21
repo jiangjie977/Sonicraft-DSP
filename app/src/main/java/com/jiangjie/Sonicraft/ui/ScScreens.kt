@@ -3799,6 +3799,9 @@ internal fun ScWidthDetailContent(viewModel: MainViewModel) {
 internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsEnabled by viewModel.vsEnabled.collectAsStateWithLifecycle()
     val vsMode by viewModel.vsMode.collectAsStateWithLifecycle()
+    val s71Enabled by viewModel.s71Enabled.collectAsStateWithLifecycle()
+    val s71Upmix by viewModel.s71Upmix.collectAsStateWithLifecycle()
+    val s71Externalize by viewModel.s71Externalize.collectAsStateWithLifecycle()
 
     val vsRearSpace by viewModel.vsRearSpace.collectAsStateWithLifecycle()
     val vsHeight by viewModel.vsHeight.collectAsStateWithLifecycle()
@@ -3944,6 +3947,72 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
 
     // 空间环绕 · 公共接口：以下参数对**所有**环绕模式生效（房间 / 中置 / 对话 /
     // 低音 / 后中置），新增环绕模式时直接复用，不必重复实现。
+    // ==================== Surround71 环绕（与矩阵环绕互斥）====================
+    // 独立效果器：7.1 上混 + HRTF 双耳化（算法参考开源项目 Surround71）。
+    // 与矩阵环绕互斥——两个空间化器同时开启会叠加成乱声，VM 层已做自动关闭。
+    val s71Expanded = rememberExpandedFollowing(s71Enabled, "s71_card")
+    ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            ScSlotHeader(
+                title = "Surround71 环绕",
+                checked = s71Enabled,
+                onCheckedChange = { viewModel.setS71Enabled(it) },
+                switchEnabled = true,
+                expanded = s71Expanded.value,
+                onToggleExpand = { s71Expanded.value = !s71Expanded.value },
+            )
+            if (s71Expanded.value) {
+                Column(
+                    modifier = Modifier.padding(bottom = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = "立体声 → 7.1 上混 → HRTF 双耳化。算法与参数参考开源项目 Surround71，"
+                            + "与上方「矩阵环绕」互斥（开启任一后另一个自动关闭）。",
+                        fontSize = 11.sp,
+                        color = ScColors.TextSub,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        ScKnob(
+                            label = "上混强度",
+                            value = s71Upmix,
+                            min = 0f,
+                            max = 1f,
+                            sizeDp = 94,
+                            textScale = 0.60f,
+                            format = { "%.2f".format(it) },
+                            resetValue = 0.85f,
+                            onValueChange = viewModel::setS71Upmix,
+                        )
+                        ScKnob(
+                            label = "外部化",
+                            value = s71Externalize,
+                            min = 0f,
+                            max = 1f,
+                            sizeDp = 94,
+                            textScale = 0.60f,
+                            format = { "%.2f".format(it) },
+                            resetValue = 0.35f,
+                            onValueChange = viewModel::setS71Externalize,
+                        )
+                    }
+                    Text(
+                        text = if (s71Enabled) {
+                            "当前生效：Surround71（矩阵环绕已自动关闭）"
+                        } else {
+                            "当前未启用"
+                        },
+                        fontSize = 11.sp,
+                        color = if (s71Enabled) ScColors.Primary else ScColors.TextSub,
+                    )
+                }
+            }
+        }
+    }
+
     val publicExpanded = rememberExpandedFollowing(false, "vs_public_card")
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {

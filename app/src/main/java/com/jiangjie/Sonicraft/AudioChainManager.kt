@@ -219,6 +219,23 @@ class AudioChainManager @Inject constructor(
                 f("stereo_width", 1f),
             )
             engine.setBypass(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, !b("vs_enabled", false))
+            // Surround71 环绕（与矩阵环绕互斥，prefs 里两者不会同时为 true）
+            engine.setBypass(AudioEngine.S71_NODE_INDEX, !b("s71_enabled", false))
+            engine.setParam(
+                AudioEngine.S71_NODE_INDEX,
+                AudioEngine.S71_PARAM_ENABLED,
+                if (b("s71_enabled", false)) 1f else 0f,
+            )
+            engine.setParam(
+                AudioEngine.S71_NODE_INDEX,
+                AudioEngine.S71_PARAM_UPMIX,
+                prefs.getFloat("s71_upmix", 0.85f),
+            )
+            engine.setParam(
+                AudioEngine.S71_NODE_INDEX,
+                AudioEngine.S71_PARAM_EXTERNALIZE,
+                prefs.getFloat("s71_externalize", 0.35f),
+            )
             // 必须同时下发 enabled：节点内该参数默认 0，仅解除 bypass 仍会直通，
             // 表现为"开关显示开启却没有效果、手动切一次才生效"（开机初始化缺陷）。
             engine.setParam(

@@ -1570,6 +1570,8 @@ class MainViewModel @Inject constructor(
 
     fun setVsEnabled(enabled: Boolean) {
         _vsEnabled.value = enabled
+        // 互斥：打开矩阵环绕则关闭 Surround71（反之在 setS71Enabled 内处理）
+        if (enabled && _s71Enabled.value) setS71Enabled(false)
         prefs.edit().putBoolean(KEY_VS_ENABLED, enabled).apply()
         engine.setBypass(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, !enabled)
         engine.setParam(
@@ -1579,6 +1581,32 @@ class MainViewModel @Inject constructor(
         )
         // 立即落盘当前设备配置：10s 周期快照会把开关状态覆盖成旧值（历史问题）
         runCatching { saveLiveConfig(outputDeviceMonitor.current.value.key) }
+    }
+
+    // ==================== Surround71 环绕（与矩阵环绕互斥）====================
+
+    fun setS71Enabled(enabled: Boolean) {
+        _s71Enabled.value = enabled
+        prefs.edit().putBoolean(KEY_S71_ENABLED, enabled).apply()
+        // 互斥：两个空间化器同时开启会叠加成乱声
+        if (enabled && _vsEnabled.value) setVsEnabled(false)
+        engine.setBypass(AudioEngine.S71_NODE_INDEX, !enabled)
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ENABLED, if (enabled) 1f else 0f)
+        runCatching { saveLiveConfig(outputDeviceMonitor.current.value.key) }
+    }
+
+    fun setS71Upmix(v: Float) {
+        val c = v.coerceIn(0f, 1f)
+        _s71Upmix.value = c
+        prefs.edit().putFloat(KEY_S71_UPMIX, c).apply()
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_UPMIX, c)
+    }
+
+    fun setS71Externalize(v: Float) {
+        val c = v.coerceIn(0f, 1f)
+        _s71Externalize.value = c
+        prefs.edit().putFloat(KEY_S71_EXTERNALIZE, c).apply()
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_EXTERNALIZE, c)
     }
 
     fun setVsMode(mode: Int) {
@@ -1829,6 +1857,14 @@ class MainViewModel @Inject constructor(
 
     private val _vsBassEnh = MutableStateFlow(prefs.getFloat(KEY_VS_BASS_ENH, 0f))
     val vsBassEnh: StateFlow<Float> = _vsBassEnh.asStateFlow()
+
+    // Surround71 环绕（与矩阵环绕互斥）
+    private val _s71Enabled = MutableStateFlow(prefs.getBoolean(KEY_S71_ENABLED, false))
+    val s71Enabled: StateFlow<Boolean> = _s71Enabled.asStateFlow()
+    private val _s71Upmix = MutableStateFlow(prefs.getFloat(KEY_S71_UPMIX, 0.85f))
+    val s71Upmix: StateFlow<Float> = _s71Upmix.asStateFlow()
+    private val _s71Externalize = MutableStateFlow(prefs.getFloat(KEY_S71_EXTERNALIZE, 0.35f))
+    val s71Externalize: StateFlow<Float> = _s71Externalize.asStateFlow()
 
     private val _vsBassEnhMode = MutableStateFlow(prefs.getInt(KEY_VS_BASS_ENH_MODE, 0))
     val vsBassEnhMode: StateFlow<Int> = _vsBassEnhMode.asStateFlow()
@@ -2419,6 +2455,9 @@ class MainViewModel @Inject constructor(
             "vs_dialog" -> setVsDialog(v)
             "vs_bass_enh" -> setVsBassEnh(v)
             "vs_bass_enh_mode" -> setVsBassEnhMode(v.toInt())
+            "s71_enabled" -> setS71Enabled(v > 0.5f)
+            "s71_upmix" -> setS71Upmix(v)
+            "s71_externalize" -> setS71Externalize(v)
             "vs_rear_center" -> setVsRearCenter(v > 0.5f)
             "vs_rear_delay" -> setVsRearDelay(v)
             "output_gain" -> setOutputGain(v)
@@ -2569,6 +2608,9 @@ class MainViewModel @Inject constructor(
         "vs_dialog" to _vsDialog.value,
         "vs_bass_enh" to _vsBassEnh.value,
         "vs_bass_enh_mode" to _vsBassEnhMode.value.toFloat(),
+        "s71_enabled" to if (_s71Enabled.value) 1f else 0f,
+        "s71_upmix" to _s71Upmix.value,
+        "s71_externalize" to _s71Externalize.value,
         "vs_rear_center" to if (_vsRearCenter.value) 1f else 0f,
         "vs_rear_delay" to _vsRearDelay.value,
         "output_gain" to _outputGain.value,
@@ -6213,6 +6255,9 @@ class MainViewModel @Inject constructor(
     const val KEY_VS_DIALOG = "vs_dialog"
     const val KEY_VS_BASS_ENH = "vs_bass_enh"
     const val KEY_VS_BASS_ENH_MODE = "vs_bass_enh_mode"
+    const val KEY_S71_ENABLED = "s71_enabled"
+    const val KEY_S71_UPMIX = "s71_upmix"
+    const val KEY_S71_EXTERNALIZE = "s71_externalize"
     const val KEY_VS_REAR_CENTER = "vs_rear_center"
     const val KEY_VS_REAR_DELAY = "vs_rear_delay"
 
