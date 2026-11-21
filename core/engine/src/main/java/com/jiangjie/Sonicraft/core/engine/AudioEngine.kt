@@ -220,7 +220,16 @@ interface AudioEngine {
         const val SCRIPT_EFFECT_NODE_INDEX = 14
 
         /** Limiter 绝对末级（index 15）。 */
-        const val LIMITER_NODE_INDEX = 15
+        /**
+     * Surround71 环绕节点（2026-11-21 新增）：与矩阵环绕（[VIRTUAL_SURROUND_NODE_INDEX]）
+     * **互斥**，开一个要关另一个。参数 id 见 [S71_PARAM_*]，与本节点内部枚举一一对应。
+     *
+     * 注意：本节点插在 ScriptEffect(14) 与 Limiter(16) 之间，因此 **Limiter 索引由 15 变 16**。
+     */
+    const val S71_NODE_INDEX = 15
+
+    /** 注意：S71 插入后本索引由 15 → 16（跨语言契约，必须与 C++ kNodeLimiter 一致） */
+    const val LIMITER_NODE_INDEX = 16
 
         // ---- 虚拟环绕参数 id（与 native `vs::Param` 一一对应，跨语言契约）----
         const val VS_PARAM_ENABLED = 0

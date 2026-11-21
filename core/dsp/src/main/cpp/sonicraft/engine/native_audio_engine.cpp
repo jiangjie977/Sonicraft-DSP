@@ -28,6 +28,7 @@
 #include "sonicraft/dsp/bass_enhance.hpp"
 #include "sonicraft/dsp/virtual_bass.hpp"
 #include "sonicraft/dsp/script_effect.hpp"
+#include "sonicraft/dsp/s71/s71_node.hpp"
 #include "sonicraft/dsp/virtual_surround.hpp"
 
 namespace sonicraft::engine {
@@ -73,8 +74,12 @@ constexpr int kNodeOutputGain  = 13;
 // 自定义脚本效果器：位于 OutputGain 之后、Limiter 之前，
 // 保证 Limiter 仍是绝对末级（用户脚本 boost 也会被限幅兜住）。
 constexpr int kNodeScriptEffect = 14;
-constexpr int kNodeLimiter     = 15;
-constexpr int kNodeCount       = 16;
+// Surround71 环绕（2026-11-21 新增）：独立节点，与矩阵环绕互斥。
+// 位置在 ScriptEffect 之后、Limiter 之前 —— Limiter 仍为绝对末级，
+// 新节点的任何增益（LFE +2dB、HRTF 叠加）都会被限幅兜住。
+constexpr int kNodeS71         = 15;
+constexpr int kNodeLimiter     = 16;
+constexpr int kNodeCount       = 17;
 
 /**
  * 索引脱节标志。由 AddNodeAt 置位，装配末尾汇总写诊断文件。
@@ -193,6 +198,13 @@ NativeAudioEngine::NativeAudioEngine(int sample_rate, int channels, int max_fram
   auto scriptFx = std::make_unique<dsp::ScriptEffectNode>();
   scriptFx->set_channel_count(channels);
   AddNodeAt(*graph_, std::move(scriptFx), kNodeScriptEffect);
+
+  // Surround71 环绕：默认 bypass=true（与矩阵环绕互斥，由 UI/prefs 控制）。
+  // S0 阶段 Process 为直通（恒等），后续批次在此节点内逐层接入算法。
+  auto s71 = std::make_unique<dsp::s71::Surround71Node>();
+  s71->Prepare(sample_rate, max_frames);
+  s71->SetBypass(true);
+  AddNodeAt(*graph_, std::move(s71), kNodeS71);
 
   auto limiter = std::make_unique<dsp::LimiterNode>();
   limiter->set_channel_count(channels);
