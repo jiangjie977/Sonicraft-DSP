@@ -4003,33 +4003,6 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                             onValueChange = viewModel::setS71Externalize,
                         )
                     }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                    ) {
-                        ScKnob(
-                            label = "LFE 电平",
-                            value = s71BassBoost,
-                            min = 0f,
-                            max = 12f,
-                            sizeDp = 94,
-                            textScale = 0.60f,
-                            format = { "%+.1f".format(it) },
-                            resetValue = 2f,
-                            onValueChange = viewModel::setS71BassBoost,
-                        )
-                        ScKnob(
-                            label = "低音管理",
-                            value = s71BassMgmt,
-                            min = 0f,
-                            max = 1f,
-                            sizeDp = 94,
-                            textScale = 0.60f,
-                            format = { "%.2f".format(it) },
-                            resetValue = 0.25f,
-                            onValueChange = viewModel::setS71BassMgmt,
-                        )
-                    }
                     Text(
                         text = if (s71Enabled) {
                             "当前生效：Surround71（矩阵环绕已自动关闭）"
@@ -4074,7 +4047,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     VsChoiceRow(
                         options = listOf("关", "小房间", "客厅", "音乐厅", "大教堂"),
                         selected = vsRoomSize,
-                        enabled = vsEnabled,
+                        enabled = vsEnabled || s71Enabled,
                         onSelect = viewModel::setVsRoomSize,
                     )
 
@@ -4099,7 +4072,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                                     .clip(shape)
                                     .background(
                                         when {
-                                            !vsEnabled -> Color(0xFFF2F4F7)
+                                            !(vsEnabled || s71Enabled) -> Color(0xFFF2F4F7)
                                             active -> ScColors.Primary
                                             else -> Color(0xFFF6F9FC)
                                         },
@@ -4107,14 +4080,14 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                                     .border(
                                         width = 1.dp,
                                         color = when {
-                                            !vsEnabled -> Color(0xFFE6EBF1)
+                                            !(vsEnabled || s71Enabled) -> Color(0xFFE6EBF1)
                                             active -> ScColors.Primary
                                             else -> Color(0xFFD9E1EA)
                                         },
                                         shape = shape,
                                     )
                                     .then(
-                                        if (vsEnabled) {
+                                        if (vsEnabled || s71Enabled) {
                                             Modifier.scNoRippleClick { viewModel.setVsCenterMode(index) }
                                         } else {
                                             Modifier
@@ -4129,7 +4102,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                                     maxLines = 1,
                                     fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                                     color = when {
-                                        !vsEnabled -> ScColors.TextSub.copy(alpha = 0.5f)
+                                        !(vsEnabled || s71Enabled) -> ScColors.TextSub.copy(alpha = 0.5f)
                                         active -> Color.White
                                         else -> ScColors.TextSub
                                     },
@@ -4141,7 +4114,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                             VsButtonToggle(
                                 label = "后中置",
                                 checked = vsRearCenter,
-                                enabled = vsEnabled,
+                                enabled = vsEnabled || s71Enabled,
                                 modifier = Modifier.weight(1f),
                                 onCheckedChange = { viewModel.setVsRearCenter(it) },
                             )
@@ -4159,7 +4132,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     VsChoiceRow(
                         options = listOf("取自 LFE", "取自前置"),
                         selected = vsBassEnhMode,
-                        enabled = vsEnabled,
+                        enabled = vsEnabled || s71Enabled,
                         onSelect = viewModel::setVsBassEnhMode,
                     )
 
@@ -4211,13 +4184,45 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     )
                 }
 
+                // LFE 电平 / 低音管理：仅 Surround71 有这两级（矩阵环绕的 LFE 电平由
+                // 「声道 Trim · LFE」与「低音增强」共同承担），因此只在 S71 开启时可调。
+                if (s71Enabled) Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    ScKnob(
+                        label = "LFE 电平",
+                        value = s71BassBoost,
+                        min = 0f,
+                        max = 12f,
+                        sizeDp = 94,
+                        textScale = 0.60f,
+                        format = { "%+.1f".format(it) },
+                        resetValue = 2f,
+                        onValueChange = viewModel::setS71BassBoost,
+                    )
+                    ScKnob(
+                        label = "低音管理",
+                        value = s71BassMgmt,
+                        min = 0f,
+                        max = 1f,
+                        sizeDp = 94,
+                        textScale = 0.60f,
+                        format = { "%.2f".format(it) },
+                        resetValue = 0.25f,
+                        onValueChange = viewModel::setS71BassMgmt,
+                    )
+                }
+
                     if (vsRearCenter && !s71Enabled) {
                         VsGainRow(
                             label = "后中置延迟",
                             value = vsRearDelay,
                             range = 0f..15f,
                             suffix = " ms",
-                            enabled = vsEnabled,
+                            enabled = vsEnabled || s71Enabled,
                             onChange = viewModel::setVsRearDelay,
                         )
                     }
