@@ -3802,6 +3802,8 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val s71Enabled by viewModel.s71Enabled.collectAsStateWithLifecycle()
     val s71Upmix by viewModel.s71Upmix.collectAsStateWithLifecycle()
     val s71Externalize by viewModel.s71Externalize.collectAsStateWithLifecycle()
+    val s71Trims by viewModel.s71Trims.collectAsStateWithLifecycle()
+    val s71Mutes by viewModel.s71Mutes.collectAsStateWithLifecycle()
 
     val vsRearSpace by viewModel.vsRearSpace.collectAsStateWithLifecycle()
     val vsHeight by viewModel.vsHeight.collectAsStateWithLifecycle()
@@ -4214,16 +4216,37 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                             .padding(top = 8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
-                        val names = listOf("L", "C", "R", "SL", "SR", "CS", "LFE")
+                        // 按「当前实际生效的节点」切换声道列表：
+                        //   矩阵环绕 → L / C / R / SL / SR / CS / LFE（7 路）
+                        //   Surround71 → FL / FR / FC / LFE / BL / BR / SL / SR（8 路，顺序同 C++ 枚举）
+                        val s71Mode = s71Enabled && !vsEnabled
+                        val names = if (s71Mode) {
+                            listOf("FL", "FR", "FC", "LFE", "BL", "BR", "SL", "SR")
+                        } else {
+                            listOf("L", "C", "R", "SL", "SR", "CS", "LFE")
+                        }
                         names.forEachIndexed { index, name ->
                             VsTrimColumn(
                                 name = name,
-                                value = vsTrims.getOrElse(index) { 0f },
-                                muted = vsMutes.getOrElse(index) { 0f } > 0.5f,
-                                // 两节点互斥：任一开启时 Trim 都应可调（原来只跟矩阵环绕，开 S71 后整块置灰）
+                                value = if (s71Mode) {
+                                    s71Trims.getOrElse(index) { 0f }
+                                } else {
+                                    vsTrims.getOrElse(index) { 0f }
+                                },
+                                muted = if (s71Mode) {
+                                    s71Mutes.getOrElse(index) { 0f } > 0.5f
+                                } else {
+                                    vsMutes.getOrElse(index) { 0f } > 0.5f
+                                },
                                 enabled = vsEnabled || s71Enabled,
-                                onValue = { viewModel.setVsTrim(index, it) },
-                                onMute = { viewModel.setVsMute(index, it) },
+                                onValue = {
+                                    if (s71Mode) viewModel.setS71Trim(index, it)
+                                    else viewModel.setVsTrim(index, it)
+                                },
+                                onMute = {
+                                    if (s71Mode) viewModel.setS71Mute(index, it)
+                                    else viewModel.setVsMute(index, it)
+                                },
                             )
                         }
                     }
@@ -4231,7 +4254,9 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,
                     ) {
-                        TextButton(onClick = { viewModel.resetVsTrims() }) {
+                        TextButton(onClick = {
+                            if (s71Enabled && !vsEnabled) viewModel.resetS71Trims() else viewModel.resetVsTrims()
+                        }) {
                             Text("还原默认值", fontSize = 12.sp)
                         }
                     }

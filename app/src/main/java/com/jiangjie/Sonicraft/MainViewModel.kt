@@ -1592,10 +1592,15 @@ class MainViewModel @Inject constructor(
         if (enabled && _vsEnabled.value) setVsEnabled(false)
         engine.setBypass(AudioEngine.S71_NODE_INDEX, !enabled)
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ENABLED, if (enabled) 1f else 0f)
-        // 开启时把当前 7 路 Trim 全量同步过去（引擎重建后节点参数会回默认值）
+        // 开启时把 S71 自己的 8 路 Trim 全量推一遍（引擎重建后节点参数回默认值）
         if (enabled) {
-            _vsTrims.value.forEachIndexed { ch, db ->
-                applyVsTrimToS71(ch, db, _vsMutes.value.getOrElse(ch) { 0f } > 0.5f)
+            _s71Trims.value.forEachIndexed { ch, db ->
+                val muted = _s71Mutes.value.getOrElse(ch) { 0f } > 0.5f
+                engine.setParam(
+                    AudioEngine.S71_NODE_INDEX,
+                    AudioEngine.S71_PARAM_SPEAKER_GAIN0 + ch,
+                    if (muted) -60f else db,
+                )
             }
         }
         runCatching { saveLiveConfig(outputDeviceMonitor.current.value.key) }
@@ -1613,6 +1618,38 @@ class MainViewModel @Inject constructor(
         _s71Externalize.value = c
         prefs.edit().putFloat(KEY_S71_EXTERNALIZE, c).apply()
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_EXTERNALIZE, c)
+    }
+
+    /** Surround71 单声道 Trim（ch: 0=FL 1=FR 2=FC 3=LFE 4=BL 5=BR 6=SL 7=SR） */
+    fun setS71Trim(ch: Int, db: Float) {
+        if (ch !in 0..7) return
+        val v = if (db.isFinite()) db.coerceIn(-12f, 12f) else 0f
+        val arr = _s71Trims.value.copyOf()
+        arr[ch] = v
+        _s71Trims.value = arr
+        saveVsFloats(KEY_S71_TRIMS, arr)
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_SPEAKER_GAIN0 + ch, v)
+    }
+
+    /** Surround71 单声道静音（用 -60 dB 表达，节点内 < -59 即置 0） */
+    fun setS71Mute(ch: Int, muted: Boolean) {
+        if (ch !in 0..7) return
+        val arr = _s71Mutes.value.copyOf()
+        arr[ch] = if (muted) 1f else 0f
+        _s71Mutes.value = arr
+        saveVsFloats(KEY_S71_MUTES, arr)
+        val g = if (muted) -60f else _s71Trims.value.getOrElse(ch) { 0f }
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_SPEAKER_GAIN0 + ch, g)
+    }
+
+    fun resetS71Trims() {
+        _s71Trims.value = FloatArray(8)
+        _s71Mutes.value = FloatArray(8)
+        saveVsFloats(KEY_S71_TRIMS, FloatArray(8))
+        saveVsFloats(KEY_S71_MUTES, FloatArray(8))
+        for (i in 0..7) {
+            engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_SPEAKER_GAIN0 + i, 0f)
+        }
     }
 
     fun setVsMode(mode: Int) {
@@ -1709,6 +1746,13 @@ class MainViewModel @Inject constructor(
     private val _vsMutes = MutableStateFlow(loadVsFloats(KEY_VS_MUTES, 7, 0f, 0f, 1f))
     val vsMutes: StateFlow<FloatArray> = _vsMutes.asStateFlow()
 
+    // Surround71 的 8 路独立 Trim（顺序 = FL/FR/FC/LFE/BL/BR/SL/SR，与 C++ 枚举一致）
+    // 独立而不是复用矩阵环绕的 7 路：两者声道集合不同（S71 没有 CS，多了 BL/BR）
+    private val _s71Trims = MutableStateFlow(loadVsFloats(KEY_S71_TRIMS, 8, 0f, -12f, 12f))
+    val s71Trims: StateFlow<FloatArray> = _s71Trims.asStateFlow()
+    private val _s71Mutes = MutableStateFlow(loadVsFloats(KEY_S71_MUTES, 8, 0f, 0f, 1f))
+    val s71Mutes: StateFlow<FloatArray> = _s71Mutes.asStateFlow()
+
     // 顺序必须与界面标签一致：L / C / R / SL / SR / CS / LFE
     private val vsTrimIds = intArrayOf(
         AudioEngine.VS_PARAM_TRIM_L, AudioEngine.VS_PARAM_TRIM_C, AudioEngine.VS_PARAM_TRIM_R,
@@ -1729,38 +1773,7 @@ class MainViewModel @Inject constructor(
         _vsTrims.value = arr
         saveVsFloats(KEY_VS_TRIMS, arr)
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, vsTrimIds[ch], v)
-        // 同一组 Trim 也要控制 Surround71 的 8 路（见 applyVsTrimToS71 的映射说明）
-        applyVsTrimToS71(ch, v, _vsMutes.value.getOrElse(ch) { 0f } > 0.5f)
     }
-
-    /**
-     * 「公共接口 · 声道 Trim」跨节点同步：矩阵环绕 7 路 → Surround71 8 路。
-     *
-     * 映射（矩阵环绕 UI 顺序 → S71 的 FL/FR/FC/LFE/BL/BR/SL/SR）：
-     *   L  → FL ｜ C → FC ｜ R → FR ｜ SL → SL ｜ SR → SR ｜ LFE → LFE
-     *   CS → BL + BR（S71 是 7.1，没有"后中置"这一路；后中置语义最接近后左+后右，
-     *                 因此把同一个 Trim 值同时写给 BL 与 BR，保证听感一致）
-     *
-     * 静音用 -60 dB 表示（S71 侧没有独立的 mute 参数）。
-     */
-    private fun applyVsTrimToS71(ch: Int, db: Float, muted: Boolean) {
-        val g = if (muted) -60f else db
-        val node = AudioEngine.S71_NODE_INDEX
-        val base = AudioEngine.S71_PARAM_SPEAKER_GAIN0
-        when (ch) {
-            0 -> engine.setParam(node, base + 0, g)          // L → FL
-            1 -> engine.setParam(node, base + 2, g)          // C → FC
-            2 -> engine.setParam(node, base + 1, g)          // R → FR
-            3 -> engine.setParam(node, base + 6, g)          // SL → SL
-            4 -> engine.setParam(node, base + 7, g)          // SR → SR
-            5 -> {                                          // CS → BL + BR
-                engine.setParam(node, base + 4, g)
-                engine.setParam(node, base + 5, g)
-            }
-            6 -> engine.setParam(node, base + 3, g)          // LFE → LFE
-        }
-    }
-
     fun setVsMute(ch: Int, muted: Boolean) {
         if (ch !in 0..6) return
         val arr = _vsMutes.value.copyOf()
@@ -1772,8 +1785,6 @@ class MainViewModel @Inject constructor(
             vsMuteIds[ch],
             if (muted) 1f else 0f,
         )
-        // 同步到 Surround71：静音用 -60 dB 表达
-        applyVsTrimToS71(ch, _vsTrims.value.getOrElse(ch) { 0f }, muted)
     }
 
     /** 还原默认：全部 0 dB、全部解除静音 */
@@ -1785,8 +1796,7 @@ class MainViewModel @Inject constructor(
         for (i in 0..6) {
             engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, vsTrimIds[i], 0f)
             engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, vsMuteIds[i], 0f)
-        }        // 同步到 Surround71（7 路全 0 dB、解除静音）
-        for (ch in 0..6) applyVsTrimToS71(ch, 0f, false)
+        }
 
     }
 
@@ -6298,6 +6308,8 @@ class MainViewModel @Inject constructor(
     const val KEY_S71_ENABLED = "s71_enabled"
     const val KEY_S71_UPMIX = "s71_upmix"
     const val KEY_S71_EXTERNALIZE = "s71_externalize"
+    const val KEY_S71_TRIMS = "s71_trims"
+    const val KEY_S71_MUTES = "s71_mutes"
     const val KEY_VS_REAR_CENTER = "vs_rear_center"
     const val KEY_VS_REAR_DELAY = "vs_rear_delay"
 
