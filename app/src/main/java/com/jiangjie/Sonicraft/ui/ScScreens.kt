@@ -4210,11 +4210,14 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
             )
             if (trimExpanded.value) {
                 Column(modifier = Modifier.padding(bottom = 20.dp)) {
+                    // 横向滚动：矩阵环绕 7 列 / S71 8 列，每列 52dp 固定宽，
+                    // 总宽超出屏幕时左右滑动查看（原来 SpaceEvenly 会被压扁到挤在一起）
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
+                            .horizontalScroll(rememberScrollState())
+                            .padding(top = 8.dp, bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         // 按「当前实际生效的节点」切换声道列表：
                         //   矩阵环绕 → L / C / R / SL / SR / CS / LFE（7 路）
@@ -4276,6 +4279,12 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                             onCheckedChange = { viewModel.setVsDebugRaw(it) },
                         )
                     }
+                    Text(
+                        text = "← 左右滑动查看更多声道 →",
+                        fontSize = 10.sp,
+                        color = ScColors.TextSub,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
                     Text(
                         text = "逐声道校验：把某一路拉到 +12 dB 或静音，即可确认该声道是否真的在工作。" +
                             "LFE 不走双耳渲染，直接混入双耳。\n" +
