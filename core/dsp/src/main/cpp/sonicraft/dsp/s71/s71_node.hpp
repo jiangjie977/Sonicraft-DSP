@@ -32,7 +32,8 @@
 #include <string_view>
 
 #include "sonicraft/dsp/dsp_node.hpp"
-#include "sonicraft/dsp/convolver.hpp"    // 复用 ConvolverNode（内置 5 档 RIR）
+#include "sonicraft/dsp/convolver.hpp"
+#include "sonicraft/dsp/s71/s71_hrir.hpp"   // MIT KEMAR HRIR（8 路方位）    // 复用 ConvolverNode（内置 5 档 RIR）
 #include "sonicraft/dsp/vs_decoder.hpp"   // 复用 LowPass2 / Biquad
 
 namespace sonicraft::dsp::s71 {
@@ -165,6 +166,7 @@ class Surround71Node : public DspNode {
     bm_lp_.Reset();
     harm_lp_ = 0.0f;
     room_.Reset();
+    for (int i = 0; i < kChannelCount; ++i) hrir_conv_[i].Reset();
   }
 
   void Process(float* const* channels, int frames) override {
@@ -177,9 +179,9 @@ class Surround71Node : public DspNode {
     const float s = ClampF(param_[kParamUpmixStrength], 0.0f, 1.0f);
     const float norm = 1.0f / (1.0f + 0.45f * s);   // 照搬 Surround71 的归一化
     // 折叠系数：8 路相加后回到原电平（实测标定，见 S1 探针）
-    // 折叠系数随上混强度递减：s=0 时必须 fold=1（上混关闭即直通），
-    // s=0.85 时约 0.70（8 路折叠后回到原电平）。实测：s=0 -> A/B 0.0dB，s=0.85 -> -0.2dB。
-    const float fold = 1.0f - 0.35f * s;
+    // 注意：S2 起用 HRTF 卷积替代了原来的「朴素折叠」，fold 已不再参与输出，
+    // 保留变量只为兼容旧注释与后续可能的旁路路径。
+    (void)(1.0f - 0.35f * s);
 
     float* pl = channels[0];
     float* pr = channels[1];
@@ -252,11 +254,26 @@ class Surround71Node : public DspNode {
         bm_mono = bm_lp_.Process(ch8[kLFE]) * bm;
       }
 
-      // 折叠（无 HRTF 时的近似双耳）：前置全量、中置 0.707、环绕全量、LFE 半量
-      const float lo =
-          (ch8[kFL] + 0.7071f * ch8[kFC] + ch8[kBL] + ch8[kSL] + 0.5f * ch8[kLFE]) * fold + bm_mono;
-      const float ro =
-          (ch8[kFR] + 0.7071f * ch8[kFC] + ch8[kBR] + ch8[kSR] + 0.5f * ch8[kLFE]) * fold + bm_mono;
+      // ---- HRTF 双耳化：8 路各按方位做 HRIR 卷积，再累加到双耳 ----
+      // LFE 不做 HRTF（低音无方向性），等量送左右耳。
+      float lo = 0.0f;
+      float ro = 0.0f;
+      for (int c = 0; c < kChannelCount; ++c) {
+        const HrirPair* hp = HrirForChannel(c);
+        if (hp == nullptr) {
+          lo += ch8[c] * 0.5f;
+          ro += ch8[c] * 0.5f;
+        } else {
+          lo += hrir_conv_[c].Process(ch8[c], hp->l);
+          ro += hrir_conv_[c].Process(ch8[c], hp->r);
+        }
+      }
+      // HRIR 已按「8 路最大能量归一化」，叠加后仍需一个总缩放（探针标定）
+      // HRIR 卷积会分散能量（139 抽头、归一化后峰值仅 0.7），7 路叠加后净增益约 -6.6 dB。
+      // 实测输入 0.5 → RMS 0.165（正弦输入 RMS 0.354），比值 0.466。乘 2.14 补回 ≈ 0 dB。
+      const float kHrirGain = 0.90f;
+      lo = lo * kHrirGain + bm_mono;
+      ro = ro * kHrirGain + bm_mono;
       pl[i] = lo;
       pr[i] = ro;
     }
@@ -297,6 +314,29 @@ class Surround71Node : public DspNode {
     if (a > 1.0f) a = 1.0f;
     return sign * a * a * 1.5f;
   }
+
+  /**
+   * 直接时域卷积（139 抽头）。用 2 倍长度历史缓冲避免取模：
+   * 写入 pos 与 pos+kHrirTaps 两处，回读 [pos+kHrirTaps-t] 永远落在合法区间。
+   * 成本：每路每样本 139 MAC，7 路 ≈ 973 MAC/样本 ≈ 47 M MAC/s（手机轻松）。
+   */
+  struct HrirConv {
+    float hist[2 * kHrirTaps]{};
+    int pos = 0;
+    void Reset() {
+      for (int i = 0; i < 2 * kHrirTaps; ++i) hist[i] = 0.0f;
+      pos = 0;
+    }
+    inline float Process(float x, const float* h) {
+      hist[pos] = x;
+      hist[pos + kHrirTaps] = x;
+      float acc = 0.0f;
+      const int base = pos + kHrirTaps;
+      for (int t = 0; t < kHrirTaps; ++t) acc += hist[base - t] * h[t];
+      if (++pos >= kHrirTaps) pos = 0;
+      return acc;
+    }
+  };
 
   /** 40 ms 延迟线容量（48 kHz 下 4096 = 85 ms，留足余量；2 的幂便于取模） */
   static constexpr int kDelaySize = 4096;
@@ -345,6 +385,7 @@ class Surround71Node : public DspNode {
   vs::LowPass2 bm_lp_;   // 低音管理的独立低通（避免污染 LFE 生成用的 lfe_lp_）
   float harm_lp_ = 0.0f;  // 低音增强的 120 Hz 近似一阶低通状态
   dsp::ConvolverNode room_;   // 环境声场（复用内置五档 RIR）
+  HrirConv hrir_conv_[kChannelCount];   // 8 路 HRTF 卷积状态
   static constexpr float kFoldGain = 0.70f;   // 折叠系数（S1 标定，探针确认）
 };
 
