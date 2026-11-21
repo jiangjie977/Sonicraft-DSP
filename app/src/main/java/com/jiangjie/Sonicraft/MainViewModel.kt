@@ -1592,6 +1592,8 @@ class MainViewModel @Inject constructor(
         if (enabled && _vsEnabled.value) setVsEnabled(false)
         engine.setBypass(AudioEngine.S71_NODE_INDEX, !enabled)
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ENABLED, if (enabled) 1f else 0f)
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_BOOST_DB, _s71BassBoost.value)
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_MANAGEMENT, _s71BassMgmt.value)
         // 开启时把 S71 自己的 8 路 Trim 全量推一遍（引擎重建后节点参数回默认值）
         if (enabled) {
             _s71Trims.value.forEachIndexed { ch, db ->
@@ -1640,6 +1642,22 @@ class MainViewModel @Inject constructor(
         saveVsFloats(KEY_S71_MUTES, arr)
         val g = if (muted) -60f else _s71Trims.value.getOrElse(ch) { 0f }
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_SPEAKER_GAIN0 + ch, g)
+    }
+
+    /** LFE 电平（0~+12 dB）：Surround71 的 BassBoostDb */
+    fun setS71BassBoost(v: Float) {
+        val c = v.coerceIn(0f, 12f)
+        _s71BassBoost.value = c
+        prefs.edit().putFloat(KEY_S71_BASS_BOOST, c).apply()
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_BOOST_DB, c)
+    }
+
+    /** 低音管理（0~1）：<110 Hz 等量补到双耳，低频更结实 */
+    fun setS71BassMgmt(v: Float) {
+        val c = v.coerceIn(0f, 1f)
+        _s71BassMgmt.value = c
+        prefs.edit().putFloat(KEY_S71_BASS_MGMT, c).apply()
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_MANAGEMENT, c)
     }
 
     fun resetS71Trims() {
@@ -1752,6 +1770,12 @@ class MainViewModel @Inject constructor(
     val s71Trims: StateFlow<FloatArray> = _s71Trims.asStateFlow()
     private val _s71Mutes = MutableStateFlow(loadVsFloats(KEY_S71_MUTES, 8, 0f, 0f, 1f))
     val s71Mutes: StateFlow<FloatArray> = _s71Mutes.asStateFlow()
+
+    // S71 低音：LFE 电平（0~+12 dB，原版默认 +2）/ 低音管理（<110Hz 等量补双耳，默认 0.25）
+    private val _s71BassBoost = MutableStateFlow(prefs.getFloat(KEY_S71_BASS_BOOST, 2.0f))
+    val s71BassBoost: StateFlow<Float> = _s71BassBoost.asStateFlow()
+    private val _s71BassMgmt = MutableStateFlow(prefs.getFloat(KEY_S71_BASS_MGMT, 0.25f))
+    val s71BassMgmt: StateFlow<Float> = _s71BassMgmt.asStateFlow()
 
     // 顺序必须与界面标签一致：L / C / R / SL / SR / CS / LFE
     private val vsTrimIds = intArrayOf(
@@ -2508,6 +2532,8 @@ class MainViewModel @Inject constructor(
             "s71_enabled" -> setS71Enabled(v > 0.5f)
             "s71_upmix" -> setS71Upmix(v)
             "s71_externalize" -> setS71Externalize(v)
+            "s71_bass_boost" -> setS71BassBoost(v)
+            "s71_bass_mgmt" -> setS71BassMgmt(v)
             "vs_rear_center" -> setVsRearCenter(v > 0.5f)
             "vs_rear_delay" -> setVsRearDelay(v)
             "output_gain" -> setOutputGain(v)
@@ -2661,6 +2687,8 @@ class MainViewModel @Inject constructor(
         "s71_enabled" to if (_s71Enabled.value) 1f else 0f,
         "s71_upmix" to _s71Upmix.value,
         "s71_externalize" to _s71Externalize.value,
+        "s71_bass_boost" to _s71BassBoost.value,
+        "s71_bass_mgmt" to _s71BassMgmt.value,
         "vs_rear_center" to if (_vsRearCenter.value) 1f else 0f,
         "vs_rear_delay" to _vsRearDelay.value,
         "output_gain" to _outputGain.value,
@@ -6310,6 +6338,8 @@ class MainViewModel @Inject constructor(
     const val KEY_S71_EXTERNALIZE = "s71_externalize"
     const val KEY_S71_TRIMS = "s71_trims"
     const val KEY_S71_MUTES = "s71_mutes"
+    const val KEY_S71_BASS_BOOST = "s71_bass_boost"
+    const val KEY_S71_BASS_MGMT = "s71_bass_mgmt"
     const val KEY_VS_REAR_CENTER = "vs_rear_center"
     const val KEY_VS_REAR_DELAY = "vs_rear_delay"
 

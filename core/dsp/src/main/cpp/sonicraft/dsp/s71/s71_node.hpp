@@ -127,6 +127,7 @@ class Surround71Node : public DspNode {
     back_lp_l_.Set(5200.0f, fs);
     back_lp_r_.Set(5200.0f, fs);
     lfe_lp_.Set(110.0f, fs);
+    bm_lp_.Set(110.0f, fs);
     Reset();
   }
 
@@ -139,6 +140,7 @@ class Surround71Node : public DspNode {
     back_lp_l_.Reset();
     back_lp_r_.Reset();
     lfe_lp_.Reset();
+    bm_lp_.Reset();
   }
 
   void Process(float* const* channels, int frames) override {
@@ -173,9 +175,28 @@ class Surround71Node : public DspNode {
         }
       }
 
+      // ---- LFE 电平（Surround71 的 BassBoostDb，默认 +2 dB）----
+      {
+        const float boost_db = param_[kParamBassBoostDb];
+        if (boost_db > 0.01f || boost_db < -0.01f) {
+          ch8[kLFE] *= std::pow(10.0f, boost_db * 0.05f);
+        }
+      }
+
+      // ---- 低音管理（Surround71 的 BassManagement）----
+      // 把 LFE 的 110 Hz 以下能量**等量**补到左右耳，低频更结实、不发散。
+      // 用独立滤波器（lfe_lp_ 已在生成 LFE 时用过，复用会改变其状态）。
+      const float bm = ClampF(param_[kParamBassManagement], 0.0f, 1.0f);
+      float bm_mono = 0.0f;
+      if (bm > 0.001f) {
+        bm_mono = bm_lp_.Process(ch8[kLFE]) * bm;
+      }
+
       // 折叠（无 HRTF 时的近似双耳）：前置全量、中置 0.707、环绕全量、LFE 半量
-      const float lo = (ch8[kFL] + 0.7071f * ch8[kFC] + ch8[kBL] + ch8[kSL] + 0.5f * ch8[kLFE]) * fold;
-      const float ro = (ch8[kFR] + 0.7071f * ch8[kFC] + ch8[kBR] + ch8[kSR] + 0.5f * ch8[kLFE]) * fold;
+      const float lo =
+          (ch8[kFL] + 0.7071f * ch8[kFC] + ch8[kBL] + ch8[kSL] + 0.5f * ch8[kLFE]) * fold + bm_mono;
+      const float ro =
+          (ch8[kFR] + 0.7071f * ch8[kFC] + ch8[kBR] + ch8[kSR] + 0.5f * ch8[kLFE]) * fold + bm_mono;
       pl[i] = lo;
       pr[i] = ro;
     }
@@ -239,6 +260,7 @@ class Surround71Node : public DspNode {
   int pos_ = 0;
   int side_del_l_ = 0, side_del_r_ = 0, back_del_l_ = 0, back_del_r_ = 0;
   vs::LowPass2 side_lp_l_, side_lp_r_, back_lp_l_, back_lp_r_, lfe_lp_;
+  vs::LowPass2 bm_lp_;   // 低音管理的独立低通（避免污染 LFE 生成用的 lfe_lp_）
   static constexpr float kFoldGain = 0.70f;   // 折叠系数（S1 标定，探针确认）
 };
 

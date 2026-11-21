@@ -3804,6 +3804,8 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val s71Externalize by viewModel.s71Externalize.collectAsStateWithLifecycle()
     val s71Trims by viewModel.s71Trims.collectAsStateWithLifecycle()
     val s71Mutes by viewModel.s71Mutes.collectAsStateWithLifecycle()
+    val s71BassBoost by viewModel.s71BassBoost.collectAsStateWithLifecycle()
+    val s71BassMgmt by viewModel.s71BassMgmt.collectAsStateWithLifecycle()
 
     val vsRearSpace by viewModel.vsRearSpace.collectAsStateWithLifecycle()
     val vsHeight by viewModel.vsHeight.collectAsStateWithLifecycle()
@@ -3999,6 +4001,33 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                             format = { "%.2f".format(it) },
                             resetValue = 0.35f,
                             onValueChange = viewModel::setS71Externalize,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        ScKnob(
+                            label = "LFE 电平",
+                            value = s71BassBoost,
+                            min = 0f,
+                            max = 12f,
+                            sizeDp = 94,
+                            textScale = 0.60f,
+                            format = { "%+.1f".format(it) },
+                            resetValue = 2f,
+                            onValueChange = viewModel::setS71BassBoost,
+                        )
+                        ScKnob(
+                            label = "低音管理",
+                            value = s71BassMgmt,
+                            min = 0f,
+                            max = 1f,
+                            sizeDp = 94,
+                            textScale = 0.60f,
+                            format = { "%.2f".format(it) },
+                            resetValue = 0.25f,
+                            onValueChange = viewModel::setS71BassMgmt,
                         )
                     }
                     Text(

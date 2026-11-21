@@ -236,6 +236,16 @@ class AudioChainManager @Inject constructor(
                 AudioEngine.S71_PARAM_EXTERNALIZE,
                 prefs.getFloat("s71_externalize", 0.35f),
             )
+            engine.setParam(
+                AudioEngine.S71_NODE_INDEX,
+                AudioEngine.S71_PARAM_BASS_BOOST_DB,
+                prefs.getFloat("s71_bass_boost", 2.0f),
+            )
+            engine.setParam(
+                AudioEngine.S71_NODE_INDEX,
+                AudioEngine.S71_PARAM_BASS_MANAGEMENT,
+                prefs.getFloat("s71_bass_mgmt", 0.25f),
+            )
             // 必须同时下发 enabled：节点内该参数默认 0，仅解除 bypass 仍会直通，
             // 表现为"开关显示开启却没有效果、手动切一次才生效"（开机初始化缺陷）。
             engine.setParam(
