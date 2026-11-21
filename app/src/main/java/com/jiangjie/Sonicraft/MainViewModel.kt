@@ -1785,7 +1785,9 @@ class MainViewModel @Inject constructor(
         for (i in 0..6) {
             engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, vsTrimIds[i], 0f)
             engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, vsMuteIds[i], 0f)
-        }
+        }        // 同步到 Surround71（7 路全 0 dB、解除静音）
+        for (ch in 0..6) applyVsTrimToS71(ch, 0f, false)
+
     }
 
     private val _vsDistance = MutableStateFlow(saneFloat(KEY_VS_DISTANCE, 0.5f, 0f, 1f))

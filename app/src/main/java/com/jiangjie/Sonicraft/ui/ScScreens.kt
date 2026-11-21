@@ -4220,7 +4220,8 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                                 name = name,
                                 value = vsTrims.getOrElse(index) { 0f },
                                 muted = vsMutes.getOrElse(index) { 0f } > 0.5f,
-                                enabled = vsEnabled,
+                                // 两节点互斥：任一开启时 Trim 都应可调（原来只跟矩阵环绕，开 S71 后整块置灰）
+                                enabled = vsEnabled || s71Enabled,
                                 onValue = { viewModel.setVsTrim(index, it) },
                                 onMute = { viewModel.setVsMute(index, it) },
                             )
