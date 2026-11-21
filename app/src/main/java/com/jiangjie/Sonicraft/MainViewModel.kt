@@ -1592,6 +1592,12 @@ class MainViewModel @Inject constructor(
         if (enabled && _vsEnabled.value) setVsEnabled(false)
         engine.setBypass(AudioEngine.S71_NODE_INDEX, !enabled)
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ENABLED, if (enabled) 1f else 0f)
+        // 开启时把当前 7 路 Trim 全量同步过去（引擎重建后节点参数会回默认值）
+        if (enabled) {
+            _vsTrims.value.forEachIndexed { ch, db ->
+                applyVsTrimToS71(ch, db, _vsMutes.value.getOrElse(ch) { 0f } > 0.5f)
+            }
+        }
         runCatching { saveLiveConfig(outputDeviceMonitor.current.value.key) }
     }
 
@@ -1723,6 +1729,36 @@ class MainViewModel @Inject constructor(
         _vsTrims.value = arr
         saveVsFloats(KEY_VS_TRIMS, arr)
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, vsTrimIds[ch], v)
+        // 同一组 Trim 也要控制 Surround71 的 8 路（见 applyVsTrimToS71 的映射说明）
+        applyVsTrimToS71(ch, v, _vsMutes.value.getOrElse(ch) { 0f } > 0.5f)
+    }
+
+    /**
+     * 「公共接口 · 声道 Trim」跨节点同步：矩阵环绕 7 路 → Surround71 8 路。
+     *
+     * 映射（矩阵环绕 UI 顺序 → S71 的 FL/FR/FC/LFE/BL/BR/SL/SR）：
+     *   L  → FL ｜ C → FC ｜ R → FR ｜ SL → SL ｜ SR → SR ｜ LFE → LFE
+     *   CS → BL + BR（S71 是 7.1，没有"后中置"这一路；后中置语义最接近后左+后右，
+     *                 因此把同一个 Trim 值同时写给 BL 与 BR，保证听感一致）
+     *
+     * 静音用 -60 dB 表示（S71 侧没有独立的 mute 参数）。
+     */
+    private fun applyVsTrimToS71(ch: Int, db: Float, muted: Boolean) {
+        val g = if (muted) -60f else db
+        val node = AudioEngine.S71_NODE_INDEX
+        val base = AudioEngine.S71_PARAM_SPEAKER_GAIN0
+        when (ch) {
+            0 -> engine.setParam(node, base + 0, g)          // L → FL
+            1 -> engine.setParam(node, base + 2, g)          // C → FC
+            2 -> engine.setParam(node, base + 1, g)          // R → FR
+            3 -> engine.setParam(node, base + 6, g)          // SL → SL
+            4 -> engine.setParam(node, base + 7, g)          // SR → SR
+            5 -> {                                          // CS → BL + BR
+                engine.setParam(node, base + 4, g)
+                engine.setParam(node, base + 5, g)
+            }
+            6 -> engine.setParam(node, base + 3, g)          // LFE → LFE
+        }
     }
 
     fun setVsMute(ch: Int, muted: Boolean) {
@@ -1736,6 +1772,8 @@ class MainViewModel @Inject constructor(
             vsMuteIds[ch],
             if (muted) 1f else 0f,
         )
+        // 同步到 Surround71：静音用 -60 dB 表达
+        applyVsTrimToS71(ch, _vsTrims.value.getOrElse(ch) { 0f }, muted)
     }
 
     /** 还原默认：全部 0 dB、全部解除静音 */

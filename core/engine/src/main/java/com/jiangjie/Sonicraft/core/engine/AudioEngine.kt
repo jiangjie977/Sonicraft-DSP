@@ -248,6 +248,8 @@ interface AudioEngine {
     const val S71_PARAM_BASS_MANAGEMENT = 7
     const val S71_PARAM_SURROUND_LEVEL_DB = 8
     const val S71_PARAM_CENTER_LEVEL_DB = 9
+    /** 8 路声道增益起点（FL/FR/FC/LFE/BL/BR/SL/SR 各 +0..+7） */
+    const val S71_PARAM_SPEAKER_GAIN0 = 10
         const val VS_PARAM_MODE = 1
         const val VS_PARAM_SURROUND_GAIN = 2
         const val VS_PARAM_CENTER_GAIN = 3

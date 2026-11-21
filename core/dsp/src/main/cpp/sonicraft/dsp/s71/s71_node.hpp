@@ -28,6 +28,7 @@
 #define SONICRAFT_DSP_S71_NODE_HPP
 
 #include <algorithm>
+#include <cmath>
 #include <string_view>
 
 #include "sonicraft/dsp/dsp_node.hpp"
@@ -161,6 +162,16 @@ class Surround71Node : public DspNode {
       const float r = pr[i];
       float ch8[kChannelCount];
       UpmixOne(l, r, s, norm, ch8);
+
+      // 8 路声道 Trim（与「公共接口 · 声道 Trim」共享同一组数值，VM 侧做映射下发）
+      for (int c = 0; c < kChannelCount; ++c) {
+        const float g_db = param_[kParamSpeakerGain0 + c];
+        if (g_db < -59.0f) {
+          ch8[c] = 0.0f;   // 静音（-60 dB 约定为 mute）
+        } else if (g_db > 0.001f || g_db < -0.001f) {
+          ch8[c] *= std::pow(10.0f, g_db * 0.05f);
+        }
+      }
 
       // 折叠（无 HRTF 时的近似双耳）：前置全量、中置 0.707、环绕全量、LFE 半量
       const float lo = (ch8[kFL] + 0.7071f * ch8[kFC] + ch8[kBL] + ch8[kSL] + 0.5f * ch8[kLFE]) * fold;
