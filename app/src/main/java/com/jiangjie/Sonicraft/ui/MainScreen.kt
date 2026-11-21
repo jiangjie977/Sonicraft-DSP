@@ -898,6 +898,10 @@ private fun P1LibrarySection(
             )
         }
         val vsEnabled = viewModel.vsEnabled.collectAsStateWithLifecycle().value
+        // 空间环绕有两个引擎（矩阵环绕 / Surround71），互斥。总闸必须「任一开启即算开」，
+        // 否则打开 Surround71 后（矩阵环绕被自动关闭）总闸会显示为关。
+        val s71Enabled = viewModel.s71Enabled.collectAsStateWithLifecycle().value
+        val vsAnyOn = vsEnabled || s71Enabled
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             // 空间环绕：与机架同行（两者都是"整条总线级"的处理，语义相近）
             // 副标题压到 8 字以内：半宽卡放不下原来那句「7 声道虚拟布局 · 双耳 HRTF 渲染」
@@ -905,9 +909,18 @@ private fun P1LibrarySection(
                 title = "空间环绕",
                 subtitle = "耳机虚拟环绕",
                 icon = ScEffectIconKind.WAVE,
-                enabled = vsEnabled,
+                enabled = vsAnyOn,
                 onClick = onOpenVs,
-                onToggle = { viewModel.setVsEnabled(!vsEnabled) },
+                onToggle = {
+                    if (vsAnyOn) {
+                        // 关闭：两个引擎都关（互斥保证了只会有一个是开的）
+                        if (vsEnabled) viewModel.setVsEnabled(false)
+                        if (s71Enabled) viewModel.setS71Enabled(false)
+                    } else {
+                        // 从全关状态点开：默认恢复矩阵环绕（用户最常用的那个）
+                        viewModel.setVsEnabled(true)
+                    }
+                },
                 modifier = Modifier.weight(1f),
             )
             // 机架：脚本机架自设置页迁来；开关为整机总闸
