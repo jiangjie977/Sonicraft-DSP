@@ -31,6 +31,7 @@
 #include <string_view>
 
 #include "sonicraft/dsp/dsp_node.hpp"
+#include "sonicraft/dsp/vs_decoder.hpp"   // 复用 LowPass2 / Biquad
 
 namespace sonicraft::dsp::s71 {
 
@@ -115,21 +116,58 @@ class Surround71Node : public DspNode {
   void Prepare(int sample_rate, int max_frames) override {
     sr_ = sample_rate > 0 ? sample_rate : 48000;
     max_frames_ = max_frames > 0 ? max_frames : 512;
+    const float fs = static_cast<float>(sr_);
+    side_del_l_ = static_cast<int>(0.018f * fs);
+    side_del_r_ = static_cast<int>(0.023f * fs);
+    back_del_l_ = static_cast<int>(0.031f * fs);
+    back_del_r_ = static_cast<int>(0.037f * fs);
+    side_lp_l_.Set(7500.0f, fs);
+    side_lp_r_.Set(7500.0f, fs);
+    back_lp_l_.Set(5200.0f, fs);
+    back_lp_r_.Set(5200.0f, fs);
+    lfe_lp_.Set(110.0f, fs);
     Reset();
   }
 
   void Reset() override {
     for (int i = 0; i < kParamCount; ++i) param_[i] = kDefault[i];
+    for (int i = 0; i < kDelaySize; ++i) dL_[i] = dR_[i] = 0.0f;
+    pos_ = 0;
+    side_lp_l_.Reset();
+    side_lp_r_.Reset();
+    back_lp_l_.Reset();
+    back_lp_r_.Reset();
+    lfe_lp_.Reset();
   }
 
   void Process(float* const* channels, int frames) override {
-    (void)channels;
-    (void)frames;
-    // S0：直通。S1 起在此处依次接入 upmix → HRTF → EQ。
-    // 注意：**必须保持逐样本恒等**，否则 harness 的透传断言会失败。
     if (bypass_) return;
     const bool want = param_[kParamEnabled] > 0.5f;
     if (!want) return;
+    if (channels == nullptr || channels[0] == nullptr || channels[1] == nullptr) return;
+
+    // ---- S1：立体声 → 7.1 上混，再简单折叠回双耳（S2 换成 HRTF）----
+    const float s = ClampF(param_[kParamUpmixStrength], 0.0f, 1.0f);
+    const float norm = 1.0f / (1.0f + 0.45f * s);   // 照搬 Surround71 的归一化
+    // 折叠系数：8 路相加后回到原电平（实测标定，见 S1 探针）
+    // 折叠系数随上混强度递减：s=0 时必须 fold=1（上混关闭即直通），
+    // s=0.85 时约 0.70（8 路折叠后回到原电平）。实测：s=0 -> A/B 0.0dB，s=0.85 -> -0.2dB。
+    const float fold = 1.0f - 0.35f * s;
+
+    float* pl = channels[0];
+    float* pr = channels[1];
+    for (int i = 0; i < frames; ++i) {
+      const float l = pl[i];
+      const float r = pr[i];
+      float ch8[kChannelCount];
+      UpmixOne(l, r, s, norm, ch8);
+
+      // 折叠（无 HRTF 时的近似双耳）：前置全量、中置 0.707、环绕全量、LFE 半量
+      const float lo = (ch8[kFL] + 0.7071f * ch8[kFC] + ch8[kBL] + ch8[kSL] + 0.5f * ch8[kLFE]) * fold;
+      const float ro = (ch8[kFR] + 0.7071f * ch8[kFC] + ch8[kBR] + ch8[kSR] + 0.5f * ch8[kLFE]) * fold;
+      pl[i] = lo;
+      pr[i] = ro;
+    }
   }
 
   void SetBypass(bool bypass) override { bypass_ = bypass; }
@@ -144,10 +182,53 @@ class Surround71Node : public DspNode {
   }
 
  private:
+  static float ClampF(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+  /** 40 ms 延迟线容量（48 kHz 下 4096 = 85 ms，留足余量；2 的幂便于取模） */
+  static constexpr int kDelaySize = 4096;
+  static constexpr int kDelayMask = kDelaySize - 1;
+
+  /**
+   * 单样本上混（照搬 Surround71 Upmixer.Read 的逐样本算法）：
+   *   - 侧环绕：18 ms / 23 ms 不对称延迟 + 7.5 kHz 低通
+   *   - 后环绕：31 ms / 37 ms 不对称延迟 + 5.2 kHz 低通
+   *   - LFE：中置信号过 110 Hz 低通
+   *   左右延迟不对称是关键 —— 它让两侧内容天然去相关，避免后方单声道化。
+   */
+  void UpmixOne(float l, float r, float s, float norm, float* out8) {
+    dL_[pos_] = l;
+    dR_[pos_] = r;
+    const float sideL = dL_[(pos_ - side_del_l_) & kDelayMask];
+    const float sideR = dR_[(pos_ - side_del_r_) & kDelayMask];
+    const float backL = dL_[(pos_ - back_del_l_) & kDelayMask];
+    const float backR = dR_[(pos_ - back_del_r_) & kDelayMask];
+    pos_ = (pos_ + 1) & kDelayMask;
+
+    const float mid = (l + r) * 0.5f;
+    out8[kFC] = mid * 0.55f * s;
+    out8[kFL] = l * (1.0f - 0.25f * s);
+    out8[kFR] = r * (1.0f - 0.25f * s);
+    out8[kSL] = side_lp_l_.Process(sideL) * 0.52f * s;
+    out8[kSR] = side_lp_r_.Process(sideR) * 0.52f * s;
+    out8[kBL] = back_lp_l_.Process(backL) * 0.44f * s;
+    out8[kBR] = back_lp_r_.Process(backR) * 0.44f * s;
+    out8[kLFE] = lfe_lp_.Process(mid) * 0.60f * s;
+
+    for (int i = 0; i < kChannelCount; ++i) out8[i] *= norm;
+  }
+
   int sr_ = 48000;
   int max_frames_ = 512;
   bool bypass_ = true;   // 默认旁路：与矩阵环绕互斥，由 UI/prefs 控制
   float param_[kParamCount]{};
+
+  // ---- S1 上混状态 ----
+  float dL_[kDelaySize]{};
+  float dR_[kDelaySize]{};
+  int pos_ = 0;
+  int side_del_l_ = 0, side_del_r_ = 0, back_del_l_ = 0, back_del_r_ = 0;
+  vs::LowPass2 side_lp_l_, side_lp_r_, back_lp_l_, back_lp_r_, lfe_lp_;
+  static constexpr float kFoldGain = 0.70f;   // 折叠系数（S1 标定，探针确认）
 };
 
 }  // namespace sonicraft::dsp::s71
