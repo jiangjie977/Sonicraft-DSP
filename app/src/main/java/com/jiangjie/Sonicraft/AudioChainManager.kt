@@ -435,6 +435,13 @@ class AudioChainManager @Inject constructor(
 
             // EQ：段数固定 10，曲线从 CSV 解析
             engine.setBypass(AudioEngine.EQ_NODE_INDEX, !b("eq_enabled", false))
+            // AutoEQ 不在 EffectGroups 里（它挂在 EQ 段，与 PEQ 独立），
+            // 必须单独重放旁路，否则打开 AutoEQ 后重启不生效（假开关）。
+            engine.setBypass(
+                AudioEngine.AUTO_EQ_NODE_INDEX,
+                !(prefs.getBoolean("eq_section_enabled", true) &&
+                    prefs.getBoolean("auto_eq_enabled", false)),
+            )
             prefs.getString("eq_bands_10", null)?.split(',')?.forEachIndexed { i, s ->
                 s.trim().toFloatOrNull()?.let { engine.setParam(AudioEngine.EQ_NODE_INDEX, i, it) }
             }
