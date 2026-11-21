@@ -55,17 +55,17 @@ constexpr bool kIsLfe[kChannelCount] = {false, false, false, true, false, false,
 enum Param : int {
   // ---- 全局 ----
   kParamEnabled = 0,        // 0/1 本节点总开关（与 bypass 叠加判定）
-  kParamHeadphoneMode = 1,  // 1 = HRTF 双耳化（默认）；0 = 每声道增益/延迟直通（内部调试用）
+  kParamHeadphoneMode = 1,  // [未实现] 1=HRTF 双耳化（默认，也是唯一路径）；0=音箱直通模式未实现
   kParamUpmixStrength = 2,  // 0~1   上混强度（保留 FL/FR 主体，其余按比例派生）
   kParamExternalize = 3,    // 0~1   外部化（早期反射强度）
   kParamWidth = 4,          // 0~2   M/S 展宽（1 = 原样）
-  kParamOutputGainDb = 5,   // -12~+12 输出增益
+  kParamOutputGainDb = 5,   // [未实现] 输出增益：改由 kHrirGain 常量统一标定，此参数未读取
 
   // ---- 电平组 ----
   kParamBassBoostDb = 6,      // 0~+12  LFE 通道电平
   kParamBassManagement = 7,   // 0~1    <110 Hz 等量补到双耳的强度
-  kParamSurroundLevelDb = 8,  // -12~+12  BL/BR/SL/SR 电平
-  kParamCenterLevelDb = 9,    // -12~+12  FC 电平
+  kParamSurroundLevelDb = 8,  // [未实现] 环绕电平：由「声道 Trim · BL/BR/SL/SR」承担，此参数未读取
+  kParamCenterLevelDb = 9,    // [未实现] 中置电平：由「声道 Trim · FC」承担，此参数未读取
 
   // ---- 每声道增益（8 路，dB）----
   kParamSpeakerGain0 = 10,  // 10..17
@@ -73,12 +73,12 @@ enum Param : int {
   kParamSpeakerDelay0 = 18,  // 18..25
 
   // ---- 6 段参数均衡器 ----
-  kParamEqEnabled = 26,   // 0/1
-  kParamEqPreampDb = 27,  // -20~+20
-  kParamEqFreq0 = 28,     // 28..33  各段中心频率 Hz
-  kParamEqGain0 = 34,     // 34..39  各段增益 dB
-  kParamEqType0 = 40,     // 40..45  0=Peak 1=LowShelf 2=HighShelf 3=HighPass 4=LowPass
-  kParamEqBandOn0 = 46,   // 46..51  各段开关 0/1
+  kParamEqEnabled = 26,   // [未实现·不做] 6 段 EQ：改用固定频响校正（RBJ 峰值+低搁架）
+  kParamEqPreampDb = 27,  // [未实现·不做] 6 段 EQ 预增益
+  kParamEqFreq0 = 28,     // [未实现·不做] 6 段 EQ 中心频率
+  kParamEqGain0 = 34,     // [未实现·不做] 6 段 EQ 增益
+  kParamEqType0 = 40,     // [未实现·不做] 6 段 EQ 类型
+  kParamEqBandOn0 = 46,   // [未实现·不做] 6 段 EQ 各段开关
 
   // ---- 低音增强（与矩阵环绕共用同一组用户参数，见 VM 的 setVsBassEnh*）----
   kParamBassEnhancer = 52,      // 0~1  谐波强度

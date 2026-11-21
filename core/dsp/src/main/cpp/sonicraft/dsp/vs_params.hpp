@@ -22,8 +22,8 @@ enum Param : int {
   kParamMode = 1,           // 0=音乐 1=电影（决定 steering 上限与平滑系数）
   kParamSurroundGain = 2,   // dB，环绕声道总增益
   kParamCenterGain = 3,     // dB，中置总增益
-  kParamRearGain = 4,       // dB，后中置增益
-  kParamFrontGain = 5,      // dB，前场补偿（空间化后常需 +1~3dB）
+  kParamRearGain = 4,       // [未实现·已废弃] 后中置增益：改用「声道 Trim · CS」，C++ 不读取
+  kParamFrontGain = 5,      // [未实现·已废弃] 前场补偿：改用「声道 Trim · FL/FR」，C++ 不读取
   kParamDistance = 6,       // 0~1，声源距离（影响早期反射比例）
 
   // ---- 编解码往返（0 = 完全直通，1 = 完全经过）----
@@ -43,16 +43,16 @@ enum Param : int {
   kParamRearCenterDelayMs = 14, // 0~15 ms（实现上限 255 样本）
 
   // ---- HRTF ----
-  kParamHrtfModel = 15,      // 0=参数化 1..N=用户导入的数据集
-  kParamHrtfMode = 16,       // 0=经典 HRTF 1=Ambisonic
+  kParamHrtfModel = 15,      // [未实现] 0=参数化 1..N=用户导入数据集（当前固定参数化）
+  kParamHrtfMode = 16,       // [未实现] 0=经典 HRTF 1=Ambisonic（当前只有经典）
   kParamHeightStrength = 17, // 0~1 高度重定向强度（>3kHz）
-  kParamEarlyReflection = 18,// 0~1 早期反射量
-  kParamAmbisonicMode = 19,  // 0/1
+  kParamEarlyReflection = 18,// [未实现] 早期反射量：实际由 kParamDistance 联动控制，此参数未读取
+  kParamAmbisonicMode = 19,  // [未实现] Ambisonic 模式：未实现
   kParamStereoExpand = 20,   // 0~1 立体声展宽
 
   // ---- 头部追踪 ----
-  kParamHeadTrackEnabled = 21, // 0/1
-  kParamHeadYawDeg = 22,       // -180~180
+  kParamHeadTrackEnabled = 21, // [未实现] 头部追踪开关：未实现
+  kParamHeadYawDeg = 22,       // [未实现] 头部朝向：未实现（无 IMU 接入）
 
   // ---- 房间（RIR）----
   kParamRoomSize = 23, // 0=关闭 1=小 2=客厅 3=音乐厅 4=大教堂
