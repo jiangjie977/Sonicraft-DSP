@@ -32,6 +32,7 @@
 #include <string_view>
 
 #include "sonicraft/dsp/dsp_node.hpp"
+#include "sonicraft/dsp/convolver.hpp"    // 复用 ConvolverNode（内置 5 档 RIR）
 #include "sonicraft/dsp/vs_decoder.hpp"   // 复用 LowPass2 / Biquad
 
 namespace sonicraft::dsp::s71 {
@@ -82,7 +83,13 @@ enum Param : int {
   kParamBassEnhancer = 52,      // 0~1  谐波强度
   kParamBassEnhancerMode = 53,  // 0=取自 LFE 1=取自前置
 
-  kParamCount = 54,
+  // ---- 与矩阵环绕共用的空间参数（同一组 UI，各自节点内实现）----
+  kParamRoomSize = 54,    // 0=关 1=小房间 2=客厅 3=音乐厅 4=大教堂
+  kParamRoomWet = 55,     // 0~1 混响量
+  kParamCenterMode = 56,  // 0=关闭 1=直通 2=混入前置
+  kParamDialog = 57,      // -6~+6 dB 对话清晰度
+
+  kParamCount = 58,
 };
 
 /** 默认值（照搬 Surround71 的 SurroundSettings 默认） */
@@ -111,6 +118,11 @@ constexpr float kDefault[kParamCount] = {
 
     0.0f,   // bass_enhancer（默认关）
     0.0f,   // bass_enhancer_mode（0 = 取自 LFE）
+
+    0.0f,   // room_size（关）
+    0.3f,   // room_wet
+    1.0f,   // center_mode（直通）
+    0.0f,   // dialog
 };
 
 /**
@@ -135,6 +147,9 @@ class Surround71Node : public DspNode {
     back_lp_r_.Set(5200.0f, fs);
     lfe_lp_.Set(110.0f, fs);
     bm_lp_.Set(110.0f, fs);
+    room_.set_channel_count(2);
+    room_.Prepare(sr_, max_frames_);
+    room_.SetBypass(false);
     Reset();
   }
 
@@ -149,6 +164,7 @@ class Surround71Node : public DspNode {
     lfe_lp_.Reset();
     bm_lp_.Reset();
     harm_lp_ = 0.0f;
+    room_.Reset();
   }
 
   void Process(float* const* channels, int frames) override {
@@ -172,6 +188,25 @@ class Surround71Node : public DspNode {
       const float r = pr[i];
       float ch8[kChannelCount];
       UpmixOne(l, r, s, norm, ch8);
+
+      // ---- 中置模式（0=关闭 / 1=直通 / 2=混入前置）----
+      // 与矩阵环绕语义一致：关闭时 FC 静音；混入前置时按 −3 dB 并入 FL/FR 后 FC 静音。
+      {
+        const int cm = static_cast<int>(param_[kParamCenterMode] + 0.5f);
+        if (cm == 0) {
+          ch8[kFC] = 0.0f;
+        } else if (cm == 2) {
+          const float half = ch8[kFC] * 0.7071f;
+          ch8[kFL] += half;
+          ch8[kFR] += half;
+          ch8[kFC] = 0.0f;
+        }
+        // 对话清晰度：FC 增益（正值提人声，负值衰减）
+        const float dlg = param_[kParamDialog];
+        if (cm != 0 && (dlg > 0.05f || dlg < -0.05f)) {
+          ch8[kFC] *= std::pow(10.0f, dlg * 0.05f);
+        }
+      }
 
       // ---- 低音增强（与矩阵环绕同一套算法：120 Hz 一阶低通 → 奇对称谐波 → 叠加）----
       {
@@ -224,6 +259,17 @@ class Surround71Node : public DspNode {
           (ch8[kFR] + 0.7071f * ch8[kFC] + ch8[kBR] + ch8[kSR] + 0.5f * ch8[kLFE]) * fold + bm_mono;
       pl[i] = lo;
       pr[i] = ro;
+    }
+
+    // ---- 环境声场（房间 RIR 卷积）----
+    // 复用 ConvolverNode：它内置 Dry/小房间/客厅/音乐厅/大教堂 五档 RIR，
+    // 与矩阵环绕用的是同一个实现，因此听感一致。
+    // 放在折叠之后 —— 房间作用于最终双耳信号（与矩阵环绕的顺序一致）。
+    if (param_[kParamRoomSize] > 0.5f) {
+      room_.SetParam(dsp::ConvolverNode::kParamPreset, param_[kParamRoomSize]);
+      room_.SetParam(dsp::ConvolverNode::kParamWet, param_[kParamRoomWet]);
+      room_.SetParam(dsp::ConvolverNode::kParamDry, 1.0f);
+      room_.Process(channels, frames);
     }
   }
 
@@ -298,6 +344,7 @@ class Surround71Node : public DspNode {
   vs::LowPass2 side_lp_l_, side_lp_r_, back_lp_l_, back_lp_r_, lfe_lp_;
   vs::LowPass2 bm_lp_;   // 低音管理的独立低通（避免污染 LFE 生成用的 lfe_lp_）
   float harm_lp_ = 0.0f;  // 低音增强的 120 Hz 近似一阶低通状态
+  dsp::ConvolverNode room_;   // 环境声场（复用内置五档 RIR）
   static constexpr float kFoldGain = 0.70f;   // 折叠系数（S1 标定，探针确认）
 };
 

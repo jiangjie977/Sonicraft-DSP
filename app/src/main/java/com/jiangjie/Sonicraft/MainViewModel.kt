@@ -1594,6 +1594,11 @@ class MainViewModel @Inject constructor(
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ENABLED, if (enabled) 1f else 0f)
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_BOOST_DB, _s71BassBoost.value)
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_MANAGEMENT, _s71BassMgmt.value)
+        // 开启时把共用的空间参数全量推一遍
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ROOM_SIZE, _vsRoomSize.value.toFloat())
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ROOM_WET, _vsRoomWet.value)
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_CENTER_MODE, _vsCenterMode.value.toFloat())
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_DIALOG, _vsDialog.value)
         // 开启时把 S71 自己的 8 路 Trim 全量推一遍（引擎重建后节点参数回默认值）
         if (enabled) {
             _s71Trims.value.forEachIndexed { ch, db ->
@@ -1891,6 +1896,7 @@ class MainViewModel @Inject constructor(
         _vsRoomSize.value = v
         prefs.edit().putInt(KEY_VS_ROOM_SIZE, v).apply()
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_ROOM_SIZE, v.toFloat())
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ROOM_SIZE, v.toFloat())
     }
 
     fun setVsRoomWet(v0: Float) {
@@ -1898,6 +1904,7 @@ class MainViewModel @Inject constructor(
         _vsRoomWet.value = v
         prefs.edit().putFloat(KEY_VS_ROOM_WET, v).apply()
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_ROOM_WET_DRY, v)
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ROOM_WET, v)
     }
 
     private val _vsEncodeStrength = MutableStateFlow(prefs.getFloat(KEY_VS_ENCODE_STRENGTH, 0.5f))
@@ -1954,6 +1961,7 @@ class MainViewModel @Inject constructor(
         _vsCenterMode.value = v
         prefs.edit().putInt(KEY_VS_CENTER_MODE, v).apply()
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_CENTER_MODE, v.toFloat())
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_CENTER_MODE, v.toFloat())
     }
 
     fun setVsDialog(db: Float) {
@@ -1961,6 +1969,7 @@ class MainViewModel @Inject constructor(
         _vsDialog.value = v
         prefs.edit().putFloat(KEY_VS_DIALOG, v).apply()
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_DIALOG, v)
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_DIALOG, v)
     }
 
     fun setVsBassEnh(amount: Float) {
