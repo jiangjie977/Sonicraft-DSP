@@ -78,7 +78,11 @@ enum Param : int {
   kParamEqType0 = 40,     // 40..45  0=Peak 1=LowShelf 2=HighShelf 3=HighPass 4=LowPass
   kParamEqBandOn0 = 46,   // 46..51  各段开关 0/1
 
-  kParamCount = 52,
+  // ---- 低音增强（与矩阵环绕共用同一组用户参数，见 VM 的 setVsBassEnh*）----
+  kParamBassEnhancer = 52,      // 0~1  谐波强度
+  kParamBassEnhancerMode = 53,  // 0=取自 LFE 1=取自前置
+
+  kParamCount = 54,
 };
 
 /** 默认值（照搬 Surround71 的 SurroundSettings 默认） */
@@ -104,6 +108,9 @@ constexpr float kDefault[kParamCount] = {
     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,                   // eq gain 0..5
     0.0f, 1.0f, 0.0f, 2.0f, 0.0f, 0.0f,                   // eq type 0..5（LS/Peak/HS）
     1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,                   // eq band on 0..5
+
+    0.0f,   // bass_enhancer（默认关）
+    0.0f,   // bass_enhancer_mode（0 = 取自 LFE）
 };
 
 /**
@@ -141,6 +148,7 @@ class Surround71Node : public DspNode {
     back_lp_r_.Reset();
     lfe_lp_.Reset();
     bm_lp_.Reset();
+    harm_lp_ = 0.0f;
   }
 
   void Process(float* const* channels, int frames) override {
@@ -164,6 +172,23 @@ class Surround71Node : public DspNode {
       const float r = pr[i];
       float ch8[kChannelCount];
       UpmixOne(l, r, s, norm, ch8);
+
+      // ---- 低音增强（与矩阵环绕同一套算法：120 Hz 一阶低通 → 奇对称谐波 → 叠加）----
+      {
+        const float amount = ClampF(param_[kParamBassEnhancer], 0.0f, 1.0f);
+        if (amount > 0.001f) {
+          const bool from_lfe = param_[kParamBassEnhancerMode] < 0.5f;
+          const float x = from_lfe ? ch8[kLFE] : (ch8[kFL] + ch8[kFR]) * 0.5f;
+          harm_lp_ += 0.0156f * (x - harm_lp_);
+          const float h = Harmonics(harm_lp_) * amount;
+          if (from_lfe) {
+            ch8[kLFE] += h;
+          } else {
+            ch8[kFL] += h;
+            ch8[kFR] += h;
+          }
+        }
+      }
 
       // 8 路声道 Trim（与「公共接口 · 声道 Trim」共享同一组数值，VM 侧做映射下发）
       for (int c = 0; c < kChannelCount; ++c) {
@@ -216,6 +241,17 @@ class Surround71Node : public DspNode {
  private:
   static float ClampF(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
+  /**
+   * 谐波生成（与 vs_post.hpp 的 Harmonics 同源）：奇对称平方映射，零输入→零输出，
+   * 不产生直流，只生成二次谐波 —— 补足小喇叭/耳机对低频的体感。
+   */
+  static float Harmonics(float x) {
+    const float sign = x < 0.0f ? -1.0f : 1.0f;
+    float a = x < 0.0f ? -x : x;
+    if (a > 1.0f) a = 1.0f;
+    return sign * a * a * 1.5f;
+  }
+
   /** 40 ms 延迟线容量（48 kHz 下 4096 = 85 ms，留足余量；2 的幂便于取模） */
   static constexpr int kDelaySize = 4096;
   static constexpr int kDelayMask = kDelaySize - 1;
@@ -261,6 +297,7 @@ class Surround71Node : public DspNode {
   int side_del_l_ = 0, side_del_r_ = 0, back_del_l_ = 0, back_del_r_ = 0;
   vs::LowPass2 side_lp_l_, side_lp_r_, back_lp_l_, back_lp_r_, lfe_lp_;
   vs::LowPass2 bm_lp_;   // 低音管理的独立低通（避免污染 LFE 生成用的 lfe_lp_）
+  float harm_lp_ = 0.0f;  // 低音增强的 120 Hz 近似一阶低通状态
   static constexpr float kFoldGain = 0.70f;   // 折叠系数（S1 标定，探针确认）
 };
 

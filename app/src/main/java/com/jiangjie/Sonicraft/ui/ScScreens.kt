@@ -4136,13 +4136,16 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                                 )
                             }
                         }
-                        VsButtonToggle(
-                            label = "后中置",
-                            checked = vsRearCenter,
-                            enabled = vsEnabled,
-                            modifier = Modifier.weight(1f),
-                            onCheckedChange = { viewModel.setVsRearCenter(it) },
-                        )
+                        // Surround71 是 7.1，没有「后中置」这一路 —— 该模式下隐藏此开关
+                        if (!s71Enabled) {
+                            VsButtonToggle(
+                                label = "后中置",
+                                checked = vsRearCenter,
+                                enabled = vsEnabled,
+                                modifier = Modifier.weight(1f),
+                                onCheckedChange = { viewModel.setVsRearCenter(it) },
+                            )
+                        }
                     }
 
                     // ---- 低音增强（对数域谐波）：滑条改为最下方旋钮 ----
@@ -4208,7 +4211,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     )
                 }
 
-                    if (vsRearCenter) {
+                    if (vsRearCenter && !s71Enabled) {
                         VsGainRow(
                             label = "后中置延迟",
                             value = vsRearDelay,

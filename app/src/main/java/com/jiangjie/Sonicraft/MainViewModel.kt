@@ -1968,6 +1968,8 @@ class MainViewModel @Inject constructor(
         _vsBassEnh.value = v
         prefs.edit().putFloat(KEY_VS_BASS_ENH, v).apply()
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_BASS_ENHANCER, v)
+        // 同一组「低音增强」也下发 Surround71（两节点互斥，但参数保持同步）
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_ENHANCER, v)
     }
 
     fun setVsBassEnhMode(mode: Int) {
@@ -1975,6 +1977,8 @@ class MainViewModel @Inject constructor(
         _vsBassEnhMode.value = v
         prefs.edit().putInt(KEY_VS_BASS_ENH_MODE, v).apply()
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_BASS_ENHANCER_MODE, v.toFloat())
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_ENHANCER_MODE, v.toFloat())
+
     }
 
     fun setVsRearCenter(enabled: Boolean) {

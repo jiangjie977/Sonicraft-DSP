@@ -250,6 +250,9 @@ interface AudioEngine {
     const val S71_PARAM_CENTER_LEVEL_DB = 9
     /** 8 路声道增益起点（FL/FR/FC/LFE/BL/BR/SL/SR 各 +0..+7） */
     const val S71_PARAM_SPEAKER_GAIN0 = 10
+    /** 低音增强（与矩阵环绕共用同一组用户参数） */
+    const val S71_PARAM_BASS_ENHANCER = 52
+    const val S71_PARAM_BASS_ENHANCER_MODE = 53
         const val VS_PARAM_MODE = 1
         const val VS_PARAM_SURROUND_GAIN = 2
         const val VS_PARAM_CENTER_GAIN = 3
