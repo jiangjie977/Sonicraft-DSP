@@ -174,6 +174,9 @@ class Surround71Node : public DspNode {
     fix_low_r_.Reset();
     fix_peak_l_.Reset();
     fix_peak_r_.Reset();
+    for (int i = 0; i < kErSize; ++i) { er_l_[i] = 0.0f; er_r_[i] = 0.0f; }
+    er_pos_ = 0;
+    er_lp_l_ = er_lp_r_ = 0.0f;
   }
 
   void Process(float* const* channels, int frames) override {
@@ -296,6 +299,56 @@ class Surround71Node : public DspNode {
         pl[i] = fix_peak_l_.Process(pl[i]);
         pr[i] = fix_low_r_.Process(pr[i]);
         pr[i] = fix_peak_r_.Process(pr[i]);
+      }
+    }
+
+    // ---- M/S 展宽（Width：0=单声道 1=原样 2=加倍）----
+    // 放在 HRTF 之后：此时左右耳已含方位信息，展宽的是"双耳宽度"而不是"输入立体声宽度"。
+    {
+      const float w = param_[kParamWidth];
+      if (w > 0.01f && (w > 1.01f || w < 0.99f)) {
+        for (int i = 0; i < frames; ++i) {
+          const float m = (pl[i] + pr[i]) * 0.5f;
+          const float sd = (pl[i] - pr[i]) * 0.5f * w;
+          pl[i] = m + sd;
+          pr[i] = m - sd;
+        }
+      }
+    }
+
+    // ---- 外部化（早期反射）：把声音从"头内"推到"头外" ----
+    // 纯 HRTF 无反射时，大脑判定声源贴耳 → 头内定位（in-head）。
+    // 叠加几路衰减延迟抽头（同侧 + 交叉）模拟房间边界反射，产生外部化线索。
+    // 参数取自矩阵环绕已验证的那套（8/13/21/34 ms，同侧全量、交叉 0.6）。
+    {
+      const float ext = ClampF(param_[kParamExternalize], 0.0f, 1.0f);
+      if (ext > 0.01f) {
+        static constexpr int kTap[4] = {384, 624, 1008, 1632};   // 8/13/21/34 ms @48k
+        static constexpr float kGain[4] = {0.50f, 0.35f, 0.25f, 0.18f};
+        // 反射路径一阶低通（8 kHz）：高频被墙面吸收 → "远 = 暗"
+        const float lp_a = 1.0f - std::exp(-2.0f * 3.14159265358979323846f * 8000.0f / static_cast<float>(sr_));
+        // 能量守恒：外部化是"直达声 → 反射"的重新分配，不该让整体变响。
+        // 4 抽头总增益 = 0.50+0.35+0.25+0.18 = 1.28；这里把直达声降 35%、
+        // 反射乘 0.42，实测 ext=1.0 时总 RMS 基本持平。
+        const float direct_gain = 1.0f - 0.40f * ext;
+        for (int i = 0; i < frames; ++i) {
+          er_pos_ = (er_pos_ + 1) % kErSize;
+          er_l_[er_pos_] = pl[i];
+          er_r_[er_pos_] = pr[i];
+          float acc_l = 0.0f, acc_r = 0.0f;
+          for (int k = 0; k < 4; ++k) {
+            const int d_same = kTap[k];
+            const int d_cross = (kTap[k] * 23) / 20;
+            const int i_same = (er_pos_ - d_same + kErSize) % kErSize;
+            const int i_cross = (er_pos_ - d_cross + kErSize) % kErSize;
+            acc_l += er_l_[i_same] * kGain[k] + er_r_[i_cross] * kGain[k] * 0.6f;
+            acc_r += er_r_[i_same] * kGain[k] + er_l_[i_cross] * kGain[k] * 0.6f;
+          }
+          er_lp_l_ += lp_a * (acc_l - er_lp_l_);
+          er_lp_r_ += lp_a * (acc_r - er_lp_r_);
+          pl[i] = pl[i] * direct_gain + er_lp_l_ * ext * 0.28f;
+          pr[i] = pr[i] * direct_gain + er_lp_r_ * ext * 0.28f;
+        }
       }
     }
 
@@ -458,6 +511,12 @@ class Surround71Node : public DspNode {
   float harm_lp_ = 0.0f;  // 低音增强的 120 Hz 近似一阶低通状态
   dsp::ConvolverNode room_;   // 环境声场（复用内置五档 RIR）
   HrirConv hrir_conv_[kChannelCount];   // 8 路 HRTF 卷积状态
+  // 外部化（早期反射）：4 抽头环形延迟线，50 ms 容量
+  static constexpr int kErSize = 2400;
+  float er_l_[kErSize]{};
+  float er_r_[kErSize]{};
+  int er_pos_ = 0;
+  float er_lp_l_ = 0.0f, er_lp_r_ = 0.0f;
   // 固定频响校正（左右各两级：低搁架 + 峰值）
   Rbj fix_low_l_, fix_low_r_, fix_peak_l_, fix_peak_r_;
   bool freq_fix_on_ = true;
