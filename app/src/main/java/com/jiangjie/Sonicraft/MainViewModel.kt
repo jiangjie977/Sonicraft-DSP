@@ -1599,11 +1599,29 @@ class MainViewModel @Inject constructor(
         engine.setParam(node, AudioEngine.VS_PARAM_ENCODE_STRENGTH, _vsEncodeStrength.value)
     }
 
+    /**
+     * 首页「空间环绕」总闸：开启时恢复**上次使用的那个引擎**。
+     *
+     * 为什么不能固定开矩阵环绕：用户可能在用 Surround71，关掉再打开却变回矩阵环绕，
+     * 参数、听感全变，很容易被当成"总闸没记忆/坏了"。
+     */
+    fun openLastSurroundEngine() {
+        if (prefs.getInt(KEY_LAST_SURROUND_ENGINE, 0) == 1) setS71Enabled(true) else setVsEnabled(true)
+    }
+
+    /** 首页总闸关闭：两个引擎都关（互斥保证只会有一个是开的）。 */
+    fun closeAllSurroundEngines() {
+        if (_vsEnabled.value) setVsEnabled(false)
+        if (_s71Enabled.value) setS71Enabled(false)
+    }
+
     fun setVsEnabled(enabled: Boolean) {
         _vsEnabled.value = enabled
         // 互斥：打开矩阵环绕则关闭 Surround71（反之在 setS71Enabled 内处理）
         if (enabled && _s71Enabled.value) setS71Enabled(false)
         prefs.edit().putBoolean(KEY_VS_ENABLED, enabled).apply()
+        // 记录「最后使用的环绕引擎」，供首页总闸恢复（0=矩阵环绕 1=Surround71）
+        if (enabled) prefs.edit().putInt(KEY_LAST_SURROUND_ENGINE, 0).apply()
         engine.setBypass(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, !enabled)
         engine.setParam(
             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
@@ -1624,6 +1642,7 @@ class MainViewModel @Inject constructor(
     fun setS71Enabled(enabled: Boolean) {
         _s71Enabled.value = enabled
         prefs.edit().putBoolean(KEY_S71_ENABLED, enabled).apply()
+        if (enabled) prefs.edit().putInt(KEY_LAST_SURROUND_ENGINE, 1).apply()
         // 互斥：两个空间化器同时开启会叠加成乱声
         if (enabled && _vsEnabled.value) setVsEnabled(false)
         engine.setBypass(AudioEngine.S71_NODE_INDEX, !enabled)
@@ -2579,6 +2598,8 @@ class MainViewModel @Inject constructor(
             "vs_bass_enh" -> setVsBassEnh(v)
             "vs_bass_enh_mode" -> setVsBassEnhMode(v.toInt())
             "s71_enabled" -> setS71Enabled(v > 0.5f)
+            "last_surround_engine" -> prefs.edit()
+                .putInt(KEY_LAST_SURROUND_ENGINE, if (v > 0.5f) 1 else 0).apply()
             "s71_upmix" -> setS71Upmix(v)
             "s71_externalize" -> setS71Externalize(v)
             "s71_bass_boost" -> setS71BassBoost(v)
@@ -2734,6 +2755,7 @@ class MainViewModel @Inject constructor(
         "vs_bass_enh" to _vsBassEnh.value,
         "vs_bass_enh_mode" to _vsBassEnhMode.value.toFloat(),
         "s71_enabled" to if (_s71Enabled.value) 1f else 0f,
+        "last_surround_engine" to prefs.getInt(KEY_LAST_SURROUND_ENGINE, 0).toFloat(),
         "s71_upmix" to _s71Upmix.value,
         "s71_externalize" to _s71Externalize.value,
         "s71_bass_boost" to _s71BassBoost.value,
@@ -6383,6 +6405,7 @@ class MainViewModel @Inject constructor(
     const val KEY_VS_BASS_ENH = "vs_bass_enh"
     const val KEY_VS_BASS_ENH_MODE = "vs_bass_enh_mode"
     const val KEY_S71_ENABLED = "s71_enabled"
+    const val KEY_LAST_SURROUND_ENGINE = "last_surround_engine"
     const val KEY_S71_UPMIX = "s71_upmix"
     const val KEY_S71_EXTERNALIZE = "s71_externalize"
     const val KEY_S71_TRIMS = "s71_trims"

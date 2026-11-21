@@ -912,14 +912,9 @@ private fun P1LibrarySection(
                 enabled = vsAnyOn,
                 onClick = onOpenVs,
                 onToggle = {
-                    if (vsAnyOn) {
-                        // 关闭：两个引擎都关（互斥保证了只会有一个是开的）
-                        if (vsEnabled) viewModel.setVsEnabled(false)
-                        if (s71Enabled) viewModel.setS71Enabled(false)
-                    } else {
-                        // 从全关状态点开：默认恢复矩阵环绕（用户最常用的那个）
-                        viewModel.setVsEnabled(true)
-                    }
+                    // 关闭 → 两个引擎都关；开启 → 恢复**上次使用的那个引擎**
+                    // （原来固定开矩阵环绕，会导致"在用 Surround71 时关掉再打开却变回矩阵环绕"）
+                    if (vsAnyOn) viewModel.closeAllSurroundEngines() else viewModel.openLastSurroundEngine()
                 },
                 modifier = Modifier.weight(1f),
             )
