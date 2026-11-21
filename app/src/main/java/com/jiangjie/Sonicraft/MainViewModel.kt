@@ -2137,27 +2137,27 @@ class MainViewModel @Inject constructor(
 
     /** 干湿比 0~1：0 = 纯原声（逐位透明）、1 = 纯虚拟低音 */
     private val _virtualBassAmount =
-        MutableStateFlow(prefs.getFloat(KEY_VIRTUAL_BASS_AMOUNT, 1.0f))
+        MutableStateFlow(prefs.getFloat(KEY_VIRTUAL_BASS_AMOUNT, 0.80f))
     val virtualBassAmount: StateFlow<Float> = _virtualBassAmount.asStateFlow()
 
     /** 谐波注入量 0~2 */
     private val _virtualBassHarmonic =
-        MutableStateFlow(prefs.getFloat(KEY_VIRTUAL_BASS_HARMONIC, 1.0f))
+        MutableStateFlow(prefs.getFloat(KEY_VIRTUAL_BASS_HARMONIC, 1.30f))
     val virtualBassHarmonic: StateFlow<Float> = _virtualBassHarmonic.asStateFlow()
 
     /** 120~600Hz 直通量 0~1 */
     private val _virtualBassMidGain =
-        MutableStateFlow(prefs.getFloat(KEY_VIRTUAL_BASS_MID_GAIN, 0.08f))
+        MutableStateFlow(prefs.getFloat(KEY_VIRTUAL_BASS_MID_GAIN, 0.20f))
     val virtualBassMidGain: StateFlow<Float> = _virtualBassMidGain.asStateFlow()
 
     /** 600Hz+ 直通量 0~1 */
     private val _virtualBassHighGain =
-        MutableStateFlow(prefs.getFloat(KEY_VIRTUAL_BASS_HIGH_GAIN, 0.16f))
+        MutableStateFlow(prefs.getFloat(KEY_VIRTUAL_BASS_HIGH_GAIN, 0.60f))
     val virtualBassHighGain: StateFlow<Float> = _virtualBassHighGain.asStateFlow()
 
     /** 包络平滑截止 5~150Hz（越小越"抽吸"，越大越跟手） */
     private val _virtualBassEnvelopeRate =
-        MutableStateFlow(prefs.getFloat(KEY_VIRTUAL_BASS_ENVELOPE_RATE, 50f))
+        MutableStateFlow(prefs.getFloat(KEY_VIRTUAL_BASS_ENVELOPE_RATE, 80f))
     val virtualBassEnvelopeRate: StateFlow<Float> = _virtualBassEnvelopeRate.asStateFlow()
 
     // ---- 低音增强（2026-11-11，设备无关）----

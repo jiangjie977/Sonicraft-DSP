@@ -72,25 +72,17 @@ enum Param : int {
   // ---- 每声道延迟（8 路，ms）----
   kParamSpeakerDelay0 = 18,  // 18..25
 
-  // ---- 6 段参数均衡器 ----
-  kParamEqEnabled = 26,   // [未实现·不做] 6 段 EQ：改用固定频响校正（RBJ 峰值+低搁架）
-  kParamEqPreampDb = 27,  // [未实现·不做] 6 段 EQ 预增益
-  kParamEqFreq0 = 28,     // [未实现·不做] 6 段 EQ 中心频率
-  kParamEqGain0 = 34,     // [未实现·不做] 6 段 EQ 增益
-  kParamEqType0 = 40,     // [未实现·不做] 6 段 EQ 类型
-  kParamEqBandOn0 = 46,   // [未实现·不做] 6 段 EQ 各段开关
-
   // ---- 低音增强（与矩阵环绕共用同一组用户参数，见 VM 的 setVsBassEnh*）----
-  kParamBassEnhancer = 52,      // 0~1  谐波强度
-  kParamBassEnhancerMode = 53,  // 0=取自 LFE 1=取自前置
+  kParamBassEnhancer = 26,      // 0~1  谐波强度
+  kParamBassEnhancerMode = 27,  // 0=取自 LFE 1=取自前置
 
   // ---- 与矩阵环绕共用的空间参数（同一组 UI，各自节点内实现）----
-  kParamRoomSize = 54,    // 0=关 1=小房间 2=客厅 3=音乐厅 4=大教堂
-  kParamRoomWet = 55,     // 0~1 混响量
-  kParamCenterMode = 56,  // 0=关闭 1=直通 2=混入前置
-  kParamDialog = 57,      // -6~+6 dB 对话清晰度
+  kParamRoomSize = 28,    // 0=关 1=小房间 2=客厅 3=音乐厅 4=大教堂
+  kParamRoomWet = 29,     // 0~1 混响量
+  kParamCenterMode = 30,  // 0=关闭 1=直通 2=混入前置
+  kParamDialog = 31,      // -6~+6 dB 对话清晰度
 
-  kParamCount = 58,
+  kParamCount = 32,
 };
 
 /** 默认值（照搬 Surround71 的 SurroundSettings 默认） */
@@ -109,13 +101,6 @@ constexpr float kDefault[kParamCount] = {
 
     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,  // speaker gain 0..7
     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,  // speaker delay 0..7
-
-    0.0f,   // eq_enabled
-    0.0f,   // eq_preamp_db
-    80.0f, 300.0f, 1000.0f, 3000.0f, 8000.0f, 12000.0f,  // eq freq 0..5
-    0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,                   // eq gain 0..5
-    0.0f, 1.0f, 0.0f, 2.0f, 0.0f, 0.0f,                   // eq type 0..5（LS/Peak/HS）
-    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,                   // eq band on 0..5
 
     0.0f,   // bass_enhancer（默认关）
     0.0f,   // bass_enhancer_mode（0 = 取自 LFE）

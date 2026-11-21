@@ -194,8 +194,6 @@ class VirtualSurroundNode final : public DspNode {
     // 四个声道增益不再对外开放：中置/环绕/前置/后中置一律按 0 dB 直通，    // 电平只由解码矩阵系数与声道 Trim 决定。
     decoder_.SetGains(0.0f, 0.0f, 0.0f);
     decoder_.SetTransientProtect(param_[vs::kParamTransientProtect] > 0.5f);
-    decoder_.SetFrontGain(0.0f);
-    decoder_.SetRearGain(0.0f);
     decoder_.SetRearSpace(param_[vs::kParamStereoExpand]);
     decoder_.SetBs775(param_[vs::kParamBs775] > 0.5f);
 

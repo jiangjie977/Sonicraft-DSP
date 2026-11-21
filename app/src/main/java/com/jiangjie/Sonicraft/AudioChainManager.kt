@@ -411,24 +411,24 @@ class AudioChainManager @Inject constructor(
             // 虚拟低音：五个参数逐个列全。
             engine.setParam(
                 AudioEngine.VIRTUAL_BASS_NODE_INDEX,
-                AudioEngine.VIRTUAL_BASS_PARAM_AMOUNT, f("virtual_bass_amount", 1.0f),
+                AudioEngine.VIRTUAL_BASS_PARAM_AMOUNT, f("virtual_bass_amount", 0.80f),
             )
             engine.setParam(
                 AudioEngine.VIRTUAL_BASS_NODE_INDEX,
-                AudioEngine.VIRTUAL_BASS_PARAM_HARMONIC, f("virtual_bass_harmonic", 1.0f),
+                AudioEngine.VIRTUAL_BASS_PARAM_HARMONIC, f("virtual_bass_harmonic", 1.30f),
             )
             engine.setParam(
                 AudioEngine.VIRTUAL_BASS_NODE_INDEX,
-                AudioEngine.VIRTUAL_BASS_PARAM_MID_GAIN, f("virtual_bass_mid_gain", 0.08f),
+                AudioEngine.VIRTUAL_BASS_PARAM_MID_GAIN, f("virtual_bass_mid_gain", 0.20f),
             )
             engine.setParam(
                 AudioEngine.VIRTUAL_BASS_NODE_INDEX,
-                AudioEngine.VIRTUAL_BASS_PARAM_HIGH_GAIN, f("virtual_bass_high_gain", 0.16f),
+                AudioEngine.VIRTUAL_BASS_PARAM_HIGH_GAIN, f("virtual_bass_high_gain", 0.60f),
             )
             engine.setParam(
                 AudioEngine.VIRTUAL_BASS_NODE_INDEX,
                 AudioEngine.VIRTUAL_BASS_PARAM_ENVELOPE_RATE,
-                f("virtual_bass_envelope_rate", 50f),
+                f("virtual_bass_envelope_rate", 80f),
             )
 
             // EQ：段数固定 10，曲线从 CSV 解析

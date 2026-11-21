@@ -251,13 +251,13 @@ interface AudioEngine {
     /** 8 路声道增益起点（FL/FR/FC/LFE/BL/BR/SL/SR 各 +0..+7） */
     const val S71_PARAM_SPEAKER_GAIN0 = 10
     /** 低音增强（与矩阵环绕共用同一组用户参数） */
-    const val S71_PARAM_BASS_ENHANCER = 52
-    const val S71_PARAM_BASS_ENHANCER_MODE = 53
+    const val S71_PARAM_BASS_ENHANCER = 26
+    const val S71_PARAM_BASS_ENHANCER_MODE = 27
     /** 与矩阵环绕共用同一组 UI 的空间参数（各节点内独立实现） */
-    const val S71_PARAM_ROOM_SIZE = 54
-    const val S71_PARAM_ROOM_WET = 55
-    const val S71_PARAM_CENTER_MODE = 56
-    const val S71_PARAM_DIALOG = 57
+    const val S71_PARAM_ROOM_SIZE = 28
+    const val S71_PARAM_ROOM_WET = 29
+    const val S71_PARAM_CENTER_MODE = 30
+    const val S71_PARAM_DIALOG = 31
     /** 8 路声道延迟（ms）起点：FL/FR/FC/LFE/BL/BR/SL/SR 各 +0..+7 */
     const val S71_PARAM_SPEAKER_DELAY0 = 18
         const val VS_PARAM_MODE = 1

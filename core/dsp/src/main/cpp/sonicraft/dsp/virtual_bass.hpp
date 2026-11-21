@@ -78,11 +78,11 @@ class VirtualBassNode : public DspNode {
    * wecho: envelope_rate=50 / mid_gain=0.08 / high_gain=0.16 / harmonic_gain=1.00。
    * wecho 没有 amount（纯替换），这里 1.0 = 不带干声；参数仍保留供耳机上手动降。
    */
-  static constexpr float kDefaultAmount = 1.0f;
-  static constexpr float kDefaultHarmonic = 1.0f;
-  static constexpr float kDefaultMidGain = 0.08f;
-  static constexpr float kDefaultHighGain = 0.16f;
-  static constexpr float kDefaultEnvelopeRate = 50.0f;
+  static constexpr float kDefaultAmount = 0.80f;        // 强度 80%
+  static constexpr float kDefaultHarmonic = 1.30f;      // 谐波量 130%
+  static constexpr float kDefaultMidGain = 0.20f;       // 中频直通 20%
+  static constexpr float kDefaultHighGain = 0.60f;      // 高频直通 60%
+  static constexpr float kDefaultEnvelopeRate = 80.0f;  // 跟随速度 80
   /** yuanma 的 envelope_alpha 固定 25Hz（setEnvelopeRate 不更新它） */
   static constexpr float kYuanmaEnvHz = 25.0f;
 
