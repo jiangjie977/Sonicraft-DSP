@@ -150,6 +150,9 @@ class MainViewModel @Inject constructor(
                 // 引擎（重新）就绪后，节点内参数已回到默认值 → 开关类参数会"显示开启却无效"，
                 // 必须把开关切一次才生效（BS.775 / 矩阵环绕都踩过）。这里在 Running 时直接补发。
                 if (st is com.jiangjie.Sonicraft.core.engine.EngineState.Running) {
+                    // 引擎重建后全量重推矩阵环绕参数（含 7 路 Trim/Mute），
+                    // 否则 UI 显示 prefs 值、引擎却是默认值 → 假状态
+                    runCatching { pushAllVsParams() }
                     runCatching {
                         engine.setBypass(
                             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
@@ -1568,6 +1571,34 @@ class MainViewModel @Inject constructor(
      */
     fun runVirtualSurroundSelfTest(): String = engine.vsSelfTest()
 
+    /**
+     * 把矩阵环绕节点的**全部**参数从 VM 状态重推一遍。
+     *
+     * 使用场景：
+     *  1. 开关从关→开（引擎重建后节点参数已回默认值）；
+     *  2. 引擎状态变为 Running（AudioChainManager 已下发一遍，这里兜底）；
+     *  3. 两个环绕引擎互相切换时（保证 UI 显示与引擎实际值一致）。
+     */
+    fun pushAllVsParams() {
+        val node = AudioEngine.VIRTUAL_SURROUND_NODE_INDEX
+        // 7 路 Trim / Mute（顺序：L C R SL SR CS LFE）
+        for (i in 0..6) {
+            engine.setParam(node, vsTrimIds[i], _vsTrims.value.getOrElse(i) { 0f })
+            engine.setParam(node, vsMuteIds[i], _vsMutes.value.getOrElse(i) { 0f })
+        }
+        // 公共接口参数（房间 / 中置 / 对话 / 低音增强）
+        engine.setParam(node, AudioEngine.VS_PARAM_ROOM_SIZE, _vsRoomSize.value.toFloat())
+        engine.setParam(node, AudioEngine.VS_PARAM_ROOM_WET_DRY, _vsRoomWet.value)
+        engine.setParam(node, AudioEngine.VS_PARAM_CENTER_MODE, _vsCenterMode.value.toFloat())
+        engine.setParam(node, AudioEngine.VS_PARAM_DIALOG, _vsDialog.value)
+        engine.setParam(node, AudioEngine.VS_PARAM_BASS_ENHANCER, _vsBassEnh.value)
+        engine.setParam(node, AudioEngine.VS_PARAM_BASS_ENHANCER_MODE, _vsBassEnhMode.value.toFloat())
+        // 模式与开关
+        engine.setParam(node, AudioEngine.VS_PARAM_BS775, if (_vsBs775.value) 1f else 0f)
+        engine.setParam(node, AudioEngine.VS_PARAM_MODE, _vsMode.value.toFloat())
+        engine.setParam(node, AudioEngine.VS_PARAM_ENCODE_STRENGTH, _vsEncodeStrength.value)
+    }
+
     fun setVsEnabled(enabled: Boolean) {
         _vsEnabled.value = enabled
         // 互斥：打开矩阵环绕则关闭 Surround71（反之在 setS71Enabled 内处理）
@@ -1579,6 +1610,11 @@ class MainViewModel @Inject constructor(
             AudioEngine.VS_PARAM_ENABLED,
             if (enabled) 1f else 0f,
         )
+        // **开启时把 7 路 Trim / Mute 全量重推**。
+        // 为什么必须：引擎重建（切设备/重启/重装）后节点内参数回到默认值，
+        // 而 UI 仍显示 prefs 里的值 → 用户看到"Trim 设了却没生效"的假状态。
+        // （Surround71 那边早就有这套重推，矩阵环绕这一侧一直缺，导致两边不对称。）
+        if (enabled) pushAllVsParams()
         // 立即落盘当前设备配置：10s 周期快照会把开关状态覆盖成旧值（历史问题）
         runCatching { saveLiveConfig(outputDeviceMonitor.current.value.key) }
     }
