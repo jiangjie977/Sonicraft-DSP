@@ -148,6 +148,9 @@ class Surround71Node : public DspNode {
     back_lp_r_.Set(5200.0f, fs);
     lfe_lp_.Set(110.0f, fs);
     bm_lp_.Set(110.0f, fs);
+    // 频响校正：低频 +4 dB（补 HRTF 造成的低频塌陷）、5 kHz 削 −4.5 dB（削 KEMAR 耳廓峰）
+    for (Rbj* f : {&fix_low_l_, &fix_low_r_}) f->SetLowShelf(fs, 200.0f, 4.0f);
+    for (Rbj* f : {&fix_peak_l_, &fix_peak_r_}) f->SetPeaking(fs, 5000.0f, 1.5f, -4.5f);
     room_.set_channel_count(2);
     room_.Prepare(sr_, max_frames_);
     room_.SetBypass(false);
@@ -167,6 +170,10 @@ class Surround71Node : public DspNode {
     harm_lp_ = 0.0f;
     room_.Reset();
     for (int i = 0; i < kChannelCount; ++i) hrir_conv_[i].Reset();
+    fix_low_l_.Reset();
+    fix_low_r_.Reset();
+    fix_peak_l_.Reset();
+    fix_peak_r_.Reset();
   }
 
   void Process(float* const* channels, int frames) override {
@@ -278,6 +285,20 @@ class Surround71Node : public DspNode {
       pr[i] = ro;
     }
 
+    // ---- 固定频响校正（校正 HRIR 自身的染色）----
+    // 实测（居中正弦扫频，1 kHz 为 0 dB）：4 kHz +4.8 dB、6 kHz +3.3 dB（刺耳区），
+    // 60 Hz −22 dB、120 Hz −10.9 dB（低频塌陷）。这两处都是 MIT KEMAR 的固有特性。
+    // 因为 HRIR 数据集固定，补偿也是固定的 —— 不需要让用户手调 6 段 EQ。
+    // 位置：HRTF 之后、房间之前（房间湿声是额外空间感，不该再被"校正成平"）。
+    if (freq_fix_on_) {
+      for (int i = 0; i < frames; ++i) {
+        pl[i] = fix_low_l_.Process(pl[i]);
+        pl[i] = fix_peak_l_.Process(pl[i]);
+        pr[i] = fix_low_r_.Process(pr[i]);
+        pr[i] = fix_peak_r_.Process(pr[i]);
+      }
+    }
+
     // ---- 环境声场（房间 RIR 卷积）----
     // 复用 ConvolverNode：它内置 Dry/小房间/客厅/音乐厅/大教堂 五档 RIR，
     // 与矩阵环绕用的是同一个实现，因此听感一致。
@@ -314,6 +335,57 @@ class Surround71Node : public DspNode {
     if (a > 1.0f) a = 1.0f;
     return sign * a * a * 1.5f;
   }
+
+  /**
+   * RBJ 双二阶（本文件只用到 Peaking 与 LowShelf 两种）。
+   *
+   * 为什么在节点内部做固定校正，而不是复用全局 EQ 节点：
+   *   全局 EQ（节点 2/3）位于本节点**之前**，而 4~6 kHz 的峰是 **HRIR 卷积产生**的，
+   *   在全局 EQ 之后才出现 —— 用全局 EQ 去挖，会导致「关掉 Surround71 时声音发闷」。
+   *   频响染色发生在哪一级，就得在哪一级之后校正。
+   */
+  struct Rbj {
+    float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f;
+    float z1 = 0.0f, z2 = 0.0f;
+
+    inline float Process(float x) {
+      const float y = b0 * x + z1;
+      z1 = b1 * x - a1 * y + z2;
+      z2 = b2 * x - a2 * y;
+      return y;
+    }
+    void Reset() { z1 = z2 = 0.0f; }
+
+    /** 峰值型（用于削 KEMAR 的耳廓共振峰） */
+    void SetPeaking(float sr, float fc, float q, float gain_db) {
+      const float A = std::pow(10.0f, gain_db * 0.025f);
+      const float w0 = 2.0f * 3.14159265358979323846f * fc / sr;
+      const float cw = std::cos(w0);
+      const float alpha = std::sin(w0) / (2.0f * q);
+      const float a0 = 1.0f + alpha / A;
+      b0 = (1.0f + alpha * A) / a0;
+      b1 = (-2.0f * cw) / a0;
+      b2 = (1.0f - alpha * A) / a0;
+      a1 = (-2.0f * cw) / a0;
+      a2 = (1.0f - alpha / A) / a0;
+    }
+
+    /** 低搁架（用于补回 HRTF 造成的低频衰减） */
+    void SetLowShelf(float sr, float fc, float gain_db, float shelf_slope = 1.0f) {
+      const float A = std::pow(10.0f, gain_db * 0.025f);
+      const float w0 = 2.0f * 3.14159265358979323846f * fc / sr;
+      const float cw = std::cos(w0);
+      const float sw = std::sin(w0);
+      const float alpha = sw * 0.5f * std::sqrt((A + 1.0f / A) * (1.0f / shelf_slope - 1.0f) + 2.0f);
+      const float two_sqrtA_alpha = 2.0f * std::sqrt(A) * alpha;
+      const float a0 = (A + 1.0f) + (A - 1.0f) * cw + two_sqrtA_alpha;
+      b0 = (A * ((A + 1.0f) - (A - 1.0f) * cw + two_sqrtA_alpha)) / a0;
+      b1 = (2.0f * A * ((A - 1.0f) - (A + 1.0f) * cw)) / a0;
+      b2 = (A * ((A + 1.0f) - (A - 1.0f) * cw - two_sqrtA_alpha)) / a0;
+      a1 = (-2.0f * ((A - 1.0f) + (A + 1.0f) * cw)) / a0;
+      a2 = ((A + 1.0f) + (A - 1.0f) * cw - two_sqrtA_alpha) / a0;
+    }
+  };
 
   /**
    * 直接时域卷积（139 抽头）。用 2 倍长度历史缓冲避免取模：
@@ -386,6 +458,9 @@ class Surround71Node : public DspNode {
   float harm_lp_ = 0.0f;  // 低音增强的 120 Hz 近似一阶低通状态
   dsp::ConvolverNode room_;   // 环境声场（复用内置五档 RIR）
   HrirConv hrir_conv_[kChannelCount];   // 8 路 HRTF 卷积状态
+  // 固定频响校正（左右各两级：低搁架 + 峰值）
+  Rbj fix_low_l_, fix_low_r_, fix_peak_l_, fix_peak_r_;
+  bool freq_fix_on_ = true;
   static constexpr float kFoldGain = 0.70f;   // 折叠系数（S1 标定，探针确认）
 };
 
