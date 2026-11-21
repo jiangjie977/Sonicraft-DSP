@@ -3806,6 +3806,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val s71Mutes by viewModel.s71Mutes.collectAsStateWithLifecycle()
     val s71BassBoost by viewModel.s71BassBoost.collectAsStateWithLifecycle()
     val s71BassMgmt by viewModel.s71BassMgmt.collectAsStateWithLifecycle()
+    val s71RearDelay by viewModel.s71RearDelay.collectAsStateWithLifecycle()
 
     val vsRearSpace by viewModel.vsRearSpace.collectAsStateWithLifecycle()
     val vsHeight by viewModel.vsHeight.collectAsStateWithLifecycle()
@@ -4001,6 +4002,17 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                             format = { "%.2f".format(it) },
                             resetValue = 0.35f,
                             onValueChange = viewModel::setS71Externalize,
+                        )
+                        ScKnob(
+                            label = "后方延迟",
+                            value = s71RearDelay,
+                            min = 0f,
+                            max = 20f,
+                            sizeDp = 94,
+                            textScale = 0.55f,
+                            format = { "%.1f".format(it) },
+                            resetValue = 0f,
+                            onValueChange = viewModel::setS71RearDelay,
                         )
                     }
                     Text(

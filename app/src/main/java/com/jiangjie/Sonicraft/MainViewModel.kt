@@ -1649,6 +1649,13 @@ class MainViewModel @Inject constructor(
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ENABLED, if (enabled) 1f else 0f)
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_BOOST_DB, _s71BassBoost.value)
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_MANAGEMENT, _s71BassMgmt.value)
+        for (ch in intArrayOf(4, 5, 6, 7)) {
+            engine.setParam(
+                AudioEngine.S71_NODE_INDEX,
+                AudioEngine.S71_PARAM_SPEAKER_DELAY0 + ch,
+                _s71RearDelay.value,
+            )
+        }
         // 开启时把共用的空间参数全量推一遍
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ROOM_SIZE, _vsRoomSize.value.toFloat())
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ROOM_WET, _vsRoomWet.value)
@@ -1718,6 +1725,23 @@ class MainViewModel @Inject constructor(
         _s71BassMgmt.value = c
         prefs.edit().putFloat(KEY_S71_BASS_MGMT, c).apply()
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_MANAGEMENT, c)
+    }
+
+    /**
+     * 后方延迟（0~20 ms）：同时写入 BL/BR/SL/SR 四路。
+     *
+     * 为什么不单独暴露 8 路：侧/后方的时间差是「一个整体线索」，
+     * 用户想调的是"后方听起来多靠后"，不是逐声道做微调。
+     * 底层参数仍是 8 路独立的（kParamSpeakerDelay0..7），以后需要时可直接扩展 UI。
+     */
+    fun setS71RearDelay(ms: Float) {
+        val c = ms.coerceIn(0f, 20f)
+        _s71RearDelay.value = c
+        prefs.edit().putFloat(KEY_S71_REAR_DELAY, c).apply()
+        val node = AudioEngine.S71_NODE_INDEX
+        for (ch in intArrayOf(4, 5, 6, 7)) {   // BL, BR, SL, SR
+            engine.setParam(node, AudioEngine.S71_PARAM_SPEAKER_DELAY0 + ch, c)
+        }
     }
 
     fun resetS71Trims() {
@@ -1836,6 +1860,10 @@ class MainViewModel @Inject constructor(
     val s71BassBoost: StateFlow<Float> = _s71BassBoost.asStateFlow()
     private val _s71BassMgmt = MutableStateFlow(prefs.getFloat(KEY_S71_BASS_MGMT, 0.25f))
     val s71BassMgmt: StateFlow<Float> = _s71BassMgmt.asStateFlow()
+
+    // 后方延迟（ms）：统一作用到 BL/BR/SL/SR 四路，强化「来自后方」的感知（哈斯效应）
+    private val _s71RearDelay = MutableStateFlow(prefs.getFloat(KEY_S71_REAR_DELAY, 0f))
+    val s71RearDelay: StateFlow<Float> = _s71RearDelay.asStateFlow()
 
     // 顺序必须与界面标签一致：L / C / R / SL / SR / CS / LFE
     private val vsTrimIds = intArrayOf(
@@ -2604,6 +2632,7 @@ class MainViewModel @Inject constructor(
             "s71_externalize" -> setS71Externalize(v)
             "s71_bass_boost" -> setS71BassBoost(v)
             "s71_bass_mgmt" -> setS71BassMgmt(v)
+            "s71_rear_delay" -> setS71RearDelay(v)
             "vs_rear_center" -> setVsRearCenter(v > 0.5f)
             "vs_rear_delay" -> setVsRearDelay(v)
             "output_gain" -> setOutputGain(v)
@@ -2760,6 +2789,7 @@ class MainViewModel @Inject constructor(
         "s71_externalize" to _s71Externalize.value,
         "s71_bass_boost" to _s71BassBoost.value,
         "s71_bass_mgmt" to _s71BassMgmt.value,
+        "s71_rear_delay" to _s71RearDelay.value,
         "vs_rear_center" to if (_vsRearCenter.value) 1f else 0f,
         "vs_rear_delay" to _vsRearDelay.value,
         "output_gain" to _outputGain.value,
@@ -6412,6 +6442,7 @@ class MainViewModel @Inject constructor(
     const val KEY_S71_MUTES = "s71_mutes"
     const val KEY_S71_BASS_BOOST = "s71_bass_boost"
     const val KEY_S71_BASS_MGMT = "s71_bass_mgmt"
+    const val KEY_S71_REAR_DELAY = "s71_rear_delay"
     const val KEY_VS_REAR_CENTER = "vs_rear_center"
     const val KEY_VS_REAR_DELAY = "vs_rear_delay"
 

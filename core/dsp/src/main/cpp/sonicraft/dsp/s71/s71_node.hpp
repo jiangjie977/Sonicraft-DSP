@@ -174,6 +174,7 @@ class Surround71Node : public DspNode {
     fix_low_r_.Reset();
     fix_peak_l_.Reset();
     fix_peak_r_.Reset();
+    for (int i = 0; i < kChannelCount; ++i) delay_[i].Reset();
     for (int i = 0; i < kErSize; ++i) { er_l_[i] = 0.0f; er_r_[i] = 0.0f; }
     er_pos_ = 0;
     er_lp_l_ = er_lp_r_ = 0.0f;
@@ -200,6 +201,14 @@ class Surround71Node : public DspNode {
       const float r = pr[i];
       float ch8[kChannelCount];
       UpmixOne(l, r, s, norm, ch8);
+
+      // ---- 每声道延迟（0~20 ms，8 路独立）----
+      // 限制在 20 ms 内：再长会与直达声脱节（口型/瞬态对不上）。
+      for (int c = 0; c < kChannelCount; ++c) {
+        const float ms = ClampF(param_[kParamSpeakerDelay0 + c], 0.0f, 20.0f);
+        const int d = static_cast<int>(ms * 0.001f * static_cast<float>(sr_) + 0.5f);
+        ch8[c] = delay_[c].Process(ch8[c], d < ChanDelay::kSize ? d : ChanDelay::kSize - 1);
+      }
 
       // ---- 中置模式（0=关闭 / 1=直通 / 2=混入前置）----
       // 与矩阵环绕语义一致：关闭时 FC 静音；混入前置时按 −3 dB 并入 FL/FR 后 FC 静音。
@@ -390,6 +399,30 @@ class Surround71Node : public DspNode {
   }
 
   /**
+   * 单声道延迟线（每声道独立，0~20 ms）。
+   * 用途：给后方/侧方声道加时间差，强化「来自后方」的感知（哈斯效应），
+   * 也可用于中置的唇音同步对齐。
+   *
+   * 注意：**每样本都必须调用 Process**（哪怕 delay=0），否则切换延迟量时
+   * 缓冲里是旧数据，会产生咔哒声。
+   */
+  struct ChanDelay {
+    static constexpr int kSize = 1024;   // 21.3 ms @48k，够 20 ms
+    float buf[kSize]{};
+    int pos = 0;
+    void Reset() {
+      for (int i = 0; i < kSize; ++i) buf[i] = 0.0f;
+      pos = 0;
+    }
+    inline float Process(float x, int delay) {
+      buf[pos] = x;
+      const int r = (pos - delay + kSize) % kSize;
+      if (++pos >= kSize) pos = 0;
+      return buf[r];
+    }
+  };
+
+  /**
    * RBJ 双二阶（本文件只用到 Peaking 与 LowShelf 两种）。
    *
    * 为什么在节点内部做固定校正，而不是复用全局 EQ 节点：
@@ -511,6 +544,7 @@ class Surround71Node : public DspNode {
   float harm_lp_ = 0.0f;  // 低音增强的 120 Hz 近似一阶低通状态
   dsp::ConvolverNode room_;   // 环境声场（复用内置五档 RIR）
   HrirConv hrir_conv_[kChannelCount];   // 8 路 HRTF 卷积状态
+  ChanDelay delay_[kChannelCount];   // 8 路独立延迟（0~20 ms）
   // 外部化（早期反射）：4 抽头环形延迟线，50 ms 容量
   static constexpr int kErSize = 2400;
   float er_l_[kErSize]{};

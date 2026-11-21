@@ -258,6 +258,8 @@ interface AudioEngine {
     const val S71_PARAM_ROOM_WET = 55
     const val S71_PARAM_CENTER_MODE = 56
     const val S71_PARAM_DIALOG = 57
+    /** 8 路声道延迟（ms）起点：FL/FR/FC/LFE/BL/BR/SL/SR 各 +0..+7 */
+    const val S71_PARAM_SPEAKER_DELAY0 = 18
         const val VS_PARAM_MODE = 1
         const val VS_PARAM_SURROUND_GAIN = 2
         const val VS_PARAM_CENTER_GAIN = 3
