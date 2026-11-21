@@ -265,7 +265,6 @@ class AudioChainManager @Inject constructor(
                 if (b("vs_bs775", false)) 1f else 0f,
             )
             engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_CENTER_GAIN, 0f)
-            engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_FRONT_GAIN, 0f)
             engine.setParam(
                 AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
                 AudioEngine.VS_PARAM_DISTANCE,
@@ -281,7 +280,6 @@ class AudioChainManager @Inject constructor(
                 AudioEngine.VS_PARAM_STEREO_EXPAND,
                 f("vs_rear_space", 0.5f),
             )
-            engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_REAR_GAIN, 0f)
             engine.setParam(
                 AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
                 AudioEngine.VS_PARAM_ROOM_SIZE,

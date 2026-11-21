@@ -1562,9 +1562,6 @@ class MainViewModel @Inject constructor(
     private val _vsCenterGain = MutableStateFlow(prefs.getFloat(KEY_VS_CENTER_GAIN, 0f))
     val vsCenterGain: StateFlow<Float> = _vsCenterGain.asStateFlow()
 
-    private val _vsFrontGain = MutableStateFlow(prefs.getFloat(KEY_VS_FRONT_GAIN, 0f))
-    val vsFrontGain: StateFlow<Float> = _vsFrontGain.asStateFlow()
-
     /**
      * 空间环绕声像定位自检：跑一次测量 + 自动校正，返回可展示的多行文本。
      * 非实时（会分配内存、跑 7 个方位 × 2 轮），必须在后台线程调用。
@@ -1958,16 +1955,6 @@ class MainViewModel @Inject constructor(
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_STEREO_EXPAND, v)
     }
 
-    private val _vsRearGain = MutableStateFlow(saneFloat(KEY_VS_REAR_GAIN, -6f, -12f, 12f))
-    val vsRearGain: StateFlow<Float> = _vsRearGain.asStateFlow()
-
-    fun setVsRearGain(db: Float) {
-        val v = if (db.isFinite()) db.coerceIn(-12f, 12f) else _vsRearGain.value
-        _vsRearGain.value = v
-        prefs.edit().putFloat(KEY_VS_REAR_GAIN, v).apply()
-        engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_REAR_GAIN, v)
-    }
-
     private val _vsRoomSize = MutableStateFlow(prefs.getInt(KEY_VS_ROOM_SIZE, 0))
     val vsRoomSize: StateFlow<Int> = _vsRoomSize.asStateFlow()
 
@@ -2088,17 +2075,6 @@ class MainViewModel @Inject constructor(
         _vsRearDelay.value = v
         prefs.edit().putFloat(KEY_VS_REAR_DELAY, v).apply()
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_REAR_CENTER_DELAY_MS, v)
-    }
-
-    fun setVsFrontGain(db: Float) {
-        val v = db.coerceIn(-12f, 12f)
-        _vsFrontGain.value = v
-        prefs.edit().putFloat(KEY_VS_FRONT_GAIN, v).apply()
-        engine.setParam(
-            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-            AudioEngine.VS_PARAM_FRONT_GAIN,
-            v,
-        )
     }
 
     // ---- 动态低音----
@@ -6140,11 +6116,6 @@ class MainViewModel @Inject constructor(
         )
         engine.setParam(
             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-            AudioEngine.VS_PARAM_FRONT_GAIN,
-            _vsFrontGain.value,
-        )
-        engine.setParam(
-            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
             AudioEngine.VS_PARAM_DEBUG_RAW,
             if (_vsDebugRaw.value) 1f else 0f,
         )
@@ -6164,11 +6135,6 @@ class MainViewModel @Inject constructor(
             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
             AudioEngine.VS_PARAM_STEREO_EXPAND,
             _vsRearSpace.value,
-        )
-        engine.setParam(
-            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-            AudioEngine.VS_PARAM_REAR_GAIN,
-            _vsRearGain.value,
         )
         engine.setParam(
             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
@@ -6418,8 +6384,6 @@ class MainViewModel @Inject constructor(
     const val KEY_VS_MODE = "vs_mode"
     const val KEY_VS_SURROUND_GAIN = "vs_surround_gain"
     const val KEY_VS_CENTER_GAIN = "vs_center_gain"
-    const val KEY_VS_FRONT_GAIN = "vs_front_gain"
-    const val KEY_VS_REAR_GAIN = "vs_rear_gain"
     const val KEY_VS_REAR_SPACE = "vs_rear_space"
     const val KEY_VS_HEIGHT = "vs_height"
     const val KEY_VS_DISTANCE = "vs_distance"
