@@ -10,7 +10,7 @@ package com.jiangjie.Sonicraft.ui
  *
  * **单一来源**：首启同意页与「我的 → 隐私与合规」的全文弹窗都从这里取，
  * 避免两处文案漂移（合规要求用户随时可查阅的版本与首次同意的一致）。
- * 同步维护：`docs/PRIVACY_POLICY.md` 是提交给商店的正式版本，两者内容需保持一致。
+ * 同步维护：`PRIVACY_POLICY.md`（仓库根目录）是提交给商店的正式版本，两者内容需保持一致。
  */
 val PRIVACY_SECTIONS: List<Pair<String, String>> = listOf(
     "一、我们收集什么" to

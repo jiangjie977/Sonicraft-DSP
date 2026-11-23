@@ -21,7 +21,7 @@ Sonicraft 不是音乐播放器。它抓取本机正在播放的音频流（任�
 
 ## 版本
 
-当前 **v0.3.0**（`versionCode 8`）。逐版变更与升级说明见 [`RELEASE_NOTES.md`](docs/RELEASE_NOTES.md)。
+当前 **v0.3.0**（`versionCode 8`）。逐版变更与升级说明见 [`RELEASE_NOTES.md`](RELEASE_NOTES.md)。
 
 ## 系统要求
 
@@ -69,7 +69,7 @@ docs/                设计文档、用户手册、架构决策记录
 - **无网络权限**：应用未声明 `INTERNET`，技术上无法上传任何数据
 - 不含统计、广告、推送等第三方 SDK
 - 捕获的音频仅在本机内存与 DSP 中处理，不落盘、不外传（主动抓样除外，存于应用私有目录）
-- 详见 [隐私政策](docs/PRIVACY_POLICY.md)
+- 详见 [隐私政策](PRIVACY_POLICY.md)
 
 ## 许可
 
