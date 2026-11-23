@@ -1,13 +1,11 @@
 <#
 .SYNOPSIS
-  Mirror D:\OPEN\DSP (development) to D:\OPEN\DSP-GITHUB (publish mirror) and push.
+  Mirror D:\OPEN\DSP (development) to D:\OPEN\DSP-GITHUB (publish mirror).
 
 .DESCRIPTION
-  Rules:
-    1. Only the publish mirror talks to GitHub.
-    2. Dev artifacts (build/, .gradle/, .cxx/, .codebuddy/, *.apk, *.jks ...) are excluded.
-    3. Line endings are normalized by .gitattributes when staging, so CRLF noise is not
-       committed as content changes.
+  HARD RULE: the publish mirror must never contain excluded files or folders.
+  robocopy /XD only skips the source side, so this script prunes the destination
+  after every sync (excluded dirs, excluded files, empty dirs left behind).
 
 .PARAMETER Version
   Optional version label used in the sync commit message (e.g. v0.4.2).
@@ -15,12 +13,16 @@
 .PARAMETER DryRun
   List files that would be copied without touching the mirror.
 
+.PARAMETER NoPush
+  Commit to the mirror but skip git push (used when the remote is not configured yet).
+
 .EXAMPLE
   .\tools\publish_sync.ps1 -Version v0.4.2
 #>
 param(
     [string]$Version = "",
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$NoPush
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,9 +46,14 @@ if ($dirty -and -not $DryRun) {
     if ($answer -notmatch '^[yY]') { exit 1 }
 }
 
-# --- mirror ---
+# --- exclude lists -------------------------------------------------------
+# Source-side skips (may include .git: we do not copy dev history into the mirror).
 $excludeDirs = @("build", ".gradle", ".kotlin", ".codebuddy", ".git", ".cxx", "node_modules", ".idea", "keystore", "dist")
-$excludeFiles = @("*.apk", "*.jks", "*.keystore", "keystore.properties", "local.properties", "*.log")
+$excludeFiles = @("*.apk", "*.jks", "*.keystore", "keystore.properties", "local.properties", "*.log", "AGENTS.md", "README.public.md")
+
+# Destination pruning (NEVER prune .git: the mirror owns its own repo).
+$pruneDirs = @("build", ".gradle", ".kotlin", ".codebuddy", ".cxx", "node_modules", ".idea", "keystore", "dist")
+$pruneFiles = @("*.apk", "*.jks", "*.keystore", "keystore.properties", "local.properties", "*.log", "AGENTS.md", "README.public.md")
 
 # --- ensure publish repo exists (first run creates an independent history) ---
 if (-not (Test-Path (Join-Path $dst ".git"))) {
@@ -61,6 +68,7 @@ if (-not (Test-Path (Join-Path $dst ".git"))) {
     }
 }
 
+# --- mirror --------------------------------------------------------------
 $robocopyArgs = @($src, $dst, "/MIR", "/XD") + $excludeDirs + @("/XF") + $excludeFiles + @("/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS")
 if ($DryRun) { $robocopyArgs += @("/L") }
 
@@ -76,7 +84,31 @@ if ($DryRun) {
     exit 0
 }
 
-# --- stage + commit + push ---
+# --- HARD RULE: prune excluded items that robocopy left on the destination ---
+foreach ($d in $pruneDirs) {
+    $p = Join-Path $dst $d
+    if (Test-Path $p) {
+        Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+foreach ($pat in $pruneFiles) {
+    Get-ChildItem -Path $dst -Recurse -File -Filter $pat -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notlike "*\.git\*" } |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
+# Remove empty directories left behind (deepest first), except .git.
+Get-ChildItem -Path $dst -Recurse -Directory -Force -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notlike "*\.git*" } |
+    Sort-Object { $_.FullName.Length } -Descending |
+    ForEach-Object {
+        if ((Get-ChildItem $_.FullName -Force -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0) {
+            Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+# --- stage + commit + push ----------------------------------------------
 Push-Location $dst
 git add -A
 $staged = git status --porcelain
@@ -95,10 +127,16 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+if ($NoPush) {
+    Write-Host "Committed locally (NoPush). Configure remote then: git push -u origin HEAD"
+    Pop-Location
+    exit 0
+}
+
 git push -u origin HEAD
 $pushCode = $LASTEXITCODE
 if ($pushCode -ne 0) {
-    Write-Error "git push failed with exit code $pushCode"
+    Write-Error "git push failed with exit code $pushCode (use -NoPush if remote is not configured yet)"
 }
 Pop-Location
 exit $pushCode

@@ -857,9 +857,8 @@ fun ScDeviceHealthCards(viewModel: MainViewModel, onToggleCapture: () -> Unit) {
                     fontSize = 11.sp,
                     color = ScColors.TextSub,
                 )
-                // 路由信息已下架：`port=NNN · 命中/未命中`
-                // 对普通用户没有意义、反而造成困惑。诊断仍保留在 diag 日志里
-                // （`重路由校验: ...` / `takeover_diag`），排查时看日志即可。
+                // 路由命中信息对普通用户无意义，不在界面显示；
+                // 排查看 diag 日志（`重路由校验` / `takeover_diag`）。
             }
             Column(
                 horizontalAlignment = Alignment.End,
@@ -1116,14 +1115,9 @@ private fun ScDiagSection(viewModel: MainViewModel) {
                         Text("停止", fontSize = 13.sp)
                     }
                 }
-                // 「DP 静音实验」与「按UID电平」已移除：
-                // 两者都是 P2 阶段用来定性「某条抓取路线是否可行」的
-                // **一次性实验**——DP 那条甚至硬编码了酷狗包名。结论已经拿到
-                // （项目最终走 Loopback + Stellar MP，没有采用按 uid 分 mix 的方案），
-                // 实验本身不再有重复执行的价值。
-                // 而且「按UID电平」有破坏性副作用：它复用同一个 UserService record，
-                // 会 stop 当前主链路，测完必须手动重新点「Loopback 引擎」才能恢复出声。
-                // 留在诊断卡里既占地方、又容易被误点。
+                // 诊断卡不提供「DP 静音实验 / 按UID电平」：
+                // 结论已定（走 Loopback），且后者复用同一 UserService record、
+                // 会 stop 主链路，误点代价高。
                 lbState?.let { Text(it, fontSize = 11.sp) }
                 // 上次进程被强杀遗留的 DP 静音效果（跨进程无法回收，只能重启）
                 val residue by viewModel.residueWarning.collectAsStateWithLifecycle()
@@ -1970,7 +1964,6 @@ fun ScIrLibraryContent(viewModel: MainViewModel) {
                                         },
                                     )
                                 }
-                                // U4 星标收藏
                                 Text(
                                     text = if (isFav) "★" else "☆",
                                     color = if (isFav) ScColors.Star else ScColors.TextSub,
@@ -2698,12 +2691,10 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
     val compressorEnabled by viewModel.compressorEnabled.collectAsStateWithLifecycle()
     val compressorThreshold by viewModel.compressorThreshold.collectAsStateWithLifecycle()
     val compressorRatio by viewModel.compressorRatio.collectAsStateWithLifecycle()
-    // 四个新增参数
     val compressorAttack by viewModel.compressorAttack.collectAsStateWithLifecycle()
     val compressorRelease by viewModel.compressorRelease.collectAsStateWithLifecycle()
     val compressorKnee by viewModel.compressorKnee.collectAsStateWithLifecycle()
     val compressorMakeup by viewModel.compressorMakeup.collectAsStateWithLifecycle()
-    // 四项新参数
     val compressorMix by viewModel.compressorMix.collectAsStateWithLifecycle()
     val compressorDetect by viewModel.compressorDetect.collectAsStateWithLifecycle()
     val compressorLookahead by viewModel.compressorLookahead.collectAsStateWithLifecycle()
@@ -3016,7 +3007,6 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                                 )
                             },
                     ) {
-                        // 三段底色
                         Row(modifier = Modifier.fillMaxSize()) {
                             Box(Modifier.weight(n1.coerceAtLeast(0.02f)).fillMaxHeight().background(Color(0xFFF7EFE1)))
                             Box(Modifier.weight((n2 - n1).coerceAtLeast(0.02f)).fillMaxHeight().background(Color(0xFFDDEAF6)))
@@ -3729,7 +3719,6 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                                 onValueChange = { viewModel.setCompressorLookahead(it) },
                             )
                         }
-                        // 两个二选一
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -5878,21 +5867,18 @@ fun highlightScript(code: String): AnnotatedString {
     val n = code.length
     while (i < n) {
         val c = code[i]
-        // 行注释
         if (c == '/' && i + 1 < n && code[i + 1] == '/') {
             val end = code.indexOf('\n', i).let { if (it < 0) n else it }
             b.addStyle(SpanStyle(color = ScriptColors.Comment), i, end)
             i = end
             continue
         }
-        // 块注释
         if (c == '/' && i + 1 < n && code[i + 1] == '*') {
             val end = code.indexOf("*/", i + 2).let { if (it < 0) n else it + 2 }
             b.addStyle(SpanStyle(color = ScriptColors.Comment), i, end)
             i = end
             continue
         }
-        // 数字
         if (c.isDigit() || (c == '.' && i + 1 < n && code[i + 1].isDigit())) {
             var j = i
             while (j < n && (code[j].isDigit() || code[j] == '.')) j++
