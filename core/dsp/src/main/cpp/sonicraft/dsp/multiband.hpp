@@ -24,17 +24,17 @@ namespace sonicraft::dsp {
  *    逐点和幅度恒为单位（|LP+HP| = 1 ∀ω）→ 分频不染色，端到端「合成=输入」
  *    可作为黄金参照（host-harness 9c）。
  *  - 分频点参数变化：块级对 fc 一阶平滑（τ=15ms，块头重算系数）+ 块内系数逐样本
- *    线性 ramp（DF1 延迟线存纯信号样本，系数插值安全）。2026-10-25 真机实听
+ *    线性 ramp（DF1 延迟线存纯信号样本，系数插值安全）。真机实听
  *    （M8e，NX733J）发现 TDF2 块级系数跳变在拖 fc 滑块时有可闻毛刺——TDF2 的
  *    z1/z2 是按旧系数积累的混合项，系数跳变瞬间状态失配产生块级咔嗒，块 RMS
  *    判据（原 9g）测不出、耳朵听得出；DF1+ramp 样本级连续后消除。
- *  - 段缓冲可通过 band_buffer() 读取（诊断/harness 用，存分频后、加增益前的段信号）。
+ *  - 段缓冲可通过 band_buffer 读取（诊断/harness 用，存分频后、加增益前的段信号）。
  *  - 频段动力学（每段独立，与 CompressorNode 同拓扑家族）：
  *      |band| → 峰值包络(瞬时攻击+指数衰减) → dB 域静态曲线(thr/ratio, soft knee)
  *             → 增益平滑(attack 降/release 升分支) → ×10^((g+gain_db)/20) → 段输出
  *    soft knee（Pirkle 抛物线）：knee 区 y = x + (1/R−1)(x−T+W/2)²/(2W)，W=0 退化硬 knee；
  *    knee 区边界与硬区函数值、斜率双连续。
- *  - 立体声联动（M8f，2026-10-25，移植 wecho MultiBandLimiter 思路）：每段一个
+ *  - 立体声联动（M8f，移植 wecho MultiBandLimiter 思路）：每段一个
  *    共享包络/增益，检测取跨声道 max(|L|,|R|)——消除单侧信号被独立检测时的
  *    声像移动（左压右不压 → 人声/元素跑位）。单声道退化为自身，无特判。
  *  - 段间防重新过冲（M8f，wecho 段限+总线限双层思路的轻量版）：三段独立压缩
@@ -48,7 +48,7 @@ namespace sonicraft::dsp {
  *    兜底（分层动态处理惯例）。
  *
  * 参数约定（node 内自洽；每段六参：threshold/ratio/attack/release/knee/gain，
- * knee 三段独立——2026-10-25 用户拍板）：
+ * knee 三段独立——用户拍板）：
  *      param 0-5  = Low:  thr(dB) / ratio(:1) / atk(ms) / rel(ms) / knee(dB) / gain(dB)
  *      param 6-11 = Mid:  同上
  *      param 12-17 = High: 同上
@@ -268,7 +268,7 @@ class MultibandNode : public DspNode {
   void SetBypass(bool bypass) override { bypass_ = bypass; }
   bool Bypassed() const override { return bypass_; }
 
-  // ==== 计量访问器（2026-11-08，多段压限 UI 的 IN/GR/OUT 电平表）====
+  // ==== 计量访问器====
   // band: 0=低 1=中 2=高。peak 为线性幅值（0~1+），GR 为 dB（负值=压缩中）。
   // 均为块级快照，UI 按 ~10fps 轮询即可；写入只在音频线程，读取为 relaxed 语义。
   float DiagnBandInPeak(int band) const {
@@ -322,7 +322,7 @@ class MultibandNode : public DspNode {
   }
 
  private:
-  // DF1 biquad + 逐样本系数 ramp（2026-10-25 毛刺修复）。
+  // DF1 biquad + 逐样本系数 ramp。
   // TDF2 的 z1/z2 是按旧系数积累的混合项，系数块级跳变瞬间状态失配 → 每块一次
   // 咔嗒（真机拖 fc 滑块可闻毛刺）；DF1 延迟线 x1/x2/y1/y2 是纯信号样本，系数
   // 插值安全。块内从当前系数线性 ramp 到目标系数，样本级连续 → 零毛刺。
@@ -448,7 +448,7 @@ class MultibandNode : public DspNode {
     float atk_coef = 0.0f;
     float rel_coef = 0.0f;
     /**
-     * 包络专用释放系数（2026-11-09 新增）。
+     * 包络专用释放系数。
      *
      * **为什么必须与 rel_coef 分开**：原来包络跟随和增益平滑共用 rel_coef，
      * 等于两个相同的一阶低通串联——阶跃响应到 63% 需约 2.68τ。
@@ -545,7 +545,7 @@ class MultibandNode : public DspNode {
   float dc_r_ = 0.999f;           // Prepare 按采样率重算（exp(−2π·kDcFcHz/fs)）
   float prot_env_ = 0.0f;         // M8f 段间防过冲联动包络
   float prot_rel_ = 0.0f;         // Prepare 按 fs 重算（τ=250ms）
-  // ==== 计量（2026-11-08，多段压限 UI 的 IN/GR/OUT 电平表）====
+  // ==== 计量====
   // 块级峰值：in = 分段后跨声道 max|·|；out = in × 该段当前增益；GR 直接读 gain_db_。
   // 这几个量在动力学循环里本来就算，这里只是记下来供 UI 读取，实时路径仅多 6 次比较。
   float band_in_pk_[3] = {};      // 每段输入峰值（块级）

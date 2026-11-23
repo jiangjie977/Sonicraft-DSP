@@ -26,7 +26,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Shizuku 后端（2026-11-23）。
+ * Shizuku 后端。
  *
  * 目标实现优先 Shevery（`com.hamondev.shevery`，Shizuku fork，自启链路更成熟），
  * 官方 Shizuku（`moe.shizuku.privileged.api`）作为备选。二者 API 协议一致：
@@ -158,7 +158,7 @@ class ShizukuPrivilegedClient @Inject constructor(
             callback.onFailed(-1, "Shizuku 未授权：请在授权弹窗/授权页允许后重试")
             return
         }
-        // 2026-11-23：重装/重启后 Shevery 可能残留旧探针进程（server 已丢 binder 但进程还在），
+        // 重装/重启后 Shevery 可能残留旧探针进程（server 已丢 binder 但进程还在），
         // 新旧两份 AudioPolicy 并存会抢路由 → 副本无数据 / underrun 暴涨。
         // bind 前清一次（进程名固定为 <pkg>:<suffix>）。
         runCatching {

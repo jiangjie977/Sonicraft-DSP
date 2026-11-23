@@ -64,7 +64,7 @@ class DynamicBassNode : public DspNode {
    */
   static constexpr float kDefaultProtectLevel = 0.6f;
 
-  // ---- 动态增强的时间常数（2026-11-11 阶段 3）----
+  // ---- 动态增强的时间常数----
   /** 包络攻击：低频要跟得快，否则鼓点起音漏掉 */
   static constexpr float kEnvAttackMs = 15.0f;
   /** 包络释放：放慢，避免低频周期性起伏导致增益"呼吸" */
@@ -95,7 +95,7 @@ class DynamicBassNode : public DspNode {
   /**
    * 阈值映射：protectLevel 0 → 关闭；0.4（默认）→ 约 -11.6dBFS；1 → **-2dBFS**。
    *
-   * **上限从 -6dBFS 提到 -2dBFS**（2026-11-11 真机实测后修正）：
+   * **上限从 -6dBFS 提到 -2dBFS**：
    * 商业音乐的峰值普遍在 -1~0dBFS，-6dBFS 的阈值意味着**几乎全程介入** ——
    * 实测 bad guy 副歌（输入 -8dBFS）时低频被压掉 2dB，
    * 用户感受是"参数拉满，低音反而更弱"，比偶尔过载糟糕得多。

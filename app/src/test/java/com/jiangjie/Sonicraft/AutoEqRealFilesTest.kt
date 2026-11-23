@@ -11,7 +11,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * 用 **AutoEq 项目真实导出文件**做回归（2026-11-14 下载自
+ * 用 **AutoEq 项目真实导出文件**做回归（下载自
  * `jaakkopasanen/AutoEq` 的 `results/oratory1990/...`）。
  *
  * 与手写样例不同，这些文件能暴露真实世界的细节：段顺序不按频率排、

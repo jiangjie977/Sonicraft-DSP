@@ -28,7 +28,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 双后端仲裁器（2026-11-23）。
+ * 双后端仲裁器。
  *
  * 选择策略（用户指定）：
  *  1. **Stellar 优先**——现有 loopback 链路已 6/6 验证、`-2` 自愈等坑都踩过；
@@ -95,7 +95,7 @@ class PrivilegeBroker @Inject constructor(
 
     /** 重新探测并切换后端；仅在 kind 变化时发事件。 */
     private fun reevaluate(reason: String) {
-        // 2026-11-23：不能只看 isAlive —— Stellar 活着但未授权时 bindUserService 会
+        // 不能只看 isAlive —— Stellar 活着但未授权时 bindUserService 会
         // code=-3；此时若 Shizuku 已授权，应让后者接管（授权优先级 > 先到先得）。
         // 两者都未授权时仍按 Stellar 优先（等用户授权）。
         val now: PrivilegedClient = when {

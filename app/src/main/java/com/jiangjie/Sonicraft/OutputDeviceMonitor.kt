@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * 输出设备感知（M14a，2026-11-08）。
+ * 输出设备感知（M14a）。
  *
  * 本批**只做感知与取证**：不改任何播放行为、不切配置、不动引擎。
  * 目的是先把「当前声音往哪出」这件事变成可观测事实，为 的按设备切换提供依据。
@@ -30,7 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
  *  - `AudioDeviceCallback` 常驻 + **500ms debounce**（插拔/蓝牙握手会连发多次）
  *  - 当前输出按**优先级表**选取（蓝牙/有线/U​​SB 优先于内置扬声器）
  *  - 设备键 = `sanitize(productName)`；内置扬声器/听筒固定为 `speaker`
- *  - **空名回落 `headphone`，绝不回落 `speaker`**——WEcho 2026-10-14 事故：
+ *  - **空名回落 `headphone`，绝不回落 `speaker`**——WEcho 事故：
  *    蓝牙握手期 `productName` 为空，若回落成 speaker 会被判成扬声器模式，
  *    出现「切到耳机却用扬声器配置」
  */
@@ -55,7 +55,7 @@ class OutputDeviceMonitor @Inject constructor(
      *
      * **必须作为一个对象一次性发出**：早先用两个独立 StateFlow 分别发 key 与 label，
      * 在 `Dispatchers.Main.immediate` 下收集器可能恰好在两次赋值之间被唤醒，读到的是
-     * **上一个设备**的 label——实测把扬声器绑定的展示名写成了耳机名（2026-11-08 09:30:19）。
+     * **上一个设备**的 label——实测把扬声器绑定的展示名写成了耳机名。
      */
     data class CurrentOutput(val key: String, val label: String)
 

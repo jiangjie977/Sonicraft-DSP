@@ -6,7 +6,7 @@
 package com.jiangjie.Sonicraft.core.engine
 
 /**
- * Loopback PCM 源（P1，2026-11-04）：与 CaptureRelaySource 平级的**另一种输入**。
+ * Loopback PCM 源（P1）：与 CaptureRelaySource 平级的**另一种输入**。
  *
  * 数据来自特权侧（shell uid=2000）的 AudioPolicy + AudioMix(LOOP_BACK)：
  * 它复制本机 MEDIA/GAME 流，因此**不受 per-stream capture policy 约束**——

@@ -30,7 +30,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 特权后端类型（2026-11-23 双后端并存）。
+ * 特权后端类型。
  *
  * 选择策略：Stellar 优先（现有链路已验证），Shizuku（含 Shevery fork）兜底；
  * 两者都不可用时 [NONE]，由 UI 弹窗引导处理。
@@ -83,7 +83,7 @@ interface LoopbackProbeCallback {
 }
 
 /**
- * 特权能力抽象（2026-11-23 双后端）。
+ * 特权能力抽象。
  *
  * 能力面：
  *  1. 免弹窗授予 PROJECT_MEDIA（内录授权）
@@ -198,7 +198,7 @@ class StellarPrivilegedClient @Inject constructor(
             backend = BackendKind.STELLAR,
             managerPackage = STELLAR_MANAGER_PKG,
         )
-        // 2026-11-23：Stellar 在跑但 `stellar` 未授权 → 自动发起一次原生授权请求。
+        // Stellar 在跑但 `stellar` 未授权 → 自动发起一次原生授权请求。
         // 背景：Manager 可能把 DSP 归为「Shizuku 兼容应用」，授权页只写 shizuku 权限，
         // stellar 保持 ASK；此时 bindUserService 报 code=-3，用户从 UI 也点不到。
         // 限频 60s，避免 refresh（onResume/binder 事件）反复弹确认页。
@@ -296,7 +296,7 @@ class StellarPrivilegedClient @Inject constructor(
         }
     }
 
-    /** H3（2026-11-03 审计）：readText()/waitFor() 原本零超时——server「活着但挂起」时永久冻结。 */
+    /** H3：readText/waitFor 原本零超时——server「活着但挂起」时永久冻结。 */
     private fun consumeProcess(process: Process): CommandResult {
         val stdoutF = streamPool.submit(Callable { process.inputStream.bufferedReader().readText() })
         val stderrF = streamPool.submit(Callable { process.errorStream.bufferedReader().readText() })

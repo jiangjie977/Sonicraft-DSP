@@ -525,7 +525,7 @@ int main(int argc, char** argv) {
         Check(deep_peak <= ceiling_12 * 1.05f,
               "limiter deep: 0.5 peak input limited to -12dBFS ceiling");
 
-        // 5f) true-peak（BS.1770 4x 过采样，2026-10-27 RocoDSP 立项补强）：
+        // 5f) true-peak（BS.1770 4x 过采样，RocoDSP 立项补强）：
         //     ±0.88 方波采样峰 0.88 < ceiling 0.891（旧检测不触发限幅），但 DAC
         //     理想带限重构存在 Gibbs 带内过冲 → 真峰 > ceiling——采样峰值检测的洞。
         //     tp=1：包络取 max(采样峰, 4x 过采样真峰估计) → 输出重构真峰 ≤ ceiling。
@@ -691,7 +691,7 @@ int main(int argc, char** argv) {
         Check(cbypass, "compressor: bypass=true passes through sample-identical (mid-compression)");
     }
 
-    // 6e) **立体声联动探针**（M4b-2 补强，2026-11-11）
+    // 6e) **立体声联动探针**（M4b-2 补强）
     //     L = 0.99（-0.1dB）、R = 0.001（-60dB）。若检测与增益是「每声道独立」，
     //     R 几乎不会被压（它远低于阈值），L/R 的增益比会明显偏离 1.0 ——
     //     这正是单侧信号导致**声像漂移**的机理。
@@ -741,7 +741,7 @@ int main(int argc, char** argv) {
               "compressor: stereo link — L/R share ONE gain (ratio ~= 1.0, no image drift)");
     }
 
-    // 6f) **侧链高通探针**（M4b-2 补强，2026-11-11）
+    // 6f) **侧链高通探针**（M4b-2 补强）
     //     同电平（0dBFS）下分别喂 60Hz 与 1kHz：
     //     · HP 关闭时两者 GR 应当接近（低频能量同样能触发检测）
     //     · HP=120Hz 时 60Hz 的 GR 必须**明显变小**（低频被挡在检测路径外）
@@ -786,7 +786,7 @@ int main(int argc, char** argv) {
               "compressor: sidechain HP transparent at 1kHz (within 1dB)");
     }
 
-    // 6g) **并联混合探针**（2026-11-11，param 7）
+    // 6g) **并联混合探针**
     //     mix=0 应当**直通**（输出 = 输入），但检测仍在跑（GR 表照常有读数）；
     //     mix=1 是纯压缩输出；mix=0.5 落在两者之间。
     //     关键语义：mix=0 **不等于 bypass** —— bypass 连检测都停，mix=0 只去掉湿声。
@@ -838,7 +838,7 @@ int main(int argc, char** argv) {
               "compressor: mix is monotonic (dry > mid > wet)");
     }
 
-    // 6h) **RMS 检测探针**（2026-11-11，param 8）
+    // 6h) **RMS 检测探针**
     //     对**稳态正弦**：峰值检测看到的是幅值 A，RMS 看到的是 A/√2（低 3.01dB）。
     //     经过 ratio=4 的压缩曲线（slope=0.75）后，GR 的差应当是 3.01 × 0.75 ≈ **2.26dB**。
     //     这条同时验证「RMS 是能量平均」而非「另一次峰值检测」。
@@ -873,7 +873,7 @@ int main(int argc, char** argv) {
               "compressor: RMS detection sees -3dB on steady sine (GR delta ~2.26dB @4:1)");
     }
 
-    // 6i) **前瞻探针**（2026-11-11，param 9）
+    // 6i) **前瞻探针**
     //     分两件事验：
     //     a) **延迟量**：lookahead=2ms @48k = 96 样本，单样本脉冲的输出峰应出现在
     //        输入位置 + 96（用 2ms 而非 5ms，保证落在 128 样本的单块内，便于定位）
@@ -931,7 +931,7 @@ int main(int argc, char** argv) {
               "compressor: look-ahead catches the transient (output peak >20% lower)");
     }
 
-    // 6j) **过采样探针**（2026-11-11，param 10）
+    // 6j) **过采样探针**
     //     2x 过采样最隐蔽的风险不是音质，而是**时间常数被带偏**：
     //     核心跑在 2x 采样率下，若 attack/release 的系数仍按原始 sr 计算，
     //     同样的 150ms 会变成 75ms —— 听觉上是「一开过采样，压缩突然变快」。
@@ -1245,8 +1245,7 @@ int main(int argc, char** argv) {
         };
 
         // protectLevel = 0.6 → ceiling = -18 + 0.6*16 = -8.4dBFS ≈ 0.380
-        // （上限从 -6 提到 -2 后映射区间变宽，2026-11-11）
-        //
+        // （上限从 -6 提到 -2 后映射区间变宽）
         // **必须用 30Hz 而不是 60Hz**：保护只作用于分频后的低频带（<80Hz），
         // 而 60Hz 紧邻 80Hz 分频点 —— LR4 低通在 60Hz 只剩约 0.76 倍，另有 0.24 倍
         // 进了高频带、保护管不到。实测 60Hz 输入 0.9 只能压到 0.505（GR -7.5dB），
@@ -1353,7 +1352,6 @@ int main(int argc, char** argv) {
         }
 
         // ② 100Hz（**谐波源带内**）→ 200Hz 谐波必须出现
-        //
         // 为什么不用 60Hz 测：谐波源是 80~150Hz 带通，60Hz 落在过渡带外、
         // 被 HP80 衰减一半以上，生成的谐波自然弱。**这不是缺陷** ——
         // 手机扬声器连 80Hz 都放不出，需要"翻译"的正是 80~150Hz 这一段；
@@ -1367,7 +1365,7 @@ int main(int argc, char** argv) {
                     a100, a200, a300);
         Check(a200 > 0.02,
               "virtual bass: 100Hz fundamental generates 200Hz harmonic (amplitude > 0.02)");
-        // **三次谐波断言（2026-11-12 对齐 yuanma 后新增）**：
+        // **三次谐波断言**：
         // yuanma 用 Harmonic<3> {0,.13,.13} → 0.52x³+0.26x²−0.39x−0.13，
         // 会生成 300Hz（100Hz 的三次）。我们旧版只有二次谐波，这正是"听感比
         // wecho 薄"的原因之一。此断言防止以后又把三次项改丢。
@@ -1376,7 +1374,7 @@ int main(int argc, char** argv) {
         // 幅度比 200Hz 低 ~26dB，说明听感差异的主因仍是混合系数而非谐波阶数。
         Check(a300 > 0.001,
               "virtual bass: 100Hz generates 3rd harmonic 300Hz (yuanma Harmonic<3>)");
-        // 判据 -20dB → -30dB（2026-11-12 对齐 yuanma）：
+        // 判据 -20dB → -30dB：
         // 按 wecho 原式（纯替换、Harmonic<3>）后，多项式含 −0.39x 项，
         // 加上 HP120 后仍有基频残留，残留基频比旧版大是**原版行为**。
         // -30dB 仍能区分"谐波生成了"和"没生成"（后者 -inf）。
@@ -1385,7 +1383,6 @@ int main(int argc, char** argv) {
               "virtual bass: 200Hz harmonic within 30dB of residual fundamental");
 
         // ③ 纯 400Hz（**谐波源带外**）→ 不得生成 800Hz
-        //
         // 为什么不用 120Hz 测：120Hz 确实在 80~150 带内，生成 240Hz 是**预期行为**。
         // 真正要防的是"中频内容被强行加工"—— 只有基频在带外时才有说服力。
         std::vector<float> out400;
@@ -1452,7 +1449,6 @@ int main(int argc, char** argv) {
         };
 
         // ① 三个参数全 0 → 电平不变
-        //
         // **不能比逐样本相位**：M 支路有 HP20、S 支路有 HP120，60Hz 过这两级会有
         // 相位偏移（实测逐样本误差 0.32，但那只是相移不是失真）。
         // 这个节点的设计是「只加增量」，全 0 时 delta=0、输出 = HP20(输入)，
@@ -1504,7 +1500,7 @@ int main(int argc, char** argv) {
               "bass enhance: 1kHz essentially untouched even at full boost (<1dB)");
     }
 
-    // 6q) **低音增强双模式**（2026-11-11，对照 wecho_projectV2.5.1 的 BassEffect）
+    // 6q) **低音增强双模式**
     //     经典模式 = `out += LP(fc,Q)(out) × 10^(g/20) × 1.5`，不碰 M/S / 包络 / 瞬态。
     //     这组断言只关心「两种模式行为确实不同 + 经典模式本身成立」。
     {
@@ -1663,7 +1659,7 @@ int main(int argc, char** argv) {
         std::printf("    INFO conv id: max_err=%.6f\n", max_err);
         Check(conv_id, "convolver: unit-impulse preset reproduces input exactly (mixed block sizes, both channels)");
 
-        // 7a2) 大块口径回归锁（2026-10-24 真机全预设啵啵回归）：真机
+        // 7a2) 大块口径回归锁：真机
         //      FRAMES_PER_BLOCK=192 > H=128，消费一步可越过批次槽区起点——
         //      b70557a 初版把补半放在消费之后 → 每批 64 帧读陈旧环带 =
         //      全预设哔哔啵啵；harness 此前恒用 ≤128 帧喂（恰好安全）故未
@@ -1709,7 +1705,7 @@ int main(int argc, char** argv) {
                 }
             }
             {   // 清尾：最后一批的后半需要有块可跑（否则用例在批中途截断，
-                //      大块口径的最后一批永远差一个后半——2026-10-24 插桩定位）
+                //      大块口径的最后一批永远差一个后半——插桩定位）
                 float z1[2048] = {}, z2[2048] = {};
                 float* zp1[2] = {z1, z1};
                 float* zp2[2] = {z2, z2};
@@ -2129,7 +2125,7 @@ int main(int argc, char** argv) {
                   "convolver: 320ms IR end-to-end (3 analytic peaks exact, no leakage)");
         }
 
-        // 7l) 预设区分度（听感回归盲区，2026-10-24 用户报告三预设听感无差别）：
+        // 7l) 预设区分度（听感回归盲区，用户报告三预设听感无差别）：
         //     同一白噪声输入跑 4 个混响预设，两两输出 diff/sig 必须显著。此前
         //     7b/7e/7j 全部只验证 preset 1，p=2..4 的 spec 填充从未被测试触碰。
         //     **必须用宽带输入**：窄带（正弦）下 LTI 输出=同频正弦，仅相位/幅度
@@ -2145,7 +2141,7 @@ int main(int argc, char** argv) {
             // 窗口必须覆盖完整混响响应：输入 320 块 + 最长 IR（cathedral）
             // 120000 帧 → 160960 帧，取 1260 块 = 161280 帧。此前 48 块（128ms）
             // 只采样 cathedral 前 13% 的响应期，湿能量与 diff/sig 被严重低估
-            // （2026-10-24 取证教训）；680ms 时代 40960 帧窗口则截掉 cathedral
+            // ；680ms 时代 40960 帧窗口则截掉 cathedral
             // 2.5s 尾的后 2/3。
             constexpr int kBlocks7l = 1260;
             const int kN7l = kBlocks7l * 128;  // 161280 帧 > 输入 + 最长尾
@@ -2304,7 +2300,7 @@ int main(int argc, char** argv) {
             const bool fail_ok = !conv.LoadImpulseResponseFromFile("no_such_file_ir.wav");
             Check(fail_ok, "convolver: missing WAV file rejected without state change");
 
-            // P3 防御（2026-10-27 自检）：畸形 data chunk_size=0xFFFFFFFF（流式
+            // P3 防御：畸形 data chunk_size=0xFFFFFFFF（流式
             // 未定长标记）必须被快速拒绝——原实现 resize(4GB) → bad_alloc 崩进
             // 程（runCatching 抓不住），且 fseek 回退死循环挂死装载线程
             {
@@ -2471,7 +2467,7 @@ int main(int argc, char** argv) {
             Check(bounded4, "convolver: 4ch IR output bounded");
         }
 
-        // 7m) WAV 解析数值回归（2026-10-24 自定义 IR「糊闷」根因）：PCM24 拼接
+        // 7m) WAV 解析数值回归：PCM24 拼接
         //     后缺符号扩展——负样本（byte2 最高位=1）被读成 +1.0~+2.0 的正数，
         //     24bit IR 负半波整体翻正、卷积核被破坏。既有 extensible 4ch/24bit
         //     测试只断言 load 成功、无数值断言，抓不到此错。此测试写已知正负
@@ -2532,7 +2528,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        // 7n) 裸二进制嗅探回归（2026-10-24 附带发现修复取证）：单极性 int16
+        // 7n) 裸二进制嗅探回归：单极性 int16
         //     裸文件被 try_float32 抢判——int16 文件长度恒满足 %4==0，且单极性
         //     （样本 < 0x8000）使每个 4 字节组的 float 解释「合法」：sign=0、
         //     指数位≈0（极小 float），isfinite/|fv|<=64/能量校验全过 → 判成
@@ -2783,8 +2779,8 @@ int main(int argc, char** argv) {
                       defs[ConvolverNode::kPresetSmallRoom].lp == 1.0f &&
                       defs[ConvolverNode::kPresetSmallRoom].dry_gain == 0.85f,
                   "convolver: smallroom preset def values");
-            // 教堂 lp 期望值 0.62 → **0.85**（2026-11-11 同步）：
-            // 7e3df03（2026-11-09「教堂真实 RIR 两处跟随调整」）刻意把 lp 放宽到 0.85
+            // 教堂 lp 期望值 0.62 → **0.85**：
+            // 7e3df03刻意把 lp 放宽到 0.85
             // —— 真实 RIR 的高频滚降比参数化合成更陡，0.62 会把教堂削得太闷。
             // 当时只改了表、没同步这条断言，导致 harness 长期挂着一条假红灯。
             Check(defs[ConvolverNode::kPresetMediumRoom].pre_delay == 240 &&
@@ -2800,7 +2796,7 @@ int main(int argc, char** argv) {
                   "convolver: dry gain table complete (6 presets)");
         }
 
-        // 7r) IR 尾部裁剪 + 满载 t_eff 边界（/，2026-10-25）：
+        // 7r) IR 尾部裁剪 + 满载 t_eff 边界：
         //     a) 长零尾 IR（有效 1000 帧 + 零尾 29000 帧）加载后 UserIrFrames
         //        裁到 1000（-80dB 相对峰值阈值，SetIrSlot2x2 的 t_eff 随之下降）；
         //     b) 裁剪数学恒等：同内容无零尾 IR 的第二实例输出逐位一致
@@ -2988,7 +2984,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        // 7s) 真实 .irs 文件取证（2026-10-26 双声排查，可选用例）：argv[1] 传
+        // 7s) 真实 .irs 文件取证：argv[1] 传
         //     文件路径，未传/不可读则跳过。两条独立判据定位「双声」来源：
         //     a) 文件本身：裸解析 WAV（不经产品加载代码），L 通道归一自相关在
         //        >5ms 滞后处找强次峰——IR 自带重复脉冲结构则 wecho 也应双声；
@@ -3155,7 +3151,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        // 7t) 病态 f32 WAV 清洗（2026-10-26「R 湿声冤案」回归守卫）：运行时构造
+        // 7t) 病态 f32 WAV 清洗：运行时构造
         //     48k/2ch 病态文件——L=帧400 单脉冲 IR；R 同结构但撒 2 个 NaN + 2 个
         //     3e38 巨大值（均在脉冲之前，躲过湿尾裁剪、确保参与归一能量）。修复前
         //     链路：NaN 污染 side_energy → g_R=0（NaN>1e-18 恒 false）/巨大值把
@@ -3275,7 +3271,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        // 7q) 干/湿电平参数（2026-10-24 第一批滑块）：WET 全预设生效 + DRY 独立
+        // 7q) 干/湿电平参数：WET 全预设生效 + DRY 独立
         //     控制。精确断言：湿声=0 时输出 = kDryGain[preset]·dry_scale·x（纯干）；
         //     干声=0 时湿声路径线性（RMS 比值 = wet 增益比）。斜坡 τ=30ms，预热
         //     16384 样本（341ms，>5τ）后测量段收敛至 <0.005 snap。
@@ -3323,7 +3319,7 @@ int main(int argc, char** argv) {
             Check(std::fabs(r15 / r10 - 1.5) < 5e-3, "convolver: wet level linear (all presets)");
         }
 
-        // 7r) 湿声低切（2026-10-24 第二批滑块）：RBJ highpass Q=0.707 只作用
+        // 7r) 湿声低切：RBJ highpass Q=0.707 只作用
         //     于湿声路径（干声直通不受影响）。比值断言（各自与低切关基准比）：
         //     cutoff=200Hz 时 1kHz 基本无损（大于 0.9），50Hz 强衰减（小于
         //     0.25，二阶理论 -24dB 留余量）。
@@ -3359,7 +3355,7 @@ int main(int argc, char** argv) {
             Check(off50 > 0.0 && hp50 / off50 < 0.25, "convolver: lowcut attenuates 50Hz");
         }
 
-        // 7x) 病态 IR 检测 + 每声道频谱（2026-10-26 双声实证驱动，判据 =
+        // 7x) 病态 IR 检测 + 每声道频谱（双声实证驱动，判据 =
         //     tmp_dualvoice_test 离线原型，真机五款复听闭环）：
         //     a) 干净立体声脉冲 → risk 0、pre_silence≈0、2 声道谱峰≈0dB
         //     b) 复刻 HIFI最终版2 形态（前置 160ms 深静音 + 孤立主脉冲 + 3 NaN）
@@ -3490,10 +3486,10 @@ int main(int argc, char** argv) {
                             rep.lr_pulse_skew_ms, rep.lr_energy_ratio_db, rep.risk_level);
                 std::remove("t7x_asym.wav");
             }
-            // 7y) 病态脏前置自动对齐（方案 A，2026-10-26）：装载路径裁剪
+            // 7y) 病态脏前置自动对齐（方案 A）：装载路径裁剪
             //     a) 脏前置（1e-4 噪声底）50ms @48k → 装载即裁：trimmed≈50ms、
             //        pre_silence<10ms、risk=0、δ 纯湿响应主峰 <30ms（双声消失）
-            //     b) 纯零前置 50ms（设计型延迟）→ 同样裁（2026-10-27 用户决策：
+            //     b) 纯零前置 50ms（设计型延迟）→ 同样裁（用户决策：
             //        检测到病态一律校正，不再豁免设计型延迟；要保留延迟效果用
             //        设置开关整体关闭）：trimmed≈50ms、pre<10ms、risk=0、
             //        pre_noise≤-96dB（报告语义保留：干净度指标照常输出）
@@ -3578,7 +3574,7 @@ int main(int argc, char** argv) {
                 Check(rep7yb.risk_level == 0, "convolver 7y b: risk 0 after trim");
                 std::remove("t7y_design.wav");
             }
-            // 7y-c: 毛刺样本+延迟主脉冲（SRS_2_2 实证形态，2026-10-27）：
+            // 7y-c: 毛刺样本+延迟主脉冲（SRS_2_2 实证形态）：
             //     183ms 深静音残留（-71dB RMS）中 1 个 -59.5dB 孤立毛刺样本 +
             //     183.3ms 处主脉冲。旧逐样本 -60dB 门被毛刺顶穿 → 误判前置仅
             //     ~2ms 不裁 → 湿声主体迟到 183ms（真机「干湿没对齐」根因）。
@@ -3619,7 +3615,7 @@ int main(int argc, char** argv) {
                             rep7yc.risk_level, rep7yc.pre_noise_db);
                 std::remove("t7y_glitch.wav");
             }
-            // 7z) 湿声电平自动校准建议（批次 2，2026-10-27；口径 2026-10-27 二次修正）：
+            // 7z) 湿声电平自动校准建议（批次 2；口径二次修正）：
             //     suggested_wet_gain = 1 + log2(3/crest)/4（log2 域，锚=3=真实音乐
             //     DSP 卷积核典型 crest，PROBE 实测库分布 2.1~5.1），clamp 0.6~1.5。
             //     首版 sqrt(RIR 标定/crest) 因 RIR crest=1243 离群，真实库 6/6 全
@@ -3692,7 +3688,7 @@ int main(int argc, char** argv) {
                     std::remove(name7z.c_str());
                 }
             }
-            // PROBE（临时取证，2026-10-27「全顶格 1.5」用户报告）：真实脉冲库 IR
+            // PROBE（临时取证，「全顶格 1.5」用户报告）：真实脉冲库 IR
             // 走同一装载路径实测建议值，并打印标定 crest 绝对量级。
             {
                 const char* probe_files[] = {"probe1.irs", "probe2.irs", "probe3.irs",
@@ -4132,7 +4128,7 @@ int main(int argc, char** argv) {
             // 阶跃 + 平滑期无跳变
             mb.SetParam(sonicraft::dsp::MultibandNode::kParamSplit1Hz, 2000.0f);
             // 判据=块间能量渐变 + 样本级斜率上限。块 RMS 测不出单样本咔嗒
-            // （2026-10-25 真机拖 fc 毛刺即为 TDF2 状态失配的单样本尖峰，
+            // （真机拖 fc 毛刺即为 TDF2 状态失配的单样本尖峰，
             // 块 RMS 全绿）。斜率阈值 0.25 为定标值：600Hz 正弦自然斜率
             // ≈0.020，fc 平滑扫过交叉区的物理相位重排（固有下限）
             // 实测 0.216（DF1+ramp），旧 TDF2 状态失配分量 0.323（真机
@@ -4562,7 +4558,7 @@ int main(int argc, char** argv) {
               "convolver 10c: reverb tail returns after wet restore (state intact)");
     }
 
-    // 8) ScriptEffectNode（自定义脚本效果器，2026-11-12）：
+    // 8) ScriptEffectNode（自定义脚本效果器）：
     //    VM 可插拔，这里注入「×0.5」假 VM 验证「节点↔VM」契约（无需真实脚本）：
     //      a) 默认 bypass=true → 逐样本等于输入（透传）
     //      b) 注入 VM + 启用 → 输出被 VM 改写（×0.5）
@@ -4867,7 +4863,7 @@ void sample() { spl0 = fib(6.0); spl1 = spl0; }
                   "script effect: declared controls update immediately while enabled");
         }
 
-        // 块处理：block() 每块执行一次，可读写整块
+        // 块处理：block 每块执行一次，可读写整块
         {
             ScriptEffectNode blk;
             blk.set_channel_count(2);
@@ -4980,7 +4976,7 @@ void sample() { spl0 = fib(6.0); spl1 = spl0; }
                   "script effect: ternary operator");
         }
 
-        // EEL function 定义 + local() + 括号体
+        // EEL function 定义 + local + 括号体
         {
             ScriptEffectNode ef;
             ef.set_channel_count(2);
@@ -5028,7 +5024,7 @@ void sample() { spl0 = fib(6.0); spl1 = spl0; }
                   "script effect: source switch + slider apply to new VM");
         }
 
-        // 只有 block()、没有 sample()：block 每块只能执行一次（否则每样本重跑 → 爆音）
+        // 只有 block、没有 sample：block 每块只能执行一次（否则每样本重跑 → 爆音）
         {
             ScriptEffectNode bo;
             bo.set_channel_count(2);

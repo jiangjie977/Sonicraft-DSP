@@ -37,7 +37,7 @@ namespace sonicraft::dsp {
  *                Kotlin 引擎构链后显式下发 1——真机默认启用，harness 默认链
  *                不受影响以保住 7a2 等 bit-exact 回归参照）
  *
- * true-peak 检测（2026-10-27，RocoDSP build22 砖墙限制器立项补强）：
+ * true-peak 检测：
  *  采样峰值 ≤ ceiling 不代表 DAC 理想带限重构后的真峰 ≤ ceiling——陡沿/方波类
  *  信号的 sinc 重构存在 Gibbs 带内过冲（±0.88 方波过采样峰实测 ~1.10 → 超
  *  ceiling 0.89 一档），采样峰值检测对此有洞。开启后以 4x 过采样（3 个子样本

@@ -53,7 +53,7 @@ class ForegroundDspService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // L11（2026-11-03 审计）：8s 确认回调的 Handler 存字段——原匿名 Handler 无引用，
+    // L11：8s 确认回调的 Handler 存字段——原匿名 Handler 无引用，
     // onDestroy 不移除回调：服务销毁后回调仍触发 startForeground = 对已死服务挂
     // 僵尸前台通知。
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -81,7 +81,7 @@ class ForegroundDspService : Service() {
     private var startKind: String = KIND_MP
 
     /**
-     * 解析本次要用的前台服务类型（方案 C，2026-11-07：双类型位 + 可切换实测）。
+     * 解析本次要用的前台服务类型（方案 C：双类型位 + 可切换实测）。
      *
      * Loopback 用 `specialUse` 而非 `mediaPlayback` 的原因：`targetSdk=35` 下
      * Android 15 限制「从 BOOT_COMPLETED 启动」的 FGS 类型，`mediaPlayback` 与
@@ -177,7 +177,7 @@ class ForegroundDspService : Service() {
 
         val notification = buildNotification(terminated)
         // 类型位按模式解析（MP=mediaProjection / Loopback=specialUse 或 mediaPlayback）
-        // 走安全启动：MP token 未就绪时自动降级 specialUse，不再闪退（2026-11-09 P0）
+        // 走安全启动：MP token 未就绪时自动降级 specialUse，不再闪退
         if (!safeStartForeground(notification, resolveFgsType())) {
             return START_NOT_STICKY
         }
@@ -185,15 +185,15 @@ class ForegroundDspService : Service() {
     }
 
     /**
-     * 安全启动前台服务（2026-11-09，P0 修复）。
+     * 安全启动前台服务。
      *
      * **问题**：`mediaProjection` 类型 FGS 要求有**活跃的 projection token**。全新安装 / 清
      * consent 后用户还没授权、token 不存在时，`startForeground` 直接抛 `SecurityException`
-     * → 进程闪退（实测 2026-11-08 11:48–11:49 连崩 Java×2 + Native×3，重开 App 才恢复正常）。
+     * → 进程闪退（实测连崩 Java×2 + Native×3，重开 App 才恢复正常）。
      * 权限声明（`FOREGROUND_SERVICE_MEDIA_PROJECTION`）只解决「允许声明」，不解决「token 必须存在」。
      *
      * **降级链**：mediaProjection 失败 → `specialUse`（manifest 已声明、**不要求 token**、
-     * 保活能力不变）→ 仍失败则 `stopSelf()`（绝不让异常冒到系统造成闪退）。
+     * 保活能力不变）→ 仍失败则 `stopSelf`（绝不让异常冒到系统造成闪退）。
      *
      * **额外收益**：Android 15 把 `mediaProjection` 列入「从 BOOT_COMPLETED 启动」的禁启名单，
      * `specialUse` 不在其中——降级后开机自启反而更可靠。
@@ -304,7 +304,7 @@ class ForegroundDspService : Service() {
         const val PREFS_NAME = "sonicraft_settings"
         const val KEY_SESSION_WAS_RUNNING = "session_was_running"
 
-        /** 前台服务类型选择（方案 C 实测开关，2026-11-07） */
+        /** 前台服务类型选择（方案 C 实测开关） */
         const val EXTRA_KIND = "extra_kind"
         const val KIND_MP = "mp"
         const val KIND_LOOPBACK = "loopback"

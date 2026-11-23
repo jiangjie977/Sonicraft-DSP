@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 双端音频取证分析（M6.1 配套，2026-10-25）。
+ * 双端音频取证分析（M6.1 配套）。
  *
  * 输入：app 端 AudioDump 抓下的两路交织 f32（捕获输入 audio_in_*.f32 与
  * 处理输出 audio_out_*.f32）。输出：文本指标报告，判定伪影归属——

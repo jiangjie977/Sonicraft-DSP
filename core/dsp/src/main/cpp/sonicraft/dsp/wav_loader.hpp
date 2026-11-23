@@ -64,7 +64,7 @@ inline bool LoadWavFile(const std::string& path, WavData* out) {
     const uint32_t chunk_size =
         static_cast<uint32_t>(chunk_hdr[4]) | (static_cast<uint32_t>(chunk_hdr[5]) << 8) |
         (static_cast<uint32_t>(chunk_hdr[6]) << 16) | (static_cast<uint32_t>(chunk_hdr[7]) << 24);
-    // P3（2026-10-27 自检）：chunk_size 直接来自文件头，畸形/恶意文件可声明
+    // P3：chunk_size 直接来自文件头，畸形/恶意文件可声明
     // 4GB 级值——resize 直接 OOM 崩进程（runCatching 抓不住 native
     // bad_alloc），0xFFFFFFFF（流式未定长标记）还会令下方 fseek 回退死循环。
     // IR 文件合理上限远低于此（131072 帧 × 4ch × 4B ≈ 2MB），取 64MB 留足
@@ -126,7 +126,7 @@ inline bool LoadWavFile(const std::string& path, WavData* out) {
                      (static_cast<uint32_t>(q[2]) << 16) | (static_cast<uint32_t>(q[3]) << 24);
         float fv;
         std::memcpy(&fv, &u, 4);
-        // 样本级数值清洗（2026-10-26「R 湿声冤案」根因修复）：社区 IR 文件
+        // 样本级数值清洗：社区 IR 文件
         // （HIFI最终版2.irs 实测）R 声道撒布 78 个 NaN + 若干 3e38 级巨大值。
         // NaN 原样进 IR 后，ConvolverNode 归一能量累加被污染成 NaN，g=0 门
         // （NaN>1e-18 恒 false）把整个 R 侧湿声静音——听感只剩 L 湿 + 双耳
@@ -147,7 +147,7 @@ inline bool LoadWavFile(const std::string& path, WavData* out) {
         v = static_cast<float>(s) / 32768.0f;
       } else if (bits == 24) {
         // 24 位小端拼入 32 位后高 8 位必须符号扩展：负样本（q[2] 最高位=1）
-        // 不扩展会被读成 +1.0~+2.0 的正数（2026-10-24 用户自定义 IR「糊闷」
+        // 不扩展会被读成 +1.0~+2.0 的正数（用户自定义 IR「糊闷」
         // 根因——24bit 文件负半波整体翻正，卷积核被破坏）。PCM16/32 靠
         // int16_t/int32_t 转换的 wrap 语义天然正确，唯独 24 位需手动扩展。
         uint32_t u = static_cast<uint32_t>(q[0]) |

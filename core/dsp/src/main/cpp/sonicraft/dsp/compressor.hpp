@@ -21,7 +21,7 @@ namespace sonicraft::dsp {
  *        → 增益平滑(attack/release，dB 域)
  *        → ×(makeup) → 输出
  *
- * **三个 2026-11-09 的专业化改造**（对照 Pro-C / 1176 的默认行为）：
+ * **三个专业化改造**（对照 Pro-C / 1176 的默认行为）：
  *
  *  ① **立体声联动**：包络与增益**跨声道共享一份**，检测取 max(|L_hp|, |R_hp|)。
  *     原来每声道独立检测+独立增益，单侧信号会让两侧被不同程度压缩 → 声像漂移。
@@ -96,12 +96,12 @@ class CompressorNode : public DspNode {
   static constexpr int kParamMakeupDb = 4;
   static constexpr int kParamKneeDb = 5;
   static constexpr int kParamSidechainHpHz = 6;
-  /** 并联混合（2026-11-11 新增）：0 = 全干（只听原声）、1 = 全湿（纯压缩输出） */
+  /** 并联混合：0 = 全干（只听原声）、1 = 全湿（纯压缩输出） */
   static constexpr int kParamMix = 7;
-  /** 检测模式（2026-11-11 新增）：0 = peak（瞬时峰值）、1 = RMS（10ms 均方根） */
+  /** 检测模式：0 = peak（瞬时峰值）、1 = RMS（10ms 均方根） */
   static constexpr int kParamDetectMode = 8;
   /**
-   * 前瞻（look-ahead，2026-11-11 新增）：0~10ms。
+   * 前瞻（look-ahead）：0~10ms。
    *
    * 原理：**检测用当前样本、输出用 N 样本前的样本**。因为增益在检测那一刻就确定了，
    * 而它作用在一段「还没到」的音频上 → 等效于增益提前 N 样本生效，瞬态来不及冲过去。
@@ -281,7 +281,7 @@ class CompressorNode : public DspNode {
         if (ay > det) det = ay;
       }
 
-      // ①' **RMS 检测**（2026-11-11 新增，param 8 = 1 时启用）：
+      // ①' **RMS 检测**：
       // 把「跨声道取大后的线性检测值」先平方、过一阶平滑（τ=10ms）、再开方。
       // 为什么不是对每个声道分别做 RMS：检测本身是**跨声道共享**的（立体声联动），
       // 若各声道独立积分再取大，两个声道的瞬态会互相错开、RMS 变得更抖。
@@ -318,7 +318,7 @@ class CompressorNode : public DspNode {
         gain_db += (target_db - gain_db) * release_coef_;
       }
 
-      // ⑤ **前瞻延迟线**（2026-11-11 新增，param 9）：
+      // ⑤ **前瞻延迟线**：
       // 无论 bypass 与否都推进缓冲 —— 否则恢复旁路时缓冲里是 N 样本前的旧数据，
       // 会听到一小段「倒放」。有前瞻时**先写入当前样本、再读 N 样本前的值**。
       // 声道上限 16：远大于实际（立体声 2 / 最多 8），留足余量防越界
@@ -419,7 +419,7 @@ class CompressorNode : public DspNode {
         const float ms = value < 0.0f ? 0.0f
                        : (value > kMaxLookaheadMs ? kMaxLookaheadMs : value);
         lookahead_ms_ = ms;
-        // **0 必须映射到 0 样本**（2026-11-11 由 6i 探针抓出）：
+        // **0 必须映射到 0 样本**：
         // 原来无条件 `+1`，导致 lookahead=0 时变成延迟 1 样本 —— 默认路径凭空多了
         // 1 个样本的延迟，`bypass` 与「无前瞻直通」都不再是逐位相同。
         const int samples = (ms <= 0.0f)

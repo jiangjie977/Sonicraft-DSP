@@ -227,7 +227,7 @@ object AutoEqParser {
         val clamped: Int = 0,
     )
 
-    // 兼容写法（2026-11-14 放宽）：
+    // 兼容写法：
     //   · ON 可省略（部分工具导出 `Filter 1: PK Fc 100 Hz Gain 3 dB Q 1.4`）
     //   · 类型含 LS/HS（老写法，等价 LSC/HSC）与 PEQ（等价 PK）
     //   · Q 可省略（shelf 用斜率 S 的文件）→ 缺省 0.707
@@ -264,7 +264,7 @@ object AutoEqParser {
             val g = m.groupValues[3].toFloatOrNull() ?: continue
             // group4 = 标签(Q/S)，group5 = 数值。
             // shelf 的斜率 S 与 Q 不是同一量纲，不做换算，按 Butterworth 缺省 0.707 处理；
-            // 完全没有 Q/S 时同样取 0.707（2026-11-14：此前把 S 的数值直接当 Q，导致 Q 偏大）。
+            // 完全没有 Q/S 时同样取 0.707。
             val qLabel = m.groupValues[4].uppercase()
             val qRaw = m.groupValues[5].toFloatOrNull()
             val q = if (qLabel == "Q" && qRaw != null) qRaw else 0.707f
@@ -279,7 +279,6 @@ object AutoEqParser {
     }
 
     // ---------------------------------------------------------------- 曲线类格式
-    //
     // AutoEq 同一副耳机会导出三种文件，除了参数化（Filter 行）还有：
     //   · `… GraphicEQ.txt`：单行 `GraphicEQ: 20 -0.2; 21 -0.2; …`（约 120 个频点）
     //   · `… .csv`：AutoEq 结果表，含 `equalization` 列（已算好的补偿曲线）

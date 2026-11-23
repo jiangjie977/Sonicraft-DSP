@@ -11,16 +11,16 @@
 namespace sonicraft::engine {
 
 /**
- * 双端音频取证 dump（M6.1 诊断增强，2026-10-25）。
+ * 双端音频取证 dump（M6.1 诊断增强）。
  *
  * 用途：同时抓「捕获输入」（PushInput 旁观）与「处理输出」（AAudio 回调出口旁观）
  * 两路交织 f32 到 files/crash/，供宿主机工具对比分析伪影归属——
  * pre-echo / birdies / 带宽截断 / 噪声底抬升：音源自带 vs 链路引入。
  *
  * 线程模型（无锁）：
- *  - Start()：Kotlin 非实时线程调用，fopen 文件对 + meta，发布后立即返回。
- *  - TapIn()：只在采集线程（PushInput 路径）。
- *  - TapOut()：只在 AAudio 输出回调线程。
+ *  - Start：Kotlin 非实时线程调用，fopen 文件对 + meta，发布后立即返回。
+ *  - TapIn：只在采集线程（PushInput 路径）。
+ *  - TapOut：只在 AAudio 输出回调线程。
  *  in/out 各自 FILE* 仅被单一线程触碰。发布协议：Start 先写 file 指针再
  *  release-store remain>0；tap acquire-load remain>0 才读指针——无并发窗口。
  */

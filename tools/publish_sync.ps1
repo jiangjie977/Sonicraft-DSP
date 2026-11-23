@@ -45,8 +45,21 @@ if ($dirty -and -not $DryRun) {
 }
 
 # --- mirror ---
-$excludeDirs = @("build", ".gradle", ".kotlin", ".codebuddy", ".git", ".cxx", "node_modules", ".idea")
-$excludeFiles = @("*.apk", "*.jks", "*.keystore", "local.properties", "*.log")
+$excludeDirs = @("build", ".gradle", ".kotlin", ".codebuddy", ".git", ".cxx", "node_modules", ".idea", "keystore", "dist")
+$excludeFiles = @("*.apk", "*.jks", "*.keystore", "keystore.properties", "local.properties", "*.log")
+
+# --- ensure publish repo exists (first run creates an independent history) ---
+if (-not (Test-Path (Join-Path $dst ".git"))) {
+    if ($DryRun) {
+        Write-Host "Dry run: publish repo not initialized yet ($dst\.git missing)."
+    } else {
+        Push-Location $dst
+        git init -q
+        git branch -M main
+        Pop-Location
+        Write-Host "Initialized empty publish repo at $dst (branch: main)"
+    }
+}
 
 $robocopyArgs = @($src, $dst, "/MIR", "/XD") + $excludeDirs + @("/XF") + $excludeFiles + @("/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS")
 if ($DryRun) { $robocopyArgs += @("/L") }
@@ -82,7 +95,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-git push origin master
+git push -u origin HEAD
 $pushCode = $LASTEXITCODE
 if ($pushCode -ne 0) {
     Write-Error "git push failed with exit code $pushCode"

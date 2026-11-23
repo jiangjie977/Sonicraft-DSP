@@ -28,11 +28,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * 首次启动隐私政策同意页（2026-11-08，国内上架合规）。
+ * 首次启动隐私政策同意页。
  *
  * 为什么必须挡在 [MainScreen] 之前：工信部《App 违法违规收集使用个人信息行为认定方法》
  * 要求「未经用户同意不得收集个人信息、不得申请权限」。本项目在 MainScreen 创建时即会
- * 实例化 MainViewModel → 触发 `autoStartCaptureIfNeeded()` → 检查/申请录音权限并建链。
+ * 实例化 MainViewModel → 触发 `autoStartCaptureIfNeeded` → 检查/申请录音权限并建链。
  * 因此**同意前不进入 MainScreen**，从根上保证「同意前零动作」（不建链、不申请权限、
  * 不读音频）。不同意则退出应用，不留后台进程。
  */

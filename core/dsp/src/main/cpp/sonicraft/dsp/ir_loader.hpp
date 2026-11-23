@@ -82,7 +82,7 @@ inline bool LoadIrFileAny(const std::string& path, int engine_rate, WavData* out
       std::memcpy(&fv, &u, 4);
       // 幅度门 65536：须容纳「整数刻度未归一导出」的 f32 IR（int16 满刻度
       // float 化 = ±32767）。旧门 64 会拒掉这类真 f32 → 被 try_int16 误判
-      // 接手（frames 翻倍、值全乱，2026-10-24 harness 7n 场景 5 坐实）。
+      // 接手（frames 翻倍、值全乱，harness 7n 场景 5 坐实）。
       // isfinite/能量/非零计数三门不动，随机二进制仍被 NaN/Inf 门拦截。
       if (!std::isfinite(fv) || std::fabs(fv) > 65536.0f) return false;
       if (std::fabs(fv) > 1e-12f) ++finite_cnt;
@@ -153,7 +153,7 @@ inline bool LoadIrFileAny(const std::string& path, int engine_rate, WavData* out
     return true;
   };
 
-  // RIFF 头拦截（2026-10-27 P3 用例坐实）：文件声明 RIFF/WAVE 却解析失败
+  // RIFF 头拦截：文件声明 RIFF/WAVE 却解析失败
   // （畸形 chunk 头 / 不支持的编码）时，裸嗅探会把 "RIFF" 头字节当 int16
   // 样本装成几十帧噪声 IR（装载「成功」实为垃圾）——明确报错更正确。
   // 纯裸格式（.irs/.pcm/.fir）不会以 RIFF 开头，此拦截不影响合法裸数据。

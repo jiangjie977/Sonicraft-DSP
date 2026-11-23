@@ -130,7 +130,7 @@ import com.jiangjie.Sonicraft.ui.theme.ScRadius
 import kotlinx.coroutines.delay
 
 /**
- * 界面缩放层（2026-11-09，移植自 wecho 定制版 `main.dart` 的 FittedBox 方案）。
+ * 界面缩放层。
  *
  * **为什么不用改 LocalDensity**：改 density 会让 dp 与 sp 一起变，但系统给的
  * `screenWidthDp` 也跟着变 → 算 scale 时读到被自己影响过的值（循环依赖）；
@@ -151,8 +151,8 @@ private fun ScUiScaleLayer(totalScale: Float, content: @Composable () -> Unit) {
     }
     val base = LocalDensity.current
     // **只乘 density，不动 fontScale**：
-    //   dp.toPx() = dp * density              → 乘一次 ✓
-    //   sp.toPx() = sp * fontScale * density  → 也乘一次 ✓
+    //   dp.toPx = dp * density              → 乘一次 ✓
+    //   sp.toPx = sp * fontScale * density  → 也乘一次 ✓
     // 若两个都乘，sp 会变成 totalScale²，字号会过度缩放。
     CompositionLocalProvider(
         LocalDensity provides Density(
@@ -219,7 +219,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     LaunchedEffect(engineState) {
         // 不再要求 engineState 必须是 Idle —— 服务被杀后引擎状态可能
         // 残留为 Running，那样自动启动永远不会触发（App 启动后一直没音效）。
-        // 是否需要真正建链交给 autoStartCaptureIfNeeded() 内部判断。
+        // 是否需要真正建链交给 autoStartCaptureIfNeeded 内部判断。
         if (!autoStartAttempted) {
             autoStartAttempted = true
             // 原为 1500ms「避开冷启动首帧」；实测 400ms 已足够（Compose 首帧已完成，
@@ -227,7 +227,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             delay(400)
             if (!viewModel.autoStartCaptureIfNeeded()) {
                 // Android 14+ 硬性要求：getMediaProjection 时必须已有 mediaProjection 类型
-                // FGS 在跑（与 launchProjection() 同款前置）。此前漏了这步，主包被 Stellar
+                // FGS 在跑（与 launchProjection 同款前置）。此前漏了这步，主包被 Stellar
                 // 免弹窗路径掩盖；验证包 Stellar 未授权走弹窗路径时崩（SecurityException）。
                 context.startForegroundService(Intent(context, ForegroundDspService::class.java))
                 projectionLauncher.launch(mpm.createScreenCaptureIntent())
@@ -415,7 +415,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            // `statusBarsPadding` **必须留在这一层**（2026-11-09 缩放移植实测）：
+            // `statusBarsPadding` **必须留在这一层**：
             // 移到缩放层内部的 `BoxWithConstraints` 上会完全失效（页头直接压到状态栏上）。
             // 留在这里的副作用是「缩放 <100% 时页头离状态栏更近」——因为留白按未缩放 px
             // 计算、内容被缩小后整体上移。这是缩小的正常结果，不是重叠。
@@ -423,11 +423,11 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     ) {
         // 宽屏（>560dp，平板/折叠屏）内容居中限宽，避免整行被拉得过长；
         // 手机宽度 <=560dp 时 contentWidth == maxWidth，与改版前完全一致。
-    // 界面缩放（2026-11-09 移植 wecho 定制版）：autoScale(按 440dp 基准自动算)
+    // 界面缩放：autoScale(按 440dp 基准自动算)
     // × 粗调 × 微调，最终夹在 0.68~1.69，与 wecho 的 UIScaleManager 同口径。
     val uiScale by viewModel.uiScale.collectAsStateWithLifecycle()
     val uiFineScale by viewModel.uiFineScale.collectAsStateWithLifecycle()
-    // **用短边而不是屏宽**（2026-11-11 横屏验证发现）：wecho 原公式按屏宽算，
+    // **用短边而不是屏宽**：wecho 原公式按屏宽算，
     // 那是竖屏假设。横屏时屏宽 973dp ÷ 440 = 2.2 → 被 clamp 到上限 1.3 →
     // 整个 UI 放大 130%，字号与控件全部撑爆（真机横屏实测）。
     // 改用「短边」：竖屏短边=宽（440 → 100%），横屏短边=高（440 → 同样 100%），
@@ -490,7 +490,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 }
             }
 
-            // ---- 投影失效警示（2026-11-03 僵尸投影事故）：capture read 恒负 → 引擎自动
+            // ---- 投影失效警示：capture read 恒负 → 引擎自动
             //      止损停机 → TakeoverController 回滚接管挂警示 → 此处呈现 + 一键重新授权。
             //      此前 captureBrokenWarning 无 UI 消费，静音/直出全靠用户耳朵发现。----
             val captureBroken by viewModel.captureBrokenWarning.collectAsStateWithLifecycle()
@@ -521,7 +521,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 }
             }
 
-            // ---- 自身播放权限自愈警示（2026-11-03 全静音事故）：ZTE 后台音频治理把
+            // ---- 自身播放权限自愈警示：ZTE 后台音频治理把
             //      本 app 置 PLAY_AUDIO=deny → 输出轨 -inf → 全链死寂。自愈探针已自动
             //      恢复，此处告知 + 引导电池白名单。----
             val selfAudioWarn by viewModel.selfAudioWarning.collectAsStateWithLifecycle()
@@ -549,7 +549,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 }
             }
 
-            // ---- 输出流停摆警示（2026-11-03 全静音事故盲区）：看门狗重建失败此前
+            // ---- 输出流停摆警示：看门狗重建失败此前
             //      完全静默（22 分钟零日志零感知）。非 null = 重建未成功，自动重试中。----
             val outputStalledMsg by viewModel.outputStalled.collectAsStateWithLifecycle()
             if (outputStalledMsg != null) {
@@ -569,7 +569,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             }
 
             // ---- 夜间保活：被系统终止警示横幅已撤除（U9p7：NX733J 专属病灶文案对其他机型
-            //      用户有歧义，2026-11-02 指示去掉）。系统终止后即普通 Idle 态，用户点电源键
+            //      用户有歧义，指示去掉）。系统终止后即普通 Idle 态，用户点电源键
             //      重新开启即可；systemKilledUnacked 标记与服务端检测逻辑保留不动。----
 
             // ---- Loopback 不可用 → 告知原因并可切换平替模式----
@@ -650,7 +650,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         }
                     })
 
-                    // U9p7：采集断链警示横幅撤除（用户 2026-11-02 指示「不显示」——蓝牙归因
+                    // U9p7：采集断链警示横幅撤除（用户指示「不显示」——蓝牙归因
                     // 已被实测证伪，真因未明前不出猜测性文案）。保险丝回滚逻辑保留在 ViewModel，
                     // 静默回退直出，恢复后静默回归接管。
                     if (engineState is EngineState.Failed) {
@@ -689,7 +689,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onSelect = { page = it },
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
         )
-        // 2026-11-23 双后端提示：底部浮层（不占内容流，避免污染设备卡布局）
+        // 双后端提示：底部浮层（不占内容流，避免污染设备卡布局）
         // 切换提示 6s 自动收起；「均不可用」必须常驻，由用户手动关闭。
         val backendNotice by viewModel.backendNotice.collectAsStateWithLifecycle()
         LaunchedEffect(backendNotice) {
@@ -872,11 +872,11 @@ private fun P1LibrarySection(
         // ---- 音效：参量均衡器 ----
         Text(text = "音效", style = MaterialTheme.typography.titleSmall)
         // （U9l：U6 信号链条退役——效果启停状态各卡片开关已表达，单帧耗时首卡健康格已有）
-        // ---- 卡片顺序（2026-11-14 用户指定）：压限器 → 限幅器 → 混响 → 立体声宽度 → 低频管家 → 参量均衡 → 机架 ----
+        // ---- 卡片顺序：压限器 → 限幅器 → 混响 → 立体声宽度 → 低频管家 → 参量均衡 → 机架 ----
         // 两列网格后自然成三组语义：动态类（压/限）、空间类（混响/宽度）、频率类（低频/均衡）。
         // 六张短卡全部 weight(1f)，3 行 × 2 列；机架仍是全宽卡收尾。
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            // 压限器：标题 2026-11-11 从「多频段压限」改来，开关为组总闸
+            // 压限器：标题从「多频段压限」改来，开关为组总闸
             ScEffectCard(
                 title = "压限器",
                 subtitle = "多段 + 单段压缩",

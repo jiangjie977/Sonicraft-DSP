@@ -18,7 +18,7 @@ import javax.inject.Singleton
 abstract class PrivilegeModule {
 
     /**
-     * 2026-11-23：双后端仲裁（Stellar 优先，Shizuku 兜底）。
+     * 双后端仲裁（Stellar 优先，Shizuku 兜底）。
      * 调用方仍注入 [PrivilegedClient]，无需感知具体后端；切换经 `events` 通知。
      */
     @Binds

@@ -25,7 +25,7 @@ private val LightColors = lightColorScheme(
     primary = SonicraftPrimary,
     secondary = SonicraftSecondary,
     tertiary = SonicraftTertiary,
-    // U3 补：清退 baseline 紫残留槽位（真机彩色槽位实验定位——2026-11-01）：
+    // U3 补：清退 baseline 紫残留槽位（真机彩色槽位实验定位）：
     // - Slider 未激活轨道走 secondaryContainer（原淡紫 #E6E1F5）
     // - Card 背景（引擎状态卡等）走 surfaceContainerHighest（原淡紫灰）
     // - surfaceVariant/High/Low/Container：文本框底、填充组件底等中性面

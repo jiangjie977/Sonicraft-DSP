@@ -62,7 +62,7 @@ class BassEnhanceNode : public DspNode {
   static constexpr int kParamAmount = 0;
   static constexpr int kParamDeep = 1;
   static constexpr int kParamPunch = 2;
-  // ---- 模式切换与经典模式参数（3~6，2026-11-11 对照
+  // ---- 模式切换与经典模式参数（3~6，对照
   //      `wecho_projectV2.5.1_studio_rack` 的 `BassEffect` 双模式实现）----
   static constexpr int kParamMode = 3;
   static constexpr int kParamClassicGain = 4;
@@ -76,14 +76,14 @@ class BassEnhanceNode : public DspNode {
   static constexpr float kDefaultDeep = 0.3f;
   static constexpr float kDefaultPunch = 0.6f;
   /**
-   * 动态增益平滑时间常数（L3 修复，2026-11-11）。
+   * 动态增益平滑时间常数（L3 修复）。
    * `env_` 由 `|low|` 快跟随得到，60Hz 整流后带 120Hz 纹波；
    * 全参数下 dyn_gain 在 1~11 倍间抖动 → 700±120Hz 边带（实测 IMD 5.84%）。
    * 20ms 平滑对 120Hz 衰减约 −23dB，等响度补偿的慢适应不受影响。
    */
   static constexpr float kDynGainSmoothMs = 20.0f;
   /**
-   * 动态调制深度软限（L3 修复，2026-11-11）。
+   * 动态调制深度软限（L3 修复）。
    *
    * 全参数下 `deep × gain10 = 10`，dyn_gain 在 1~11 倍间摆动、次谐波被放大
    * 到 15 倍 —— 这两处是 IMD 5.84% 的全部来源（诊断：关次谐波后降到 3.06%）。
@@ -106,7 +106,7 @@ class BassEnhanceNode : public DspNode {
   /** wecho 经典模式的固定额外增益（`× 1.5`），保留原值 */
   static constexpr float kClassicExtraGain = 1.5f;
   /**
-   * 经典模式共振峰（Q 旋钮，2026-11-12 用户要求「实现功能，不可移除」）。
+   * 经典模式共振峰（Q 旋钮，用户要求「实现功能，不可移除」）。
    *
    * L1 把经典模式改成 LR4 分频重构后，分频的 Q 必须固定 1/√2 才能互补平坦，
    * 原 `classic_q` 因此失效。现在让 Q 作用于**低频带内的一个 bell**：
@@ -150,7 +150,7 @@ class BassEnhanceNode : public DspNode {
     classic_q_ = kDefaultClassicQ;
     classic_center_ = kDefaultClassicCenter;
 
-    // 经典模式：每声道一套 LR4 分频器（L1 修复，2026-11-11）
+    // 经典模式：每声道一套 LR4 分频器（L1 修复）
     classical_split_.assign(static_cast<std::size_t>(channels_), LR4Split{});
     classic_reso_.assign(static_cast<std::size_t>(channels_), Biquad{});
 
@@ -185,11 +185,9 @@ class BassEnhanceNode : public DspNode {
     if (bypass_) return;
 
     // ---- 经典模式 ----
-    //
     // **L1 修复**：原来是 `out = in + LP(fc,Q)(in) × gain`，
     // 直接把低通信号加回原信号。LP 在截止点以上相位滞后约 −146°，与原信号相消，
     // 实测 160/200Hz 出现 −5.6/−5.0dB 凹陷（专业验收发现）。
-    //
     // 改为**分频重构**：
     //   `out = hp4(x) + lp4(x) × (1 + gain)`
     // LR4 的 lp4/hp4 同分频点、相位一致、相加平坦 ⇒ 高频段 lp4≈0、hp4≈1，
@@ -229,7 +227,6 @@ class BassEnhanceNode : public DspNode {
     const bool mono = channels_ < 2;
     const float gain10 = amount_ * 10.0f;   // wecho 的 gain 量纲 0~10
     // **L3 软限（定稿）**：默认值完全不动，只压缩拉满后的极端值。
-    //
     // `knee = 1.5` 正好是默认参数（amount=0.5 × deep=0.3 × 10 = 1.5）。
     // x ≤ 1.5 时**原样通过**（默认音色逐位不变）；超过后指数渐近到
     // `kDeepGainSoftLimit = 2.0`，全参数 x=10 时收敛到 ≈2.0。
@@ -258,15 +255,13 @@ class BassEnhanceNode : public DspNode {
       const float env_abs = std::fabs(m_low_origin);
       const float coef = (env_abs > env_) ? env_attack_ : env_release_;
       env_ += (env_abs - env_) * coef;
-      // **L3 修复（2026-11-11，二次修正后定稿）**
-      //
+      // **L3 修复**
       // 诊断证据（全参数 amount=1）：
       //   deep=0  → IMD 0.24~0.41%（合格）
       //   deep=1  → IMD 5.84~6.33%（不合格），且降 punch 无效（6.10%）
       //   关掉次谐波 → IMD 3.06%
       // ⇒ 元凶不是 punch（一阶差分是**线性**运算，根本不产生互调），
       //   而是 deep 驱动的两处非线性：包络调制（~3%）与 flip-flop 次谐波（~2.8%）。
-      //
       // **试过无效**：给 dyn_gain 加 20ms 平滑（IMD 5.84→5.86）——
       // 因为「增益随包络变化」本身就是非线性，平滑滤不掉调制本身。
       // 真正要收敛的是**极端参数下的调制深度**，见 kDeepGainSoftLimit。

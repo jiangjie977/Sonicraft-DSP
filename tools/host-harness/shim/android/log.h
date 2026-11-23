@@ -1,5 +1,5 @@
 #pragma once
-// host-harness shim（2026-11-03 补欠账）：宿主机无 NDK 头文件——parametric_eq.hpp
+// host-harness shim：宿主机无 NDK 头文件——parametric_eq.hpp
 // 直接 include <android/log.h> 致 harness 编译断（harness 落后于 core 头文件演进）。
 // 日志调用降为无操作宏，算法路径零影响；NDK 侧不受此文件影响（不在其 include 路径）。
 #ifndef __android_log_print

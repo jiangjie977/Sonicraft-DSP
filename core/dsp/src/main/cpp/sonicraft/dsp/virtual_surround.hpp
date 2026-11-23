@@ -209,7 +209,7 @@ class VirtualSurroundNode final : public DspNode {
                         decoder2_, param_[vs::kParamMode] > 0.5f,
                         param_[vs::kParamCenterGain], param_[vs::kParamSurroundGain]);
 
-    // TODO(试听待修，2026-11-15，暂不动算法)：
+    // TODO(试听待修，暂不动算法)：
     //  1. FL/FR 里残留的中置人声过多 —— 中置提取后的扣除比例（C/2）偏小；
     //  2. C 声道人声偏弱、夹带乐器过多 —— 中置输入增益与相干度加权不足；
     //  3. 后环绕方向基本正确，但左右分离度不足、声场偏窄 —— 环绕差分分配比例待调；

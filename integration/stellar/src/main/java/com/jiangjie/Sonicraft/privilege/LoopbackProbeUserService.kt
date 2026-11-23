@@ -16,7 +16,7 @@ import android.util.Log
 import kotlin.math.sqrt
 
 /**
- * Loopback 探针服务（2026-11-04，P0 可行性验证）：运行在 Stellar UserService 进程。
+ * Loopback 探针服务：运行在 Stellar UserService 进程。
  *
  * 为什么这条路能抓 ALLOW_CAPTURE_BY_SYSTEM + FLAG_NO_MEDIA_PROJECTION：
  *  - 旧的 AudioPlaybackCaptureConfiguration 路线受**单流 capture policy** 约束（酷狗
@@ -50,7 +50,7 @@ class LoopbackProbeUserService(
 
     /**
      * 按 uid 分 mix 的目标 uid（<=0 表示普通全局 mix）。
-     * startUidProbe 设置后由 start() 一次性消费并复位。
+     * startUidProbe 设置后由 start 一次性消费并复位。
      */
     @Volatile
     private var matchUidFilter = -1
@@ -66,7 +66,7 @@ class LoopbackProbeUserService(
      *
      * 为什么必须回退：APM 只有在 **mix 格式与播放源可兼容** 时才会把 player 路由进该
      * mix；我们此前死磕 48000，而酷狗实际是 44100 → mix 长期 `Standby: yes`、
-     * record 读到 0（2026-11-05 实锤 output 197 Standby）。
+     * record 读到 0。
      */
     override fun start(sampleRate: Int, excludeUid: Int): String {
         if (running) return "已在运行 uid=${Process.myUid()}"
@@ -117,7 +117,7 @@ class LoopbackProbeUserService(
             val ruleUsage = ruleCls.getField("RULE_MATCH_ATTRIBUTE_USAGE").getInt(null)
             log("常量: ROUTE_FLAG_LOOP_BACK=$routeLoopBack RULE_MATCH_ATTRIBUTE_USAGE=$ruleUsage")
 
-            // ③ AudioMixingRule：**必须同时匹配 USAGE_UNKNOWN**（决定性，2026-11-04 万象
+            // ③ AudioMixingRule：**必须同时匹配 USAGE_UNKNOWN**（决定性，万象
             // 现场实证）。AudioRecord(setInternalCapturePreset(8)) 自身的 AudioAttributes
             // usage = USAGE_UNKNOWN(0)；AudioFlinger 建 record 时用它去匹配已注册 mix 的
             // rule，只有 MEDIA 的 rule 匹配不上 → getInputForAttr 找不到 mix →
@@ -131,10 +131,9 @@ class LoopbackProbeUserService(
             val targetUid = matchUidFilter
             matchUidFilter = -1   // 一次性消费，避免影响后续普通启动
             if (targetUid > 0 && ruleUid >= 0) {
-                // 按 uid 分 mix（2026-11-05 P2 精细化）：目标是拿到**该 app 独占的副本**，
+                // 按 uid 分 mix：目标是拿到**该 app 独占的副本**，
                 // 以判断「DP 静音是否连坐它这一路」——全局电平会被其它在播 app 撑住，
                 // 单路失源完全看不出来（网易云静音事故即此）。
-                //
                 // 实现要点（实测修正）：**纯 uid 规则拿不到数据**（route 生效、output 建成、
                 // 但 record 恒零 0.0009）。故叠加 usage 规则——usage 路径是已验证能供数的，
                 // 两者是 AND 语义：usage∈{UNKNOWN,MEDIA,GAME} 且 uid=target。
@@ -161,7 +160,7 @@ class LoopbackProbeUserService(
                     addMixRule.invoke(ruleBuilder, ruleUsage, attrs)
                     log("  + mixRule USAGE_$name($usage)")
                 }
-                // 排除自身（安全底线，2026-11-04 卡死事故教训）：
+                // 排除自身（安全底线，卡死事故教训）：
                 // ① 排除调用方 app 的 uid —— 否则 app 自己的 AAudio 输出（USAGE_MEDIA）
                 //    也会被 LOOP_BACK 进 mix；record 一旦建失败就是「吃流无消费者」黑洞；
                 // ② probe 进程自身（shell 2000）同理。
@@ -175,7 +174,7 @@ class LoopbackProbeUserService(
                     log("  ⚠ 拿不到 excludeMixRule/RULE_MATCH_UID —— 有抓自身输出的风险")
                 }
             }
-            // ★ 决定性参数（2026-11-05 推断并验证）：`allowPrivilegedPlaybackCapture(true)`。
+            // ★ 决定性参数：`allowPrivilegedPlaybackCapture(true)`。
             // MediaProjection 的 mix 与我们的差异就在这一项——普通 playback-capture mix
             // 会**按 capture policy 过滤参与者**，酷狗(ALLOW_CAPTURE_BY_SYSTEM + 0x400)
             // 被排除出 mix，于是我们的 output 恒为 `Standby: yes`（实测 output 197）。
@@ -248,17 +247,14 @@ class LoopbackProbeUserService(
             //   并且 `force_render=true` 时它**整段跳过 DP 静音**（muter.releaseAll）。
             //   也就是说：RENDER = 让 APM 把 player 重定向进我方 submix（原声不再出声），
             //   因此不需要任何静音；纯 LOOP_BACK = 只复制、原声仍在，必须靠静音压制。
-            // 【2026-11-21 二次修正】默认回到纯 LOOP_BACK(0x2) 优先。
-            //
+            // 默认回到纯 LOOP_BACK(0x2) 优先。
             // 上一版曾把默认改为 0x3(RENDER|LOOP_BACK)，实测**有双声** —— 原因是
             // 0x3 并非「RENDER 替代 LOOP_BACK」，而是**两个位同时置位**：
             //   RENDER    → player 被重定向进我方 mix（原声搬走）
             //   LOOP_BACK → 同时又复制一路
             //   → 两路叠加 = 双声（比纯 LOOP_BACK 更严重）
-            //
             // 因此：0x2（只复制）才是可用的主路径，**但必须配合 DP 静音压掉原声**
             // （`debug.sonicraft.nodp=0` 才会挂 DP；默认 nodp=true 不挂 → 双声）。
-            //
             // 调试：`debug.sonicraft.render=1` 可把 0x3 提到第一位（仅用于排查）。
             val preferRender = runCatching {
                 ProcessBuilder("getprop", "debug.sonicraft.render").start()
@@ -276,8 +272,8 @@ class LoopbackProbeUserService(
                 ?: return finishFail("拿不到 AUDIO_SERVICE")
             audioManager = am
 
-            // ⑥★ 读端先行（决定性，2026-11-04 依据 skill 文档 + NX733J 实测）：
-            // AOSP LOOP_BACK 标准顺序是「AudioRecord(REMOTE_SUBMIX).startRecording()
+            // ⑥★ 读端先行（决定性，依据 skill 文档 + NX733J 实测）：
+            // AOSP LOOP_BACK 标准顺序是「AudioRecord(REMOTE_SUBMIX).startRecording
             // 先就绪 → 再 registerAudioPolicy」。反过来（先写后读）在 NX733J 上会建立
             // 「无订阅者」submix 通道：policy 注册成功、端口可见（控制面正常），但
             // 数据面被 OEM HAL 桩死 —— 表现正是我们一路遇到的 `output: 0` 与
@@ -286,7 +282,7 @@ class LoopbackProbeUserService(
                 AudioRecord.getMinBufferSize(sampleRate, channelMask, encoding),
                 4096,
             )
-            // 系统 Context（万象同款：ActivityThread.currentApplication()）——
+            // 系统 Context（万象同款：ActivityThread.currentApplication）——
             // AudioRecord.Builder.setContext 用它推导 attributionSource。实测万象成功
             // 的 record 显示 mPackageName='anroid'（系统 Context 的包名 "android"），
             // 而我们用 AIDL 注入的 DSP Context 会得到 (uid 10473, pkg Sonicraft)，
@@ -319,7 +315,7 @@ class LoopbackProbeUserService(
                 patchContextAttribution(recordCtx, SHELL_UID, SHELL_PKG)
             }
             // ★ 万象 record 现场实锤 mPackageName='anroid'（故意拼错的假包名）。
-            // AudioRecord.Builder.setContext 内部用 context.getOpPackageName() 生成
+            // AudioRecord.Builder.setContext 内部用 context.getOpPackageName 生成
             // attribution：真实包名 com.android.shell 会触发 AppOps 的 uid-包名严格校验；
             // 不存在的包名使 getPackageUid 返回 -1 → 走「未知包」分支放行。
             val fakePkgCtx = object : android.content.ContextWrapper(ctx) {
@@ -351,7 +347,7 @@ class LoopbackProbeUserService(
                 }
                 val policyTry = runCatching {
                     // AudioPolicy.Builder 构造必须传 Context（AOSP：Builder(Context)）；
-                    // 无参构造不存在，传 newInstance() 会 NoSuchMethodException——
+                    // 无参构造不存在，传 newInstance 会 NoSuchMethodException——
                     // 这是「两种 route flag 均被拒绝」假象的真因
                     val pb = runCatching {
                         policyBuilderCls.getDeclaredConstructor(Context::class.java).newInstance(ctx)
@@ -415,7 +411,7 @@ class LoopbackProbeUserService(
             // APM 建「回环输入设备」是异步的：注册返回 0 时端口还没就绪，立刻 build 会
             // 拿到 state=0。原实现是「死等 2s」，实测端口通常几百 ms 就出现 → 白等。
             // 现改为「轮询端口出现（≤1.5s）+ 300ms 落地余量」：端口在即可建，通常 0.5~0.9s。
-            // 注意：不能用「固定 300ms」代替（2026-11-06 实测：固定短等待会导致首链
+            // 注意：不能用「固定 300ms」代替（实测：固定短等待会导致首链
             // record state=1 但数据恒 0，必须靠重建第二条链才有数据）。判据必须是「端口真的出现」。
             runCatching {
                 val t0 = android.os.SystemClock.elapsedRealtime()
@@ -436,7 +432,7 @@ class LoopbackProbeUserService(
             }
             log("开始建 record（失败每 150ms 重试）")
 
-            // ★★ 万象路线（2026-11-05，LoopbackPolicy.java 注册后段）：优先用隐藏 API
+            // ★★ 万象路线：优先用隐藏 API
             // `AudioPolicy.createAudioRecordSink(mix)`。它把 record 直接绑到**已注册 mix
             // 的 sink 端**，是"正统绑定"；我们此前手工 preset=8 + addr tag 建出的 record
             // 绑不到 sink —— 这正是 mix output 长期 `Standby`、inputLevel 恒零，
@@ -469,7 +465,7 @@ class LoopbackProbeUserService(
 
             // ★ 手工构造兜底（旧路，万象的 fallback 同款）：
             // 用「旧 5 参构造」而非 Builder（万象 trail 的「自建」就是这条）：
-            // Builder.build() 在 state=0 时会先 release 再抛 UnsupportedOperationException
+            // Builder.build 在 state=0 时会先 release 再抛 UnsupportedOperationException
             // ——对象拿不到，无法重试；旧构造只返回 state=0 的对象（不抛），才可能重试到
             // APM 把回环输入设备建好（万象实测第 9 次才 state=1）。
             var rec: AudioRecord? = sinkRec
@@ -596,7 +592,7 @@ class LoopbackProbeUserService(
     }
 
     /**
-     * 按 uid 分 mix 的电平探针（2026-11-05 P2）：
+     * 按 uid 分 mix 的电平探针：
      * 只注册匹配 [targetUid] 的 LOOP_BACK mix，record 读到的是该 app 独占的副本。
      * 调用方 start 后轮询 [getLevel] 即可拿到「这一路是否还有数据」。
      */
@@ -607,7 +603,7 @@ class LoopbackProbeUserService(
         return "targetUid=$targetUid $st"
     }
 
-    // ===== 静音托管（2026-11-05 根治孤儿 DP）=====
+    // ===== 静音托管=====
     // 效果对象由**本服务进程**持有：服务是 DAEMON 常驻，app 死亡时通过
     // attachClient 的 linkToDeath 立刻释放，不会留下 `0 Clients` 的孤儿效果。
 
@@ -663,7 +659,7 @@ class LoopbackProbeUserService(
         }
     }
 
-    // ===== 16k 特权静音器（双路之一，2026-11-05）=====
+    // ===== 16k 特权静音器（双路之一）=====
     private var silencerPolicy: Any? = null
     private var silencerRecord: AudioRecord? = null
     private var silencerThread: Thread? = null
@@ -758,7 +754,7 @@ class LoopbackProbeUserService(
                 return "fail policyBuild ${c.javaClass.simpleName}: ${c.message}"
             }
             log("16k: AudioPolicy 构建成功")
-            // ★ 读端先行（与主链路同规则，2026-11-04 实测）：NX733J 上必须先有
+            // ★ 读端先行（与主链路同规则，实测）：NX733J 上必须先有
             // REMOTE_SUBMIX record 在录，APM 才会为该 mix 建回环输入设备；反过来
             // （先注册 policy 再建 record）12 次重试全是 state=0（本轮实锤）。
             val recBuf = maxOf(
@@ -843,7 +839,7 @@ class LoopbackProbeUserService(
     }
 
     /**
-     * 主动触发 APM 重算路由（REROUTE 实验，2026-11-05）。
+     * 主动触发 APM 重算路由（REROUTE 实验）。
      *
      * 手法：`setMode(IN_COMMUNICATION) → setMode(NORMAL)` + `setSpeakerphoneOn` 切换。
      * 这些都会让 AudioPolicyManager 走一次 `updateCallRouting` / `checkOutputForAllStrategies`，
@@ -1011,10 +1007,10 @@ class LoopbackProbeUserService(
 
     /**
      * 把某个 Context（及其 ContextWrapper 链底层的 ContextImpl）的 attribution
-     * 强制改成 (uid, pkg) —— 等价于万象 `ShellContext.getAttributionSource()`
+     * 强制改成 (uid, pkg) —— 等价于万象 `ShellContext.getAttributionSource`
      * 硬编码 uid=2000 的效果，但不需要 @SystemApi 编译。
      *
-     * 原理：`AudioRecord.Builder.setContext(ctx)` 内部取 `ctx.getAttributionSource()`，
+     * 原理：`AudioRecord.Builder.setContext(ctx)` 内部取 `ctx.getAttributionSource`，
      * 而该值来自 `ContextImpl.mAttributionSource`（Android 12+ 也可能是
      * `mAttributionSourceState`）。AudioFlinger 用这个 attribution 的 uid 去查
      * RECORD_AUDIO appops：
@@ -1056,7 +1052,7 @@ class LoopbackProbeUserService(
      * 伪造进程级 attribution 为 shell 身份（照抄万象 ProcessIdentity.makeShellAttribution）。
      *
      * 为什么必须这么干：`createPackageContext("com.android.shell")` 拿到的 Context 只有
-     * **包名**是 shell，其 `getAttributionSource()` 里的 **uid 仍是本 app 的 10473** ——
+     * **包名**是 shell，其 `getAttributionSource` 里的 **uid 仍是本 app 的 10473** ——
      * AppOps 校验 uid-package 一致性时直接拒绝（Cannot create AudioRecord）。
      * 万象的做法是构造 `AttributionSource(uid=2000, pkg=com.android.shell, pid)`，然后
      * **反射遍历 ActivityThread 的全部 AttributionSource 字段（static + instance）全部替换**，
@@ -1167,7 +1163,7 @@ class LoopbackProbeUserService(
         // 但保留 5s 供外部 dump 诊断（本机 logcat 不可用，只能靠 dumpsys 看 mix 是否
         // 真的创建了 output 端口——这是判断 record 为何 state=0 的关键证据）。
         // 立即撤销（安全优先）：mix 一旦匹配到流就会 LOOP_BACK，record 失败时
-        // 留下「吃流无消费者」黑洞 → 卡死声（2026-11-04 实锤事故）
+        // 留下「吃流无消费者」黑洞 → 卡死声
         unregisterPolicyQuietly()
         return "失败：$msg"
     }
@@ -1183,8 +1179,8 @@ class LoopbackProbeUserService(
     }
 
     // 注：万象的 ShellContext（重写 getAttributionSource 硬编码 uid=2000）无法在本项目
-    // 复刻——`Context.getAttributionSource()` 与 `android.content.AttributionSource`
-    // 均为 @SystemApi，public SDK 不可见（2026-11-04 编译实测：Unresolved reference）。
+    // 复刻——`Context.getAttributionSource` 与 `android.content.AttributionSource`
+    // 均为 @SystemApi，public SDK 不可见。
     // 需要 framework stub / 系统签名环境才能编译，属构建体系限制。
 
     private companion object {

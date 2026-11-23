@@ -43,7 +43,7 @@ import kotlin.coroutines.resume
  * 由 [ForegroundDspService] 在判定「被系统终止」时直接调用。
  *
  * 参数重放只覆盖可序列化的标量项（增益/平衡/宽度/卷积/FDN/限幅/压限/EQ 10 段）；
- * 用户下次打开 App 时，ViewModel 的完整 `applyEqSettings()` 会再对齐一次。
+ * 用户下次打开 App 时，ViewModel 的完整 `applyEqSettings` 会再对齐一次。
  */
 @Singleton
 class AudioChainManager @Inject constructor(
@@ -63,7 +63,7 @@ class AudioChainManager @Inject constructor(
     private var restoring = false
 
     init {
-        // 2026-11-23 双后端：当前后端死亡 → PrivilegeBroker 自动切到另一个。
+        // 双后端：当前后端死亡 → PrivilegeBroker 自动切到另一个。
         // 旧链的 probe 绑在旧后端进程上，必须 stop + detach 后按新后端重建，
         // 否则旧 AudioPolicy 残留（双份 submix）或链路停摆。
         scope.launch {
@@ -180,7 +180,7 @@ class AudioChainManager @Inject constructor(
                 .putBoolean(ForegroundDspService.KEY_SESSION_WAS_RUNNING, true)
                 .putBoolean(ForegroundDspService.KEY_SYSTEM_KILLED_UNACKED, false)
                 .apply()
-            // 2026-11-23：headless 恢复成功必须撤掉开机瞬间挂的「内录授权失效」警示——
+            // headless 恢复成功必须撤掉开机瞬间挂的「内录授权失效」警示——
             // 重启后 Shevery 服务端晚起（binder 未到 → 首启探测失败挂通知），
             // 晚几秒恢复成功却不撤，用户会看到「已经恢复但通知还说失效」。
             runCatching { KeepAliveJobService.clearWarningNotification(context) }
@@ -358,9 +358,9 @@ class AudioChainManager @Inject constructor(
                 if (b("vs_enabled", false)) 1f else 0f,
             )
             engine.setBypass(AudioEngine.STEREO_WIDTH_NODE_INDEX, !b("stereo_width_enabled", true))
-            // 三个 Gain/Balance 节点的旁路（2026-11-11 双路径一致性检查检出）：
+            // 三个 Gain/Balance 节点的旁路：
             // 前台 applyEqSettings 有 setBypass，headless 此前只发 setParam ——
-            // engine.prepare() 后它们保持默认 bypass=true，用户调过的输入/输出增益
+            // engine.prepare 后它们保持默认 bypass=true，用户调过的输入/输出增益
             // 与平衡会在「系统杀进程自愈」后静默失效。中性值时不启用，与前台语义一致。
             engine.setBypass(AudioEngine.INPUT_GAIN_NODE_INDEX, f("input_gain", 1f) == 1f)
             engine.setBypass(AudioEngine.BALANCE_NODE_INDEX, f("balance", 0f) == 0f)
@@ -408,9 +408,9 @@ class AudioChainManager @Inject constructor(
             // 双模式：模式 + 经典模式三个参数。
             // **两套参数都要重放**（不只是当前模式那套）——否则切模式后
             // 另一套参数会回默认，用户会觉得"切回去音色变了"。
-            // **必须用 getInt 而不是 f()**：
+            // **必须用 getInt 而不是 f**：
             // `bass_enhance_mode` 在 prefs 里是 Int（setBassEnhanceMode 用 putInt），
-            // 而 `f()` = prefs.getFloat —— Android 对 Int 键调 getFloat 会抛
+            // 而 `f` = prefs.getFloat —— Android 对 Int 键调 getFloat 会抛
             // ClassCastException，被外层 runCatching 吞掉 →
             // **整个重放块静默中断**，后面所有参数都不下发。
             // 这类错误没有日志、没有崩溃，只有"某些参数重启后回默认"的症状。
@@ -498,7 +498,7 @@ class AudioChainManager @Inject constructor(
             // 限幅 / 压限 / 多段
             engine.setParam(AudioEngine.LIMITER_NODE_INDEX, 0, f("limiter_ceiling", -1f))
             engine.setBypass(AudioEngine.LIMITER_NODE_INDEX, !b("limiter_enabled", true))
-            // 自定义脚本效果器（2026-11-12 原型）：恢复用户脚本（新节点默认旁路可重载）+ 旁路
+            // 自定义脚本效果器：恢复用户脚本（新节点默认旁路可重载）+ 旁路
             val scriptSrc = prefs.getString("script_effect_source", "") ?: ""
             if (scriptSrc.isNotEmpty()) engine.setScriptSource(scriptSrc)
             engine.setBypass(AudioEngine.SCRIPT_EFFECT_NODE_INDEX, !b("script_effect_enabled", false))
@@ -554,7 +554,7 @@ class AudioChainManager @Inject constructor(
                 AudioEngine.COMPRESSOR_NODE_INDEX,
                 AudioEngine.COMPRESSOR_PARAM_OVERSAMPLE, f("compressor_oversample", 1f),
             )
-            // 效果组的旁通重放（2026-11-11 **表驱动**）：遍历 [EffectGroups.all]，
+            // 效果组的旁通重放：遍历 [EffectGroups.all]，
             // 每组每槽都按「总闸 && 该槽记忆」下发。
             // 这样新增一个效果组只需在 EffectGroups 里加一条 spec ——
             // 不必再回来改这里，也就不会出现「加了新组忘了重放」。

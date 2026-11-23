@@ -10,7 +10,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 /**
- * AutoEq 解析的兼容性回归（2026-11-14 完善）。
+ * AutoEq 解析的兼容性回归。
  *
  * 真实世界的 ParametricEQ.txt 并不总是 AutoEq 官方那一种写法：
  *   · 有的工具省略 `ON`

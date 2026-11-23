@@ -25,7 +25,9 @@
 | `build/`、`.cxx/`、`.gradle/`、`.kotlin/` | 构建产物 |
 | `.codebuddy/`、`.idea/` | IDE / AI 工具数据 |
 | `node_modules/` | 前端依赖 |
-| `*.apk`、`*.jks`、`*.keystore`、`local.properties` | 产物与签名，**永不入库** |
+| `keystore/`、`*.jks`、`*.keystore`、`keystore.properties` | **签名材料，永不入库** |
+| `dist/`、`*.apk` | 历史安装包，用 Release 附件分发 |
+| `local.properties` | 本机 SDK 路径 |
 | `*.log` | 运行日志 |
 
 ## 三、标准推送流程（顺序不可颠倒）
@@ -58,10 +60,11 @@
 
 1. **只在开发目录改代码**。发布目录里发现的任何问题，回开发目录改，再同步；禁止在镜像里直接编辑。
 2. **发布目录单线**：只有 `master`，不建 feature 分支，历史是「发布快照序列」。
-3. **开发目录与发布目录的历史是分叉的**（设计如此）：
+3. **开发目录与发布目录的历史互相独立**（设计如此）：
    - 开发目录保留完整开发历史（含实验提交）；
-   - 发布目录每个 `sync:` 提交对应开发目录的一个快照。
-   - 因此**不要从开发目录直接 `git push` 到 GitHub**（会因历史分叉被拒）；推送统一走脚本。
+   - 发布目录是**全新首版历史**，不继承也不克隆开发目录的提交；
+   - 之后每个 `sync:` 提交对应开发目录的一个快照。
+   - 因此**不要从开发目录直接 `git push` 到远端**；推送统一走脚本。
 4. **同步前开发目录必须干净**（`git status --porcelain` 为空），脚本会二次确认。
 5. **行尾由 `.gitattributes` 统一**：`*.kt` 存 LF、`*.bat/*.cmd/*.ps1` 存 CRLF。脚本的 `git add` 会自动规范化，纯行尾差异不会被提交成内容变更。
 6. **签名文件永不入库**：`*.jks` / `*.keystore` / `local.properties` 已在排除列表与 `.gitignore` 双保险。
@@ -76,10 +79,27 @@
 | 开发目录改错了 | 正常 `git revert` 或新提交修复，不要重写已同步过的历史 |
 | 镜像内容异常 | 删除发布目录，重新 `git clone` GitHub 仓库，再跑一次同步脚本 |
 
-## 六、首次初始化（已完成，留档）
+## 六、首次初始化（独立首版，无历史）
+
+发布镜像是**全新仓库**，不继承开发目录的任何提交历史，也不从远端 clone：
+
+```powershell
+# 1. 清空镜像目录（如有旧内容）
+Remove-Item D:\OPEN\DSP-GITHUB -Recurse -Force
+
+# 2. 跑同步脚本（脚本会自动 git init + 镜像 + 首次提交）
+.\tools\publish_sync.ps1 -Version vX.Y.Z
+```
+
+首次执行后：
+
+- `D:\OPEN\DSP-GITHUB` 是一个只有 1 个提交（`sync: vX.Y.Z`）的独立仓库；
+- 此时**尚未配置远端**，脚本的 `git push` 会失败——先手动配好远端再推：
 
 ```powershell
 cd D:\OPEN\DSP-GITHUB
-git clone https://github.com/jiangjie977/Sonicraft-DSP.git .
-# 之后每次只需运行 tools/publish_sync.ps1
+git remote add origin <新仓库地址>
+git push -u origin HEAD
 ```
+
+> 之后的日常发布只需重复「跑脚本」，脚本内含 `git push -u origin HEAD`（分支名 main/master 均可）。

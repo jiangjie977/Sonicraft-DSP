@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * 多机型响应式公共组件（2026-11-07，方案见 docs/UI_RESPONSIVE_PLAN.md）。
+ * 多机型响应式公共组件。
  *
  * 原则：**内容驱动，不按容器比例缩放**。机型名长度差异极大
  * （`NX733J` / `V2408A` / `Pixel 9 Pro XL`），任何 `fillMaxWidth(0.6f)` 都会在

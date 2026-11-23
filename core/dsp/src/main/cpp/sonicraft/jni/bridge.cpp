@@ -180,7 +180,7 @@ Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeLoadImpulseResponse
   return err.empty() ? nullptr : env->NewStringUTF(err.c_str());
 }
 
-// 尾分区上限（低端机负载分档）：须在 Start() 前调用（Prepare 前生效）
+// 尾分区上限（低端机负载分档）：须在 Start 前调用（Prepare 前生效）
 JNIEXPORT void JNICALL
 Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeSetTailPartitionLimit(
     JNIEnv* /*env*/, jclass /*clazz*/, jlong handle, jint max_parts) {
@@ -209,7 +209,7 @@ Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeCompressorMeters(
     JNIEnv* env, jclass /*clazz*/, jlong handle, jfloatArray out) {
   auto* engine = reinterpret_cast<sonicraft::engine::NativeAudioEngine*>(handle);
   if (engine == nullptr || out == nullptr) return JNI_FALSE;
-  // 4 个值：{输入峰值, GR dB, 输出峰值, GR 峰值保持 dB}（2026-11-09 增加第 4 项）
+  // 4 个值：{输入峰值, GR dB, 输出峰值, GR 峰值保持 dB}
   if (env->GetArrayLength(out) < 4) return JNI_FALSE;
   float buf[4];
   if (!engine->GetCompressorMeters(buf)) return JNI_FALSE;
@@ -217,7 +217,7 @@ Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeCompressorMeters(
   return JNI_TRUE;
 }
 
-// 病态脏前置自动对齐开关（方案 A，2026-10-26；默认开，下次装载生效）
+// 病态脏前置自动对齐开关（方案 A；默认开，下次装载生效）
 JNIEXPORT void JNICALL
 Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeSetTrimSickHead(
     JNIEnv* /*env*/, jclass /*clazz*/, jlong handle, jboolean enabled) {
@@ -230,7 +230,7 @@ Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeSetTrimSickHead(
 // [1028] 布局版本=4 | [1029] 源采样率 | [1030] 前置静音 ms | [1031] 主脉冲 ms
 // [1032] R/L 能量比 dB | [1033] L/R 主脉冲错位 ms | [1034] NaN 数 | [1035] Inf 数
 // [1036] 峰值 | [1037] 削波占比 | [1038] 双声风险 0/1/2 | [1039] 谱声道数 N
-// [1040] 前置噪声 dB（≤-96 干净=设计型延迟；-96~-60 导出残留；仅报告口径，2026-10-27 起不再豁免裁剪）
+// [1040] 前置噪声 dB（≤-96 干净=设计型延迟；-96~-60 导出残留；仅报告口径，不再豁免裁剪）
 // [1041] 装载时自动裁除的前置 ms（0=未裁，UI「已自动对齐」横幅）
 // [1042..1042+N*128) 每声道 128 点 dB 谱（峰 0dB / 底 -100dB）
 // [1554] 湿声电平自动校准建议（批次 2，0.6~1.5；未装载=1）
@@ -532,7 +532,7 @@ Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeStats(
     JNIEnv* env, jclass /*clazz*/, jlong handle) {
   auto* engine = reinterpret_cast<sonicraft::engine::NativeAudioEngine*>(handle);
   // 11 元素：原 9 元素时 native 的 n>=10 分支（xRun/旁路标志）永假——xRunBlocks
-  // 线上恒 0 的断档（2026-10-27 发现），顺带扩到 11 修通
+  // 线上恒 0 的断档，顺带扩到 11 修通
   // 24 = 11 基础 + 3 卷积诊断 + 10 逐节点平均耗时
   constexpr int kStatsLen = 24;
   jlongArray result = env->NewLongArray(kStatsLen);

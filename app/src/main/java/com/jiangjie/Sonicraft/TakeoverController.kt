@@ -43,11 +43,11 @@ import javax.inject.Singleton
  *     （某些 ROM set 返回 0 但未生效，WEcho/RocoDSP/本 app 三方实测同坑）。
  *  ② DP_SESSION 轨（回退）：① 回读失败时下探——对该 uid 的活跃 audio session 挂
  *     DynamicsProcessing 输入增益 -200dB（WEcho MuteEffectFactory 同款模式）。
- *     已知局限：对部分直播/独占 session 挂载失败（Error -3，2026-10-22 实测），
+ *     已知局限：对部分直播/独占 session 挂载失败（Error -3，实测），
  *     失败进 30s 冷却；自愈靠 500ms 轮询补挂（替代 WEcho 的反射 listener），
  *     补挂失败则干净放弃，行为退化为无阶梯现状（双声），不会更糟。
  *
- * 铁律（对应 2026-10-21 无声事故与 2026-10-22 用户「通话优先」要求）：
+ * 铁律（对应无声事故与「通话优先」要求）：
  *  1. 只接管 USAGE_MEDIA / USAGE_GAME；通话/铃声/闹钟/通知等一律不碰。手机通话音频走
  *     modem 直连不经过本链路，铃声/闹钟的 usage 不在白名单，天然隔离。
  *  2. 通话保护（混合 app 正解）：appops 静音是包级全局——微信视频号被接管后其语音通话也会
@@ -58,11 +58,11 @@ import javax.inject.Singleton
  *     自动消失，无需留痕。冷启动先回滚上次残留（进程被杀/崩溃兜底）；stopAndRollback
  *     按轨恢复全部。
  *
- * 实测依据（2026-10-22 NX733J）：ignore 后该 app 仍保持 state:started（活跃列表稳定，
+ * 实测依据：ignore 后该 app 仍保持 state:started（活跃列表稳定，
  * 无检测振荡），仅 mutedState 变 appOps；**capture 数据流不受影响**（副本照常出声，
  * 这是「接管替代」成立的根本前提）。
  *
- * 禁抓 app 音效轨（2026-11-03 豆包案定稿）：部分 app 对媒体流运行时调
+ * 禁抓 app 音效轨：部分 app 对媒体流运行时调
  * setAllowedCapturePolicy(NONE)（豆包朗读流服务端配置驱动，fresh tap 对照实验实锤：
  * 同分钟内豆包投影恒零、酷狗湿声正常）——投影抓不到 → appops 静音 + 引擎无副本 =
  * 「压原声几秒→保险丝回滚直出」的差体验，且永远无音效。对策三件套：
@@ -70,7 +70,7 @@ import javax.inject.Singleton
  *     判定该 app 禁抓 → 回滚 appops 保直出 → 进禁抓名单（包名+时间戳持久化）。
  *  ② 名单命中 → 不走 appops（压原声无意义），直接对该 uid 的 session 挂 DP EQ
  *     效果（人声提亮）——per-session AudioEffect 走 AudioFlinger 效果链，
- *     capturePolicy 管不住（RootlessJamesDSP 对豆包实测挂载生效，2026-11-03）。
+ *     capturePolicy 管不住（RootlessJamesDSP 对豆包实测挂载生效）。
  *     原声直出 + EQ 音效，无缝。已知局限：多源并发时观察窗电平含他源声，无法
  *     归因（不判定，退化为现状保险丝行为）；豆包恰逢喂零期接管时电平已零，不启动
  *     观察（交给全局保险丝）——残余误标场景由 24h TTL 重试兜底自愈。
@@ -107,7 +107,7 @@ class TakeoverController @Inject constructor(
     private val dpSilencedNotified: MutableSet<Int> =
         java.util.concurrent.ConcurrentHashMap.newKeySet()
 
-    // ===== Loopback 专用：按「会话」静音（2026-11-05 视频模式双声案）=====
+    // ===== Loopback 专用：按「会话」静音=====
     // 同一 uid 可同时有多个音频会话（酷狗：音乐 1457 / 视频 1785），而 uid→单个
     // session 的映射只能盖住其一 → 未被覆盖的会话原声照出 = 双声（视频前台实锤）。
     // 故 loopback 模式按 session 逐个挂 DP，并跟踪 session→uid 以便回收。
@@ -118,7 +118,7 @@ class TakeoverController @Inject constructor(
     /** sid → 所属 uid（用于只回收该 uid 的会话） */
     private val loopbackSessionUid = ConcurrentHashMap<Int, Int>()
 
-    // ===== DP 连坐保险（2026-11-05 网易云全静音事故）=====
+    // ===== DP 连坐保险=====
     // 事实现象：挂 DP -200dB 后，部分 app 的原声与 LOOP_BACK 副本**一起**被压掉
     // （网易云：切过去先有声 → 接管挂 DP → 全静音），而酷狗副本能存活。
     // 无论机制差异如何，「全静音」都不可接受 —— 故挂载后 1.5s 复查电平：
@@ -151,7 +151,7 @@ class TakeoverController @Inject constructor(
     val residueWarning: StateFlow<String?> = _residueWarning.asStateFlow()
 
     /**
-     * 残留 DP 自检（2026-11-05 孤儿效果事故）。
+     * 残留 DP 自检。
      *
      * App 在「已静音某 app」状态下被 force-stop / 重装时，DynamicsProcessing 可能
      * 不随进程消失（dump 可见 `0 Clients` 的孤儿效果），继续把目标 app 压到 -200dB ——
@@ -187,7 +187,7 @@ class TakeoverController @Inject constructor(
     }
 
     /**
-     * 远程静音桥（2026-11-05 根治孤儿 DP）。
+     * 远程静音桥。
      *
      * 静音效果改由 **UserService（shell 常驻）** 持有：app 进程被强杀/崩溃时，
      * 服务通过 linkToDeath 立刻释放，不会留下 `0 Clients` 的孤儿 DynamicsProcessing
@@ -202,7 +202,7 @@ class TakeoverController @Inject constructor(
     var loopbackMuteBridge: LoopbackMuteBridge? = null
 
     /**
-     * 链路级「已重路由」标志（，2026-11-06）。
+     * 链路级「已重路由」标志。
      *
      * true = 已确认原声被搬进我方 submix（活跃会话 deviceIds 命中我方 Port）→
      * 整条链路**不需要任何静音**，`syncLoopbackMute` 直接返回并释放既有静音。
@@ -325,7 +325,7 @@ class TakeoverController @Inject constructor(
     private var lastDumpFailed = false
 
     /** 本会话已自动接管的 uid → 轨道（内存态，回滚按轨分派）。
-     * （2026-11-03 审计）：CAPTURE_DEAD 止损 collect 协程与 poll 协程并发读写，
+     * ：CAPTURE_DEAD 止损 collect 协程与 poll 协程并发读写，
      *  HashMap 无同步 = CME/撕裂读风险，统一 ConcurrentHashMap（弱一致遍历安全）。 */
     private val autoTakenOverUids = ConcurrentHashMap<Int, MuteTrack>()
 
@@ -345,12 +345,12 @@ class TakeoverController @Inject constructor(
     /** DP 轨挂载失败冷却：sessionId → 冷却到期时间戳（WEcho 同款 30s，避免疯狂重试） */
     private val dpFailedSessions = ConcurrentHashMap<Int, Long>()
 
-    /** EQ 轨停用期（2026-11-04 用户指令）已 restore allow 的名单 uid：去重防每轮空跑
+    /** EQ 轨停用期已 restore allow 的名单 uid：去重防每轮空跑
      *  特权命令。setAppopsForUid 本身幂等，此 Set 只省日志与命令量。 */
     private val eqDisabledRestoredUids: MutableSet<Int> =
         java.util.concurrent.ConcurrentHashMap.newKeySet()
 
-    /** companion 包（<packageName>.submix，REMOTE_SUBMIX 输出端点）uid。2026-11-04
+    /** companion 包（<packageName>.submix，REMOTE_SUBMIX 输出端点）uid。
      *  全新安装前发现：它对输出流的 USAGE_MEDIA 主动播会被接管扫描当普通媒体 app
      *  mute（dumpsys appops 实锤 PLAY_AUDIO ignore）=掐死投影输出链——必须排除。 */
     private val submixUid: Int? by lazy {
@@ -370,7 +370,7 @@ class TakeoverController @Inject constructor(
     /** 禁抓观察窗：uid → 接管时刻（elapsedRealtime ms）。仅 APPOPS 轨、接管时电平非零才启动 */
     private val captureWatch = ConcurrentHashMap<Int, Long>()
 
-    // ===== 2026-11-04 息屏案修复：观察窗回滚验证 + 保险丝拓扑解除 + EQ session 重挂 =====
+    // ===== 息屏案修复：观察窗回滚验证 + 保险丝拓扑解除 + EQ session 重挂 =====
 
     /** 疑似禁抓待验证：uid → 回滚时刻（elapsedRealtime ms）。观察窗期满恒零只回滚暂不落名单，
      *  回滚后电平恢复=可抓（误判，撤销）；仍零超阈值=真禁抓（落名单）。
@@ -404,7 +404,7 @@ class TakeoverController @Inject constructor(
     private val lastSeenUids = ConcurrentHashMap<Int, Long>()
 
     // 进程级 scope：轮询与保险丝必须与 engine 同生命周期。
-    // 教训（2026-11-03 双声）：曾寄宿 viewModelScope，Activity 被回收即取消 →
+    // 教训：曾寄宿 viewModelScope，Activity 被回收即取消 →
     // 接管停摆但引擎仍在播 = 双声。详见 docs/ADR.md ADR-02/ADR-08。
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -415,7 +415,7 @@ class TakeoverController @Inject constructor(
     val captureBrokenWarning: StateFlow<String?> = _captureBrokenWarning
 
     /**
-     * 自身播放权限自愈警示（2026-11-03 全静音事故）：ZTE 星云后台音频治理类组件会把
+     * 自身播放权限自愈警示：ZTE 星云后台音频治理类组件会把
      * 「后台无声播放」的 app 自动置 PLAY_AUDIO=deny(MODE_ERRORED)，引擎输出轨被
      * AudioFlinger 压 -inf 增益 → 静音 → 省电断流(-899) → 重建仍被压 → 全链死寂；
      * appops 跟 uid 走，force-stop/重授权/重启进程均无法解除。自愈探针低频自检并
@@ -463,7 +463,7 @@ class TakeoverController @Inject constructor(
     val privilegeError: StateFlow<String?> = _privilegeError.asStateFlow()
 
     /**
-     * 采集断链保险丝（2026-11-01 事故）：capture 全零断链（系统侧 mix 脱钩）时接管
+     * 采集断链保险丝：capture 全零断链（系统侧 mix 脱钩）时接管
      * 静音照常生效 = 原声被压 + 引擎无声 = 完全无声。挂起期间 pollOnce 空转（不新增
      * 接管），已接管项全部回滚保直出——宁可双声，不许完全无声。
      */
@@ -477,7 +477,7 @@ class TakeoverController @Inject constructor(
     private val diagFile =
         java.io.File(DiagDirs.crashDir, "takeover_diag.txt")
 
-    // ===== 投影失效自动止损联动（2026-11-03 僵尸投影事故）=====
+    // ===== 投影失效自动止损联动=====
     // 引擎因 read 恒负自杀停机（Stopped(CAPTURE_DEAD)）时，接管静音若不回滚 =
     // 静音先行已压原声 + 引擎已停 = 完全无声。必须走 stopAndRollback（完全停止
     // 轮询 + 回滚全部静音）而非 suspendMuting——后者挂起态会被保险丝的
@@ -485,7 +485,7 @@ class TakeoverController @Inject constructor(
     // 进程级监听（同 poll scope），UI 生死无关。
     init {
         scope.launch {
-            // （2026-11-03 审计）：collect 协程免疫。原实现无 try-catch——一次未捕获
+            // ：collect 协程免疫。原实现无 try-catch——一次未捕获
             // 异常（并发容器事故/CME）会让协程静默死亡（SupervisorJob 不重建），此后
             // CAPTURE_DEAD 自动止损永久失效且无日志。map 已换 ConcurrentHashMap 消根源，
             // 此处再兜异常 + 自动重订阅双保险（取消经 delay 挂起点自然终止）。
@@ -540,8 +540,8 @@ class TakeoverController @Inject constructor(
         writeDiag("takeover.start(auto=$autoEnabled loopback=$loopback)")
         // 历史重复条目迁移（幂等；老版本按次 append，实测堆过 61 条同包名）
         dedupeBlocklistOnce()
-        // L12（2026-11-03 审计）：rollbackPrefsRecords 对每个失败 uid 发 set+get 两条
-        // 特权命令——原在主线程同步执行，与 2026-11-01「stopAndRollback 卡主线程」同款
+        // L12：rollbackPrefsRecords 对每个失败 uid 发 set+get 两条
+        // 特权命令——原在主线程同步执行，与「stopAndRollback 卡主线程」同款
         // 事故模式漏网面。移 IO 协程；poll 路径置于协程首位，保证清理先于新增接管
         // （铁律 3 时序不变）。
         if (!autoEnabled) {
@@ -652,7 +652,7 @@ class TakeoverController @Inject constructor(
     }
 
     /**
-     * 保险丝触发：暂停全部静音并回滚接管（保直出）。2026-11-01 实锤：capture 全零
+     * 保险丝触发：暂停全部静音并回滚接管（保直出）。实锤：capture 全零
      * 断链期间接管照常生效 → 原声静音 + 引擎无声 = 完全无声，用户无任何可听的声源。
      */
     fun suspendMuting(reason: String) {
@@ -717,7 +717,7 @@ class TakeoverController @Inject constructor(
     }
 
     /**
-     * 自身播放权限自愈探针（2026-11-03 全静音事故根治）。
+     * 自身播放权限自愈探针。
      * 事故链：ZTE 星云后台音频治理把「后台无声播放」的本 app 置 PLAY_AUDIO=deny
      * （MODE_ERRORED，写入窗口内接管轮询被保险丝挂起、App 代码只写 ignore/allow——
      * 外部写入实锤）→ AudioFlinger 对本 app 全部 track 置增益 -inf → 输出流无声 →
@@ -732,7 +732,7 @@ class TakeoverController @Inject constructor(
         val pkg = context.packageName
         val r = privileged.runCommand("appops", "get", pkg, "PLAY_AUDIO")
         if (r.exitCode != 0) {
-            // （2026-11-03 审计）：通道异常不能静默——Stellar 半连接期（binder 通但
+            // ：通道异常不能静默——Stellar 半连接期（binder 通但
             // 命令失败）探针失效无痕，恰是本探针最该工作的场景。采样留痕防刷盘。
             noteSelfAuditFail("appops get 失败 exit=${r.exitCode} ${r.stderr.trim().take(60)}")
             return
@@ -740,9 +740,8 @@ class TakeoverController @Inject constructor(
         val mode = Regex("""PLAY_AUDIO:\s*([a-z]+)""", RegexOption.IGNORE_CASE)
             .find(r.stdout)?.groupValues?.get(1)?.lowercase() ?: run {
             // `No operations.` = 本 app 没有任何 PLAY_AUDIO op 记录。
-            //
             // 这是**正常状态**，不是通道异常：
-            //   · 2026-11-05 起 Loopback 模式改用 REROUTE 搬走原声，**不再写 appops**
+            //   · Loopback 模式改用 REROUTE 搬走原声，**不再写 appops**
             //     （见 README M11「重路由成立即整链路不挂 DP」）；
             //   · 没写过 op 时 `appops get` 返回的就是 `No operations.`，语义上等于
             //     默认 allow（未被任何一方改过）。
@@ -789,7 +788,7 @@ class TakeoverController @Inject constructor(
     }
 
     /**
-     * 采集断链保险丝判定（2026-11-01 立项 / 2026-11-03 迁入本类进程级 scope）。
+     * 采集断链保险丝判定。
      * 病理（11-01 12:25 双端 dump 实锤）：AudioFlinger 喂静音——AudioRecord 满速
      * 读（lastRead=2048、zeroReads=0，字节级心跳全绿）但内容全零，app 侧重建
      * 100% 无效；此时接管静音照常生效 = 原声被压 + 引擎无声 = 完全无声。
@@ -836,7 +835,7 @@ class TakeoverController @Inject constructor(
     }
 
     private fun pollOnce() {
-        // 自身播放权限自愈探针（2026-11-03 全静音事故）：必须在 _mutingSuspended 早退
+        // 自身播放权限自愈探针：必须在 _mutingSuspended 早退
         // 之前——事故 deny 恰落在保险丝挂起窗口（15:56:50~15:57:09），探针若被挂起
         // 屏蔽等于关闭唯一自救通道。低频（每 20 轮 ≈10s）控制 shell 开销。
         selfAuditCounter++
@@ -947,10 +946,10 @@ class TakeoverController @Inject constructor(
             // 15s 消失回滚，期间还可能静音系统提示音。三方媒体源 uid 恒 >= 10000。
             if (uid < Process.FIRST_APPLICATION_UID) continue
             // companion 包（.submix）绝不接管：它是本 App 把副本灌进 REMOTE_SUBMIX 的
-            // 输出端点（播 USAGE_MEDIA），mute 它 = 掐死投影输出链（2026-11-04 dumpsys
+            // 输出端点（播 USAGE_MEDIA），mute 它 = 掐死投影输出链（dumpsys
             // appops 实锤其 PLAY_AUDIO ignore 残留）
             if (uid == submixUid) continue
-            // 回滚验证期内不接管（2026-11-04 3s 循环案定因）：pendingBlockVerify 的裁决
+            // 回滚验证期内不接管：pendingBlockVerify 的裁决
             // 需要 2s 验证窗（电平恢复=mute 连坐 / 仍零=真禁抓，双向落名单），而本扫描
             // 同轮（runCaptureWatch 先跑、pollOnce 后跑，diag 实测回滚后 86ms 重接管）
             // 就把 uid 抢回 → runCaptureWatch「已被其他路径接管」守卫杀掉验证 → 观察窗
@@ -989,13 +988,13 @@ class TakeoverController @Inject constructor(
                 lastSeenUids[uid] = now
             }
             if (isCoolingDown(uid)) continue
-            // 禁抓名单命中（2026-11-03 豆包案）：该 app 投影抓不到，appops 静音只会
+            // 禁抓名单命中：该 app 投影抓不到，appops 静音只会
             // 压原声且引擎无副本——直接 DP EQ 轨挂音效，原声直出。挂载失败退化为
             // 直出无双声（未走 appops），30s 冷却后随轮询重试。
             if (isCaptureBlocked(uid)) {
                 // 用户指令：EQ 兜底轨停用（频段均衡≠全局自定义 DSP 产品形态）。
                 // 名单命中=纯直出：幂等 restore allow（防历史残留压死直出）+ 不挂任何
-                // 纯直出。**不再有「等 DP 连坐判决」这回事**（2026-11-11 清理实验残留）：
+                // 纯直出。**不再有「等 DP 连坐判决」这回事**：
                 // 该实验三次全跳过（候选不可抓 → 基线恒零 → 无有效样本），已整体删除；
                 // ADR-02 定案后也不存在可翻转的备用主轨 —— DP mute 与 appops 受同一个
                 // capture 复制点影响，没有「换个手段就绕开连坐」的可能。
@@ -1018,14 +1017,12 @@ class TakeoverController @Inject constructor(
                 // 原先它埋在 syncLoopbackMute 里，而默认 nodp（不挂 DP）会在这里 continue，
                 // 导致 loopbackRerouted 永远为 false → 轮询降频不生效、日志也无从判断。
                 detectReroute(dump.stdout, uid)
-                // 【2026-11-21 修正】默认挂 DP。
-                //
+                // 默认挂 DP。
                 // 实测结论：
                 //   · 0x2（纯 LOOP_BACK）= 复制语义，原声仍在 → 不挂 DP 就是**双声**；
                 //   · 0x3（RENDER|LOOP_BACK）= 两个位同时置位 → 重定向 + 复制双路叠加，
                 //     双声比 0x2 更严重，**不可用**。
                 //   → 唯一可用组合：0x2 + DP 静音（把原声压掉，只剩副本）。
-                //
                 // 调试：debug.sonicraft.nodp=1 可跳过 DP（仅用于排查，会双声）。
                 val noDp = runCatching {
                     ProcessBuilder("getprop", "debug.sonicraft.nodp").start()
@@ -1038,7 +1035,7 @@ class TakeoverController @Inject constructor(
                     continue
                 }
                 // 先确认副本有数据再静音：引擎刚启动/切源瞬间电平为 0，此时压原声
-                // 就是「原声没了 + 副本也没有」= 全静音（2026-11-05 网易云实锤）。
+                // 就是「原声没了 + 副本也没有」= 全静音。
                 val lvlNow = currentInputLevel()
                 if (lvlNow < 0.01f) {
                     if (dpWaitNotified.add(uid)) {
@@ -1079,7 +1076,7 @@ class TakeoverController @Inject constructor(
                         writeDiag("阶梯下探成功 uid=$uid 轨=DP_SESSION usages=$usages")
                         SonicraftLog.i(TAG, "阶梯下探 DP 轨接管 uid=$uid usages=$usages")
                     } else {
-                        // 孤儿 mute 堵漏（2026-11-04 死锁案定因）：此分支的 appops ignore
+                        // 孤儿 mute 堵漏：此分支的 appops ignore
                         // 写已发出（ZTE deny 假阴性=可能实际生效），旧代码不 recordPrefs
                         // → mute 在场但无记录 → 进程死亡后无人认领，跨装机/重启永久残留
                         // （豆包案 11-03 08:07 的 mute 残留至 11-04 全量还原才清）。
@@ -1094,7 +1091,7 @@ class TakeoverController @Inject constructor(
             }
         }
 
-        // ★ 轮询级持续静音监测（2026-11-23 补）：原实现只在 muteUid（新会话挂静音）时
+        // ★ 轮询级持续静音监测：原实现只在 muteUid（新会话挂静音）时
         // 检查一次，注释写的「每轮 500ms 盯一次」与实现不符——切歌/蓝牙切换导致副本
         // 掉零时，静音仍保持 = 原声被压 + 副本无数据 = 彻底无声（用户听感：几秒后没声）。
         // 这里每轮对所有已静音 uid 复查：连续 2 轮低于 0.005 → 释放 + 标记直出。
@@ -1165,7 +1162,7 @@ class TakeoverController @Inject constructor(
 
     /**
      * DP_SESSION 轨统一入口：eq=false 挂静音（appops 主轨回读失败的下探）；
-     * eq=true 挂 EQ 音效（禁抓 app 名单命中，2026-11-03 豆包案）。
+     * eq=true 挂 EQ 音效（禁抓 app 名单命中，豆包案）。
      * 成功记入 DP_SESSION 轨；失败返回 false（静音轨双轨皆弃 / EQ 轨本轮直出）。
      */
     /**
@@ -1173,14 +1170,14 @@ class TakeoverController @Inject constructor(
      *
      * 为什么不能只挂一个：同一 app 可同时有多个 AudioTrack 会话（酷狗音乐 1457 /
      * 视频 1785），uid→单 session 只能盖住其一 → 未覆盖的会话原声照出 = 双声
-     * （2026-11-05 视频前台实锤）。这里按 sid 集合做增量同步：
+     * 。这里按 sid 集合做增量同步：
      *   新增会话 → 挂 DP；会话消失 → 释放；仍存在 → 重新 enable（防被抢控制权）。
      *
      * @param dumpText 当前轮的 dumpsys audio 输出（复用，避免再跑一次特权命令）
      */
     /**
      * 用本轮 dump 判定「该 uid 的会话是否已被重路由到我方 submix」，并维护
-     * `loopbackRerouted` 与设备卡文案（2026-11-07 从 [syncLoopbackMute] 抽出）。
+     * `loopbackRerouted` 与设备卡文案。
      *
      * 为什么必须独立于静音：默认配置是「不挂 DP」（nodp），静音分支会直接 continue，
      * 若检测埋在里面，`loopbackRerouted` 永远为 false —— 既导致轮询无法降频（耗电），
@@ -1216,7 +1213,7 @@ class TakeoverController @Inject constructor(
     }
 
     private fun syncLoopbackMute(dumpText: String, uid: Int) {
-        // ★ （2026-11-06，由万象对照实验定案）：链路已被确认重路由时，
+        // ★ ：链路已被确认重路由时，
         // **整条链路不挂任何静音**。现场证据：万象 mix 在时酷狗 deviceIds 指向其
         // submix、DP 恒 0、单声；关掉它后 deviceIds 回到主输出 —— 说明「原声被搬走」
         // 完全由重路由完成，再挂 DP 只会连坐自己的副本（实测 0.09 → 0.0 → 断供）。
@@ -1229,7 +1226,7 @@ class TakeoverController @Inject constructor(
         // 已判定 DP 连坐的 uid：直接直出，不再尝试静音
         if (uid in dpUnfitUids) return
 
-        // ★ 持续静音监测（2026-11-05 全静音事故）：单次 1.5s 复查不足——
+        // ★ 持续静音监测：单次 1.5s 复查不足——
         // 实测「挂载瞬间副本还在（0.25），几秒后掉到 1.7E-4」，而那时不再复查，
         // 于是原声被压 + 副本也没有 = 全静音（用户听感：几秒音效后彻底没声）。
         // 这里每轮（500ms）盯一次：连续 2 轮副本归零 → 立即释放并标记 unfit。
@@ -1321,7 +1318,7 @@ class TakeoverController @Inject constructor(
     private val loopbackMissCount = ConcurrentHashMap<Int, Int>()
 
     /**
-     * 全局清扫（2026-11-05 长跑发现泄漏）：按会话静音后，若目标 app **整体停止播放**
+     * 全局清扫：按会话静音后，若目标 app **整体停止播放**
      * （uid 从活跃列表消失），per-uid 的回收分支根本不会被访问 → 效果对象越积越多
      * （实测 3 分钟从 1 涨到 3）。这里按「全量 sessionId 集合」做兜底清扫，
      * 连续 2 次（≈20s）缺席才释放，避免切歌间隙误杀导致瞬间双声。
@@ -1448,7 +1445,7 @@ class TakeoverController @Inject constructor(
             for (uid in captureWatch.keys) watchSawLevel[uid] = true
             for (uid in pendingBlockVerify.keys) watchSawLevel[uid] = true
         }
-        // 回滚验证裁决（2026-11-04 网易云/酷狗案）：疑似禁抓已回滚解除 mute——电平恢复
+        // 回滚验证裁决：疑似禁抓已回滚解除 mute——电平恢复
         // =可抓（误判，撤销不落名单，重新接管由轮询自然发生）；仍零超 2s=真禁抓落名单。
         // 全局恒零无法归因（被我们 mute 的可抓 app 投影无源与他源消失叠加后与真禁抓
         // 不可区分，酷狗 21:24 误标实锤）——回滚实测是唯一可靠信号。
@@ -1689,7 +1686,7 @@ class TakeoverController @Inject constructor(
                 if (!entry.value.enabled) {
                     if (dpIsEq[entry.key] == true) {
                         // EQ 轨：效果参数在 Config 里，只需重新 enable——重打静音增益
-                        // 会把禁抓 app 的直出原声压死（2026-11-03 豆包案防御）
+                        // 会把禁抓 app 的直出原声压死
                         entry.value.enabled = true
                     } else {
                         (entry.value as? DynamicsProcessing)
@@ -1803,7 +1800,7 @@ class TakeoverController @Inject constructor(
             diagFile.parentFile?.mkdirs()
             diagFile.appendText("ts=${System.currentTimeMillis()} $msg\n")
         }.onFailure { e ->
-            // diag 是排障命根子：静默丢行等于伪造「未发生过」（2026-11-04 实锤丢过
+            // diag 是排障命根子：静默丢行等于伪造「未发生过」（实锤丢过
             // 「保险丝解除」行，误导时序归因）——失败必须留系统痕迹
             SonicraftLog.e(TAG, "diag 写盘失败: ${e.message}")
         }
@@ -1815,10 +1812,10 @@ class TakeoverController @Inject constructor(
         private const val KEY_AUTO_TAKEOVER_UIDS = "auto_takeover_uids"
         private const val POLL_INTERVAL_MS = 500L
 
-    /** 重路由已成立（不需要静音）时的降频间隔（2026-11-07 省电） */
+    /** 重路由已成立（不需要静音）时的降频间隔 */
     private const val POLL_INTERVAL_REROUTED_MS = 2_000L
     /**
-     * 灭屏 + 重路由成立：10s → 30s（2026-11-08 省电）。
+     * 灭屏 + 重路由成立：10s → 30s。
      * 实测一夜 7.5h 的特权服务 CPU 达 184，与其 fork 次数直接相关（每轮一条
      * `dumpsys audio`，输出约 120KB 需解析）。该状态下链路已确认重路由、整条链路
      * 不挂静音，轮询只是为了发现「切歌/新 app 开播」，30s 足够。
@@ -1830,17 +1827,17 @@ class TakeoverController @Inject constructor(
         private const val POLL_INTERVAL_IDLE_MS = 2_500L
         private const val CALL_COOLDOWN_MS = 30_000L
         /** 采集断链保险丝：capture 零电平持续 15s 判定断链（时间基准，亮屏 500ms/灭屏 2.5s 一轮判定）；
-         *  阈值 0.001（-60dBFS）——2026-11-01 喂静音病态（心跳全绿内容全零）的根治防线 */
+         *  阈值 0.001（-60dBFS）——喂静音病态（心跳全绿内容全零）的根治防线 */
         private const val BROKEN_CAPTURE_MS = 15_000L
         private const val BROKEN_CAPTURE_LEVEL = 0.001f
-        /** 保险丝总开关（2026-11-04 退役）：挂起回滚连 EQ 轨一起压死=死锁直声
+        /** 保险丝总开关：挂起回滚连 EQ 轨一起压死=死锁直声
          *  （10:23 挂起死锁 6 分钟实锤，用户感知「循环几次后直接出原声」），且当日
          *  8 次触发全为误触发（mute 连坐 capture 的全局电平盲归因）。酷狗/网易云类
          *  app 由「撤销裁决反转→落名单→EQ 轨」独立兜底；engine 非 Running 真断链
          *  分支不受此开关影响。统一路线重构后重新评估归因职责。 */
         private const val FUSE_ENABLED = false
         /** 接管中 uid 从活跃列表消失的超时回滚阈值（覆盖微信语音通话等 uid 消失场景） */
-        private const val GONE_ROLLBACK_MS = 15_000L   // 2026-11-01：5s 会在刷视频的间隙（加载/暂停）误触发回滚=双声一闪，15s 只影响真停播后的恢复速度
+        private const val GONE_ROLLBACK_MS = 15_000L   // 5s 会在刷视频的间隙（加载/暂停）误触发回滚=双声一闪，15s 只影响真停播后的恢复速度
         private const val APPOPS_IGNORE = "ignore"
         private const val APPOPS_ALLOW = "allow"
 
@@ -1857,10 +1854,10 @@ class TakeoverController @Inject constructor(
         /** DP 挂载后复查窗口：满此时间比对电平，判定是否连坐 LOOP_BACK 副本 */
         private const val DP_VERIFY_MS = 1_500L
 
-        // ===== 禁抓名单（2026-11-03 豆包案；2026-11-05 语义收敛） =====
+        // ===== 禁抓名单 =====
         // **仅描述 MediaProjection 抓不到的 app**（如酷狗 ALLOW_CAPTURE_BY_SYSTEM）。
         // Loopback 输入链路能抓一切 MEDIA/GAME 流，该名单在 loopback 模式下由
-        // `isCaptureBlocked()` 直接短路返回，不作为「不可加音效」的判决。
+        // `isCaptureBlocked` 直接短路返回，不作为「不可加音效」的判决。
         private const val KEY_CAPTURE_BLOCKLIST = "capture_blocklist_pkgs"
 
         /** 名单上限（按包名去重后）；超出丢弃最旧条目，防集合无界增长 */

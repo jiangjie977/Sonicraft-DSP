@@ -143,7 +143,7 @@ class NativeAudioEngine private constructor(private var handle: Long) : AutoClos
 
     /**
      * 尾分区上限（低端机负载分档）：各预设卷积尾的有效分区数被钳到 min(t_, limit)。
-     * 须在 start() 前调用（Prepare 前生效）；0 = 不限制。
+     * 须在 start 前调用（Prepare 前生效）；0 = 不限制。
      */
     fun setTailPartitionLimit(maxParts: Int) {
         if (handle != 0L) nativeSetTailPartitionLimit(handle, maxParts)
@@ -155,7 +155,7 @@ class NativeAudioEngine private constructor(private var handle: Long) : AutoClos
     }
 
     /**
-     * 多频段每段计量（2026-11-08，供 UI 的 IN/GR/OUT 电平表）。
+     * 多频段每段计量。
      * 返回 9 个 float：[band*3 + 0/1/2] = 入峰值(线性) / GR(dB) / 出峰值(线性)，
      * band 0=低 1=中 2=高。null = 引擎未就绪或无多频段节点。
      * 非实时：UI 侧按 ~10fps 轮询。
@@ -202,7 +202,7 @@ class NativeAudioEngine private constructor(private var handle: Long) : AutoClos
     }
 
     /**
-     * 设置输出缓冲帧数（用户可调，2026-11-06）。
+     * 设置输出缓冲帧数（用户可调）。
      * frames<=0 → 恢复默认（2×burst，下限 384 帧 ≈8ms）。
      */
     fun setBufferFrames(frames: Int) {
@@ -309,7 +309,7 @@ class NativeAudioEngine private constructor(private var handle: Long) : AutoClos
         @JvmStatic
         private external fun nativeLoadImpulseResponse(handle: Long, path: String): String?
 
-        /** 尾分区上限（低端机负载分档）：须在 start() 前调用；0 = 不限制 */
+        /** 尾分区上限（低端机负载分档）：须在 start 前调用；0 = 不限制 */
         @JvmStatic
         private external fun nativeSetTailPartitionLimit(handle: Long, maxParts: Int)
 
@@ -323,7 +323,7 @@ class NativeAudioEngine private constructor(private var handle: Long) : AutoClos
         /**
          * 单段压缩器计量：out 长度 >= 3 = {输入峰值, 增益衰减 dB, 输出峰值}。
          *
-         * **`@JvmStatic` 不可省**（2026-11-09 踩坑）：companion 内不加它时，Kotlin 会把方法
+         * **`@JvmStatic` 不可省**：companion 内不加它时，Kotlin 会把方法
          * 定义在 `NativeAudioEngine$Companion` 上，JNI 名变成
          * `Java_..._NativeAudioEngine_00024Companion_nativeCompressorMeters`；
          * 而 C++ 侧按 `Java_..._NativeAudioEngine_nativeCompressorMeters` 导出 →
@@ -377,7 +377,7 @@ data class NativeEngineStats(
     val convPreset: Long = 0,
     /** 卷积器湿声 RMS ×1e6（0 且预设非 Dry ⇒ 卷积状态坏死） */
     val convWetRmsScaled: Long = 0,
-    /** 逐节点平均耗时（ns/次），索引对应节点 0..9（2026-11-06 负载定位用） */
+    /** 逐节点平均耗时（ns/次），索引对应节点 0..9 */
     val nodeAvgNanos: LongArray = LongArray(0),
 ) {
     /** 输入 RMS 电平（0..1） */

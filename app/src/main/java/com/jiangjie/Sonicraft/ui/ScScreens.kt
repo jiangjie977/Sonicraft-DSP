@@ -208,7 +208,7 @@ fun ScFavoritesScreen(viewModel: MainViewModel, onOpenEq: () -> Unit) {
         var showSaveDialog by remember { mutableStateOf(false) }
         var presetName by remember { mutableStateOf("") }
         // 内置场景默认**折叠**：它们只读、且 4 张大卡会占满首屏，
-        // 把用户自己的组合与下方 EQ 预设 / 收藏脉冲挤到很下面（2026-11-14 用户要求）
+        // 把用户自己的组合与下方 EQ 预设 / 收藏脉冲挤到很下面
         var builtinExpanded by rememberSaveable { mutableStateOf(false) }
         ScCard {
             Column(
@@ -342,7 +342,7 @@ fun ScFavoritesScreen(viewModel: MainViewModel, onOpenEq: () -> Unit) {
                     )
                     // AutoEq 是「参量均衡」的能力（曲线修正），这里必须落到 EQ 详情页。
                     // 历史 bug：此处曾连到 onGoToLibrary = { reverbOpen = true }，
-                    // 点它会打开「混响」页，与 AutoEq 毫无关系（2026-11-14 修）。
+                    // 点它会打开「混响」页，与 AutoEq 毫无关系。
                     TextButton(onClick = onOpenEq) {
                         Text("AutoEq 导入", fontSize = 12.sp)
                     }
@@ -682,26 +682,25 @@ fun ScProfileScreen(viewModel: MainViewModel) {
         // `IllegalStateException: Vertically scrollable component was measured with an
         // infinity maximum height constraints` —— 同方向嵌套滚动在 Compose 里是硬约束。
         // 表现是进「我的」页即闪退（栈里能看到两层 ScrollNode）。
-        //
         // U8i：外层 Tab 容器已 padding(16)，此处不再加（原双 16 叠加导致卡比其他页窄 16dp）
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // U8y：页头下的小「我的」标签退役（页头已有大标题，重复）
         // U8z：设备卡+引擎健康卡迁音效库顶部（ScDeviceHealthCards），我的页自诊断卡始
 
-        // 【顺序重排 2026-11-09】原来「诊断 → Capture → 设置 → 隐私」：把开发者工具
+        // 【顺序重排】原来「诊断 → Capture → 设置 → 隐私」：把开发者工具
         // 放在最上面，几张日志占掉大半页，用户改个设置得一直往下翻。
         // 现在按**使用频率**排：设置（最常用）→ 隐私 → Capture → 诊断（折叠）→ 说明。
         ScSettingsSection(viewModel)
 
-        // **诊断与取证紧跟「诊断与工具」**（2026-11-09 用户要求上移）：
+        // **诊断与取证紧跟「诊断与工具」**：
         // 设置卡的最后一个分组就是「诊断与工具」（测试正弦），同属排障工具；
         // 原来中间隔着「隐私与合规」「Capture 策略」两张卡，两块诊断内容被拆散了。
         ScDiagSection(viewModel)
 
         PrivacyComplianceSection(viewModel)
 
-        // **Capture 策略只在 Stellar + MP 下显示**（2026-11-09 用户要求按模式分流）：
+        // **Capture 策略只在 Stellar + MP 下显示**：
         // 它列的是「全机 APP 的 MediaProjection 可抓性」（BY_SYSTEM / BY_NONE / BY_ALL），
         // 是走屏幕录制抓取时才需要判断的东西。Loopback 走 AudioMix 副本、按 mix 整体抓，
         // 不做 per-app 判定，这张表在那儿没有决策价值。
@@ -711,7 +710,7 @@ fun ScProfileScreen(viewModel: MainViewModel) {
         }
 
         // ---- 内录机制说明 ----
-        // 标题**放回卡内**（2026-11-09 用户要求）：这是最后一张说明性质的卡，
+        // 标题**放回卡内**：这是最后一张说明性质的卡，
         // 不像上面那些分组那样成体系，标题留在卡内反而更像一张「通告」。
         // 字号仍用 15sp Bold（与卡外的 ScSectionTitle 同款），只是位置从卡外移到卡内，
         // 视觉层级不变、不会被误读成新的分组。
@@ -790,7 +789,7 @@ fun ScDeviceHealthCards(viewModel: MainViewModel, onToggleCapture: () -> Unit) {
                 // 高斯模糊光晕：同一图标先画一份模糊副本垫底，
                 // 再叠清晰的一份 —— 形成发光效果（Modifier.blur 需 API 31+，本机 36 可用）
                 if (chainStarting) {
-                    // **加载中：橙色闪烁**（2026-11-11 用户要求）。
+                    // **加载中：橙色闪烁**。
                     // 外层 Box 已用 `pulse` 做 1↔0.3 的 alpha 呼吸（600ms），
                     // 这里只需把颜色从「运行星云紫蓝 / 停止灰」切换成琥珀橙，
                     // 并去掉星云画刷（brush 传 null → 整个图标统一 tint）。
@@ -858,7 +857,7 @@ fun ScDeviceHealthCards(viewModel: MainViewModel, onToggleCapture: () -> Unit) {
                     fontSize = 11.sp,
                     color = ScColors.TextSub,
                 )
-                // 路由信息已下架（2026-11-06 用户要求）：`port=NNN · 命中/未命中`
+                // 路由信息已下架：`port=NNN · 命中/未命中`
                 // 对普通用户没有意义、反而造成困惑。诊断仍保留在 diag 日志里
                 // （`重路由校验: ...` / `takeover_diag`），排查时看日志即可。
             }
@@ -866,7 +865,7 @@ fun ScDeviceHealthCards(viewModel: MainViewModel, onToggleCapture: () -> Unit) {
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 // U9h：IntrinsicSize.Max 让 Running pill 撑到与 Stellar 标签同宽；
-                // widthIn 上限防窄屏把左侧信息挤成 1 字宽（2026-11-07 响应式）
+                // widthIn 上限防窄屏把左侧信息挤成 1 字宽
                 modifier = Modifier.width(IntrinsicSize.Max)
                     .widthIn(max = if (compactScreen) 100.dp else 132.dp),
             ) {
@@ -877,7 +876,7 @@ fun ScDeviceHealthCards(viewModel: MainViewModel, onToggleCapture: () -> Unit) {
                     // U9a：Running pill（自引擎运行中卡迁入，Stellar 标签上方）；U9b 电源图标迁 Z 位
                     ScPill(
                         text = when {
-                            // **闪烁期间显示 Loading**（2026-11-06 用户要求）：
+                            // **闪烁期间显示 Loading**：
                             // 只要电源键还在呼吸闪烁（chainStarting），就不提前显示运行模式，
                             // 避免"显示已就绪但其实还在建链"的误导。
                             chainStarting -> "Loading"
@@ -907,7 +906,7 @@ fun ScDeviceHealthCards(viewModel: MainViewModel, onToggleCapture: () -> Unit) {
                     )
                 }
                 // 路由行已移到左侧信息区（48kHz 下方），此处不再重复
-                // 特权胶囊（2026-11-23 双后端）：按当前生效后端显示
+                // 特权胶囊：按当前生效后端显示
                 //   已配对 → 绿，不可点
                 //   待授权 → 黄，点击拉起对应客户端（Stellar Manager / Shevery）
                 //   无后端 → 红呼吸，点击浏览器打开下载页（中性引导）
@@ -942,7 +941,7 @@ fun ScDeviceHealthCards(viewModel: MainViewModel, onToggleCapture: () -> Unit) {
                         .clickable(enabled = !backendReady) {
                             when (backend) {
                                 BackendKind.STELLAR -> {
-                                    // 2026-11-23：先触发原生授权请求（server 会拉起 Manager 的
+                                    // 先触发原生授权请求（server 会拉起 Manager 的
                                     // 确认页并写入权限表）；仅拉起 Manager 不会写权限——
                                     // 重装 Manager 清空配置后，UI 的「允许」状态并不可靠。
                                     viewModel.requestStellarPermission()
@@ -1026,11 +1025,11 @@ private fun ScHealthCell(value: String, label: String, color: Color) {
 /** 诊断段（M7）：探针文件读取 + 抓 30s 取证（原主页诊断卡整体迁入 P5） */
 @Composable
 private fun ScDiagSection(viewModel: MainViewModel) {
-    // **默认折叠**（2026-11-09 布局梳理）：这块是开发者工具，展开时有几十行日志
+    // **默认折叠**：这块是开发者工具，展开时有几十行日志
     // 加 8 个按钮，能占掉大半屏，把设置挤到需要翻好几屏的位置。
     // 但报障时要能一键导出，所以「导出」留在标题行，不随折叠隐藏。
     var expanded by remember { mutableStateOf(false) }
-    // 统一用 ScCard（2026-11-09 用户反馈「边框跟上方不一致」）：
+    // 统一用 ScCard：
     // Material `Card` 只有 elevation 阴影，没有 ScCard 那层 1dp 高光描边与渐变底，
     // 圆角半径也不同（默认 12dp vs ScRadius.Card）。换过来后整页卡片外观一致。
     // 注意 ScCard 内部已自带 16dp 内边距，所以去掉这里原来的 padding(16.dp)。
@@ -1102,7 +1101,7 @@ private fun ScDiagSection(viewModel: MainViewModel) {
                     Text("清除禁抓名单", fontSize = 13.sp)
                 }
 
-                // ---- Loopback 探针（2026-11-04 P0）：AudioPolicy/AudioMix(LOOP_BACK) 路线验证 ----
+                // ---- Loopback 探针：AudioPolicy/AudioMix(LOOP_BACK) 路线验证 ----
                 val lbState by viewModel.loopbackProbeState.collectAsStateWithLifecycle()
                 val lbLevel by viewModel.loopbackProbeLevel.collectAsStateWithLifecycle()
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1118,7 +1117,7 @@ private fun ScDiagSection(viewModel: MainViewModel) {
                     }
                 }
                 // 「DP 静音实验」与「按UID电平」已移除：
-                // 两者都是 2026-11-05 P2 阶段用来定性「某条抓取路线是否可行」的
+                // 两者都是 P2 阶段用来定性「某条抓取路线是否可行」的
                 // **一次性实验**——DP 那条甚至硬编码了酷狗包名。结论已经拿到
                 // （项目最终走 Loopback + Stellar MP，没有采用按 uid 分 mix 的方案），
                 // 实验本身不再有重复执行的价值。
@@ -1153,8 +1152,8 @@ private fun ScDiagSection(viewModel: MainViewModel) {
     }
 }
 
-/** Capture 策略段（2026-11-04 酷狗 opt-out 定性产物）：全机第三方 APP 投影可抓性一览。
- *  数据源 MainViewModel.scanCapturePolicies()（Stellar 特权 dumpsys audio——公开 API
+/** Capture 策略段：全机第三方 APP 投影可抓性一览。
+ *  数据源 MainViewModel.scanCapturePolicies（Stellar 特权 dumpsys audio——公开 API
  *  只能读自身）。BY_SYSTEM/BY_NONE=内录抓不到=恒零=只能走自动直出名单（酷狗实锤
  *  uid10514 BY_SYSTEM）；BY_ALL=可抓副本=DSP 链正常前提。 */
 private data class CapPolicyRow(val pkg: String, val uid: Int, val policy: Int)
@@ -1240,7 +1239,7 @@ private fun ScCapturePolicySection(viewModel: MainViewModel) {
 }
 
 /**
- * 设备绑定 UI 开关（M14，2026-11-08 用户决定：先隐藏）。
+ * 设备绑定 UI 开关（M14，先隐藏）。
  *
  * 当前产品语义是「切换设备自动恢复该设备/该类型最近一次调整的参数」，绑定属于可选的
  * "固定某套"能力。先隐藏入口、完整保留实现（ViewModel 接口 + 存储 + 解析回落），
@@ -1249,7 +1248,7 @@ private fun ScCapturePolicySection(viewModel: MainViewModel) {
 private const val SHOW_DEVICE_BIND_UI = false
 
 /**
- * Stellar 客户端下载页（2026-11-08，用户指定的 Gitee release 锚点）。
+ * Stellar 客户端下载页。
  * 仅在「本机未安装 Stellar」时被拉起：功能依赖该框架，故下载入口属于必需依赖引导，
  * 文案保持中性（「未安装」而非「推荐安装」），避免商店审核的诱导安装条款。
  */
@@ -1261,7 +1260,7 @@ private const val SHIZUKU_DOWNLOAD_URL =
     "https://github.com/RikkaApps/Shizuku/releases"
 
 /**
- * 小型二选一 chip（2026-11-11，供压缩器「高级」区的检测模式 / 过采样使用）。
+ * 小型二选一 chip。
  * 与设置页「链路模式」的 chip 同款语言：选中为实心主题色 + 白字。
  */
 @Composable
@@ -1280,7 +1279,7 @@ private fun ScAdvChip(text: String, active: Boolean, onClick: () -> Unit) {
 }
 
 /**
- * 卡外分组大标题（2026-11-09，参照 wecho 设置页）。
+ * 卡外分组大标题。
  *
  * wecho 的分组标题在**卡片之外**，字号明显大于行标题，形成「章 / 节」两级层次。
  * Sonicraft 原来把 11sp 的小字标题放进卡内，层级与行标题打架，整块读起来是平的。
@@ -1390,7 +1389,7 @@ fun ScSettingsSection(viewModel: MainViewModel) {
     var pickerMode by remember { mutableStateOf<AppPickMode?>(null) }
     val running = engineState is EngineState.Running || engineState is EngineState.Suspended
 
-    // ============ 界面缩放（2026-11-09，移植 wecho 定制版）============
+    // ============ 界面缩放============
     // wecho 是三级：autoScale(按 440dp 基准自动算) × uiScale(粗调) × uiFineScale(微调)。
     // 这里把三者的乘积直接显示出来，用户改滑块就能看到「总 X%」跟着动。
     val uiScale by viewModel.uiScale.collectAsStateWithLifecycle()
@@ -1484,7 +1483,7 @@ fun ScSettingsSection(viewModel: MainViewModel) {
         Column {
             ScSettingBlock(
                 title = "链路模式",
-                // 副标题去掉（2026-11-09 用户要求）：两个 chip 本身已经写明了模式名，
+                // 副标题去掉：两个 chip 本身已经写明了模式名，
                 // 下面再重复一行「Loopback（默认，无弹窗）」是冗余。
             ) {
                 // 两个 chip **居中**（原来靠左）：本行只有两项，靠左会让右侧空一大块
@@ -2015,7 +2014,7 @@ fun ScIrLibraryContent(viewModel: MainViewModel) {
 // 预设横滑 + 参数旋钮卡 + 诊断卡）。语义沿用原卷积区全部功能。
 
 /**
- * 多段压限的单段电平表组（2026-11-08，按用户设计稿）：IN / GR / OUT 三条竖条。
+ * 多段压限的单段电平表组：IN / GR / OUT 三条竖条。
  * IN/OUT 为线性峰值（换算 dB = 20log10），GR 为该段当前增益衰减（负 dB，压得越深条越高）。
  */
 @Composable
@@ -2025,7 +2024,7 @@ private fun ScBandMeterGroup(
     outPk: Float,
     accent: Color,
     /**
-     * 表体高度（2026-11-09 参数化）：三段动态用 130dp（三张卡并排、需要足够刻度感）；
+     * 表体高度：三段动态用 130dp（三张卡并排、需要足够刻度感）；
      * 单段压缩器卡片更矮、表又撑满宽度，130dp 会显得粗笨，故降到 96dp。
      */
     meterHeight: Dp = 130.dp,
@@ -2092,7 +2091,7 @@ private fun ScBandMeterGroup(
 
 /** 三条表的数据描述：打包 tag/value/color/isGr，便于按行遍历。 */
 /**
- * VFD **竖向**电平条（2026-11-09，单段压缩器专用）。
+ * VFD **竖向**电平条。
  *
  * 从横条转成竖条，为的是与三段动态页的竖表形态**跨卡片一致**：
  * 详情页里两块表都是「三条竖着的电平柱 + 上方标签 + 下方数值」，
@@ -2113,7 +2112,7 @@ private fun ScVfdMeterColumn(
     dim: Boolean,
     modifier: Modifier = Modifier,
     /**
-     * 格数 16 → 20（2026-11-09 用户反馈「电平条还是矮了，对比旋钮好突兀」）。
+     * 格数 16 → 20。
      * 柱高从 200 拉到 250dp 与右栏（3 行旋钮 ≈ 285dp，减去标签与数值的 34dp）齐平；
      * 若维持 16 格，每格会胀到 15.6dp、显得粗笨，所以格数同步提到 20
      * （每格 10.5dp，与原来 200dp/16 格的密度一致，观感不变但整体更高）。
@@ -2121,7 +2120,7 @@ private fun ScVfdMeterColumn(
     segmentCount: Int = 20,
     barHeight: Dp = 250.dp,
     /**
-     * GR 峰值保持（dB，负值，2026-11-09）：只对 isGr 生效，在柱上画一条细横线
+     * GR 峰值保持（dB，负值）：只对 isGr 生效，在柱上画一条细横线
      * 标记历史压缩最深处。DSP 侧按 3dB/s 缓慢回落，不会永久钉死。
      */
     peakDb: Float = 0f,
@@ -2134,7 +2133,6 @@ private fun ScVfdMeterColumn(
     }
     // 旁路时格子全灭：与顶部「总 GR」的电源指示语义对齐——
     // 那边是标签随开关亮灭，这边让柱子随开关亮灭。
-    //
     // 为什么 UI 要管这件事：native 的 `bypass_` 只影响输出那一步，包络/增益/计量
     // 仍照常推进（这是为了解除旁路时增益已在稳态、不产生跳变）。
     // 所以旁路期间 `meter_*` 一直在更新，表会持续跳动——看起来像「关了还在工作」。
@@ -2145,7 +2143,7 @@ private fun ScVfdMeterColumn(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        // 标签**常亮**（2026-11-09 用户要求）：VFD 面板上的 IN/GR/OUT 是丝印，
+        // 标签**常亮**：VFD 面板上的 IN/GR/OUT 是丝印，
         // 不是发光段——真实设备断电时丝印依然清晰，不随 dim 变暗。
         Text(
             text = label,
@@ -2159,7 +2157,7 @@ private fun ScVfdMeterColumn(
             val segH = ((size.height - gap * (segmentCount - 1)) / segmentCount)
                 .coerceAtLeast(1f)
             for (i in 0 until segmentCount) {
-                // **发光方向按表类型分开**（2026-11-09 用户指出 GR 应从上往下）：
+                // **发光方向按表类型分开**：
                 //   IN/OUT —— 从下往上，电平越高柱子越长（读「有多响」）
                 //   GR     —— 从**上往下**，压得越深柱子越往下延伸（读「压了多少」）
                 // 这与三段动态的竖表一致（ScBandMeterCanvas 里 GR 也是自上而下填充）。
@@ -2170,7 +2168,7 @@ private fun ScVfdMeterColumn(
                 }
                 if (i < lit) {
                     // 20 格 × 1.2dB：12dB 落在第 10 格、18dB 落在第 15 格
-                    // **三档配色保持原样**（2026-11-09 用户要求「点亮段/琥珀/红不能动」）：
+                    // **三档配色保持原样**：
                     // 底改成淡灰后，这三色仍是同一套语义色，只靠一层 1px 深色描边
                     // 让亮色在浅底上立住轮廓（否则青绿与淡灰亮度接近、边缘会发虚）。
                     val c = when {
@@ -2230,7 +2228,7 @@ private data class MeterSpec(
 
 /**
  * 表体数值文本：GR 归一负零；IN/OUT 低于 -59dB 显示「--」。
- * **带 dB 单位**（2026-11-09 P0）：专业工具从不省略单位——原来裸写 `-29`，
+ * **带 dB 单位**：专业工具从不省略单位——原来裸写 `-29`，
  * 读者要自己判断这是 dB 还是线性值。
  */
 private fun meterText(value: Float, isGr: Boolean): String {
@@ -2254,7 +2252,7 @@ private fun meterTextColor(value: Float, isGr: Boolean): Color = if (!isGr) {
 }
 
 /**
- * 紧凑开关（2026-11-08 手绘）：42×24dp 视觉 + 42×32dp 触摸区。
+ * 紧凑开关：42×24dp 视觉 + 42×32dp 触摸区。
  *
  * 为什么不用 Material3 的 ScSwitch：它的触摸区约 48dp 高，在「压缩器（单段）」
  * 收起后的标题行里占掉整卡高度的大半（93dp 卡里开关就占了 48dp）。自绘后视觉 24dp，
@@ -2464,7 +2462,7 @@ private fun ScBandMeterCanvas(
     Canvas(modifier = modifier) {
             val w = size.width
             val h = size.height
-            // 直角而非圆角（2026-11-08 用户要求）：18dp 宽的窄条上圆角几乎只剩圆边，
+            // 直角而非圆角：18dp 宽的窄条上圆角几乎只剩圆边，
             // 观感发软；直角更硬朗、刻度也更容易对齐到边缘。
             drawRect(color = Color(0xFFE4E9EF))
 
@@ -2593,7 +2591,7 @@ internal fun ScEffectDetailPage(
     subtitle: String,
     onBack: () -> Unit,
     /**
-     * 页头开关（2026-11-11 改为**可空**）：压限器页的总开关已移进「多段压限」卡片内，
+     * 页头开关：压限器页的总开关已移进「多段压限」卡片内，
      * 页头不再显示；其余三个详情页（参量均衡/立体声宽度/限幅器）仍用页头开关，
      * 照常传值即可。
      * 两个都传 null 才不渲染 —— 只传一个视为不完整，同样不渲染，避免出现「开关点了没反应」。
@@ -2700,7 +2698,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
     val compressorEnabled by viewModel.compressorEnabled.collectAsStateWithLifecycle()
     val compressorThreshold by viewModel.compressorThreshold.collectAsStateWithLifecycle()
     val compressorRatio by viewModel.compressorRatio.collectAsStateWithLifecycle()
-    // 四个新增参数（2026-11-09 全部暴露到 UI）
+    // 四个新增参数
     val compressorAttack by viewModel.compressorAttack.collectAsStateWithLifecycle()
     val compressorRelease by viewModel.compressorRelease.collectAsStateWithLifecycle()
     val compressorKnee by viewModel.compressorKnee.collectAsStateWithLifecycle()
@@ -2712,7 +2710,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
     val compressorOversample by viewModel.compressorOversample.collectAsStateWithLifecycle()
     val compressorSidechainHp by viewModel.compressorSidechainHp.collectAsStateWithLifecycle()
     val multibandParams by viewModel.multibandParams.collectAsStateWithLifecycle()
-    // 多段压限的总开关（2026-11-11 从页头下沉到卡片内）
+    // 多段压限的总开关
     val multibandEnabled by viewModel.multibandEnabled.collectAsStateWithLifecycle()
     // 压限器**总闸**：音效库卡片上那个开关。关掉 = 整体旁通，
     // 但两张卡的记忆值不动 —— 所以这里显示的是「记忆 && 总闸」而不是记忆本身。
@@ -2730,7 +2728,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
             padded = false,
             modifier = Modifier
                 .fillMaxWidth()
-                // 折叠态**整卡可点**（2026-11-11 用户要求「点卡片上就能动作」）：
+                // 折叠态**整卡可点**：
                 // 原来 clickable 只挂在标题 Text 上，点卡片上下留白、右侧空白毫无反应，
                 // 手感像「没点到」。这里把点击区提到卡片最外层（含 ScCard 的 16dp 内边距）。
                 // 展开态**不能加**——否则点旋钮/滑块/分段控件会被外层吞成「折叠」。
@@ -2740,7 +2738,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                 ),
         ) {
             Column(
-                // 收起时 10dp、展开时 14dp（2026-11-11 统一两卡折叠高度）：
+                // 收起时 10dp、展开时 14dp：
                 // 原来这里是固定 14dp，而压缩器收起是 6dp，两者折叠态实测相差
                 // 245px vs 210px（12.7dp）。改成同一套规则后只差行高，行高由下面的
                 // heightIn(32dp) 锁定 → 两卡折叠高度一致。
@@ -2751,11 +2749,11 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                // 联动状态 / A-B 快照（2026-11-09 P2/P3）：提前 collect 供标题行使用
+                // 联动状态 / A-B 快照：提前 collect 供标题行使用
                 val linked by viewModel.multibandLinked.collectAsStateWithLifecycle()
                 var abSlot by remember { mutableStateOf('A') }
-                // 折叠头（2026-11-08 用户要求）：点标题行展开/收回
-                // 通用卡头（2026-11-11 抽为 ScSlotHeader）；trailing 放组内特有控件。
+                // 折叠头：点标题行展开/收回
+                // 通用卡头；trailing 放组内特有控件。
                 // 顺序固定为「标题 … 联动/A|B … 开关 … ▾」—— 开关是这一组控件的收尾。
                 ScSlotHeader(
                     title = "多段压限",
@@ -2765,7 +2763,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                     expanded = multibandExpanded,
                     onToggleExpand = { multibandExpanded = !multibandExpanded },
                 ) {
-                    // 联动开关（P2，2026-11-09）：开 = 改任一段的段内参数同步三段；关 = 各段独立
+                    // 联动开关（P2）：开 = 改任一段的段内参数同步三段；关 = 各段独立
                     Text(
                         text = if (linked) "联动" else "独立",
                         fontSize = 10.sp,
@@ -2778,7 +2776,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    // A/B 快照（P3，2026-11-09）：切到另一槽时，先把当前存回原槽，
+                    // A/B 快照（P3）：切到另一槽时，先把当前存回原槽，
                     // 再载入目标槽——用于「压前 / 压后」快速对比。
                     for (slot in listOf('A', 'B')) {
                         Text(
@@ -2806,7 +2804,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                     Spacer(modifier = Modifier.width(6.dp))
                 }
                 if (multibandExpanded) {
-                // 旁路提示（2026-11-11 从页头迁入，同日区分两级旁路）：
+                // 旁路提示：
                 // 总闸关 与 本卡关 是两回事，提示要分开写，否则用户不知道该去开哪个。
                 if (!sectionEnabled) {
                     Text(
@@ -2837,19 +2835,17 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                     }
                 }
                 // 总 GR：**VFD（真空荧光）风格**。
-                //
                 // VFD 的视觉特征：深色底 + 离散发光段 + 青绿磷光 + 段间留缝 +
                 // 柔和外发光。老式功放/AV 接收机的电平表都是这个样子。
                 // 与之前的「浅灰底 + 连续色块填充」是两套完全不同的语言——
                 // 连续填充像「进度条」，分段发光像「仪表」。
-                //
                 // 分段逻辑：满量程 24dB → 24 段，每段 1dB。点亮段按 GR 深度从左往右亮。
                 // 颜色仍保留三档警示（前 6 段青绿 / 中 6 段琥珀 / 后 12 段红），
                 // 只是把「连续渐变」换成了「离散段」。
                 run {
                     val grMax = minOf(meters.grDb(0), meters.grDb(1), meters.grDb(2))
                     val norm = (-grMax / 24f).coerceIn(0f, 1f)
-                    // 三段压缩开关（2026-11-09 用户要求）：「总 GR」标签是这块仪表的电源指示——
+                    // 三段压缩开关：「总 GR」标签是这块仪表的电源指示——
                     // 开启时点亮成磷光青绿，关闭时保持 VFD 未通电的暗青。这样不读数字也知道
                     // 「这一段到底在工作没有」。
                     val mbOn by viewModel.multibandEnabled.collectAsStateWithLifecycle()
@@ -2887,7 +2883,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                                     .weight(1f)
                                     .height(19.dp),
                             ) {
-                                // 16 格 × 1.5dB（2026-11-09 采纳「格感更强」方案）：
+                                // 16 格 × 1.5dB：
                                 // 24 格时每格仅 ~11dp、缝 2dp，远看仍像一条连续带；
                                 // 减到 16 格 + 缝 3dp 后每格 ~18dp，VFD 的离散感才真正立起来。
                                 // 代价是读数从「1 格 = 1dB」变成「1 格 = 1.5dB」，精度略降，
@@ -2942,7 +2938,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                                 else "%.1f dB".format(grMax),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                // 等宽 + 右对齐 + **固定宽度**（2026-11-09 用户要求）：
+                                // 等宽 + 右对齐 + **固定宽度**：
                                 // 数字是 Row 里除 weight(1f) 之外的固定项，若让它按内容自适应，
                                 // 「0.0 dB」→「-14.7 dB」变长时会把电平条挤短，条长随数值跳动，
                                 // 显得突兀。`-100.0 dB` 是 9 字符，10sp 等宽约 6dp/字符 → 取 58dp。
@@ -2956,12 +2952,12 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                         }
                     }
                 }
-                // 频点划分条（2026-11-08，按用户设计稿）：三段色块 + 两根可拖竖线，
+                // 频点划分条：三段色块 + 两根可拖竖线，
                 // 取代原先两个独立 Slider——拖线即改分频点，颜色区域随分频点实时变化。
                 // 横轴固定 20Hz~20kHz 对数刻度：这样色块宽度才真实反映各频段的频率占比，
                 // 而不是「两个滑块各占一半」的假象。
                 run {
-                    // 点击 LOW / MID 色块输入截止频率（2026-11-08 用户要求）：
+                    // 点击 LOW / MID 色块输入截止频率：
                     // 0=无 1=低频上限（分频点1） 2=中频上限（分频点2）
                     var splitInput by remember { mutableStateOf(0) }
                     var splitText by remember { mutableStateOf("") }
@@ -3026,7 +3022,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                             Box(Modifier.weight((n2 - n1).coerceAtLeast(0.02f)).fillMaxHeight().background(Color(0xFFDDEAF6)))
                             Box(Modifier.weight((1f - n2).coerceAtLeast(0.02f)).fillMaxHeight().background(Color(0xFFEDE2F6)))
                         }
-                        // 段名（2026-11-08 调整）：字号 10→13sp + 加粗。
+                        // 段名：字号 10→13sp + 加粗。
                         // **垂直居中必须靠 Row 的 verticalAlignment**：Row 默认 Top，
                         // 而内部 Box 的 contentAlignment 只在自己高度内生效——Row 已
                         // fillMaxSize 撑满，Box 却是 wrapContent 高，结果文字一直贴顶，
@@ -3076,7 +3072,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                                 )
                             }
                         }
-                        // 两根分频点**推子**（2026-11-09 用户要求「用推子渲染看看」）。
+                        // 两根分频点**推子**。
                         // 纯绘制，不接手势——手势在整条上统一处理（按离哪根近决定拖谁）。
                         // 结构：贯穿全高的细轨道 + 居中的把手（圆角矩形 + 两道防滑横纹），
                         // 这是调音台 fader 的经典形态：轨道表达「轴」，把手表达「可抓」。
@@ -3098,7 +3094,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                                     Offset(x, h),
                                     strokeWidth = 1.6f,
                                 )
-                                // 把手轮廓（2026-11-09 用户要求「外围用小倒角圆弧」）：
+                                // 把手轮廓：
                                 // 不再是 `drawRoundRect` 的圆角矩形——那样四个角是四分之一圆，
                                 // 整体偏「胶囊」。改为**45° 小倒角 + 倒角处二次贝塞尔圆弧**：
                                 // 直边是直线，只在切角处用一段短弧过渡，是调音台 fader cap
@@ -3193,7 +3189,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                             },
                         )
                     }
-                    // 分频点读数（2026-11-08 用户要求）：两个数值**各自跟随自己的竖线**居中，
+                    // 分频点读数：两个数值**各自跟随自己的竖线**居中，
                     // 而不是两端对齐——两端对齐时读者要把视线从左边数值拽到右边才知道哪个是哪个。
                     // **关键：这里不能挂任何 pointerInput / clickable**。标签只是 Text，浮在
                     // 手势区之外；一旦给它加可点修饰符就会参与命中测试并拦截拖动，竖线就拽不动了。
@@ -3223,18 +3219,18 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                         )
                     }
                 }
-                // ==== 每段 IN/GR/OUT 实时电平表（2026-11-08，按设计稿）====
+                // ==== 每段 IN/GR/OUT 实时电平表====
                 // 数据来自引擎的块级计量（multiband.hpp band_in_pk_/gain_db_/band_out_pk_），
                 // 经 JNI 一次取 9 个 float。轮询放在页面作用域里，离开页面自动停止。
                 run {
                     // meters / LaunchedEffect 已上移到作用域顶部（标题行总 GR 也要用）
-                    // 参数展开状态**三段共享**（2026-11-09 用户要求）：点任一段的「更多参数」
+                    // 参数展开状态**三段共享**：点任一段的「更多参数」
                     // 三段同时展开/收起。原来每段独立，会出现「只有中间那段变高」的参差，
                     // 破坏三张卡等高的视觉一致性。
                     var paramsExpandedAll by remember { mutableStateOf(false) }
                     val names = listOf("低频段", "中频段", "高频段")
                     val accents = listOf(Color(0xFF8A6D3B), Color(0xFF3B6A8A), Color(0xFF6B4A8A))
-                    // **大气重排（2026-11-08 用户要求）**：三段各自成一张浅色底卡，
+                    // **大气重排**：三段各自成一张浅色底卡，
                     // 边界靠「面」而不是「一根细线」——原来三段靠 1dp 竖线切分，信息密度高
                     // 但观感像表格；现在每段有独立底色、圆角、色点标题，成为三个并列的仪表区块。
                     // height(IntrinsicSize.Min) 必须保留：三张底卡要等高，否则参差不齐。
@@ -3259,10 +3255,10 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(12.dp))
-                                    // 段色 13% 做底（2026-11-09 P1）：7% 在白卡上三段几乎同色，
+                                    // 段色 13% 做底：7% 在白卡上三段几乎同色，
                                     // 主要靠色点区分；13% 后边界一眼可辨，又不至于压过内容
                                     .background(accents[b].copy(alpha = 0.13f))
-                                    // 极淡描边（2026-11-09 用户征询）：底卡在白卡上靠色差定界，
+                                    // 极淡描边：底卡在白卡上靠色差定界，
                                     // 强光或低亮度下边缘会发虚；加 1dp 段色 28% 的线后轮廓立住，
                                     // 又因为本身是半透明段色、不是灰线，不会退回「表格感」
                                     .border(
@@ -3338,7 +3334,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                                     format = { "%.0fms".format(it) },
                                     onValueChange = { viewModel.setMultibandParam(base + 3, it) },
                                 )
-                                // 阈值旋钮（2026-11-08 用户要求）：它是三段里最常动的参数，
+                                // 阈值旋钮：它是三段里最常动的参数，
                                 // 藏在「标签+可点数字」里每次都要点开输入框，不如直接给个旋钮。
                                 ScKnob(
                                     label = "阈值",
@@ -3356,7 +3352,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                                     format = { "%.0fdB".format(it) },
                                     onValueChange = { viewModel.setMultibandParam(base + 0, it) },
                                 )
-                                // 自动增益补偿（2026-11-09 P3）：把该段当前 GR 反向加到段增益上，
+                                // 自动增益补偿：把该段当前 GR 反向加到段增益上，
                                 // 只做一次性应用，不实时跟踪（实时跟会让增益随音乐抖动）。
                                 // **常显示**（用户要求）：隐式出现/消失会破坏三段卡的等高与一致性；
                                 // GR 接近 0 时置灰不可点，位置与尺寸保持不变。
@@ -3379,7 +3375,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                                             .padding(horizontal = 7.dp, vertical = 2.dp),
                                     )
                                 }
-                                // 参数折叠（2026-11-09 改为三段共享）：压缩比/拐点/增益改动频率低，
+                                // 参数折叠：压缩比/拐点/增益改动频率低，
                                 // 默认收起省约 60dp；点任一段三段同步展开，保持三等高。
                                 Text(
                                     text = if (paramsExpandedAll) "收起 ▴" else "更多参数 ▾",
@@ -3418,14 +3414,14 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                 }
             }
         }
-        // 卡片背景回到默认白卡（2026-11-09 用户要求「改成三段动态的卡片背景」）：
+        // 卡片背景回到默认白卡：
         // 之前展开时整卡铺浅灰 #E8EEF4，白色陶瓷旋钮压在上面显得突兀；
         // 现在与「三段动态」卡片一致，都是标准 ScCard 白底。
         ScCard(
             padded = false,
             modifier = Modifier
                 .fillMaxWidth()
-                // 折叠态整卡可点（2026-11-11 用户要求「点卡片上就能动作」）：
+                // 折叠态整卡可点：
                 // 与三段卡同一套规则 —— 展开态不加，避免吞掉旋钮/滑块的手势。
                 .then(
                     if (!compressorExpanded) Modifier.clickable { compressorExpanded = true }
@@ -3433,7 +3429,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                 ),
         ) {
             Column(
-                // 收起时压缩纵向内边距（2026-11-08 用户要求「高度太高」）：
+                // 收起时压缩纵向内边距：
                 // 展开时保持 14dp 的舒展留白；收起时卡片里只剩标题行和开关，
                 // 14dp 上下留白占掉了整卡高度近一半，故收到 6dp。
                 // 只留展开态底边距：收起时卡内只有标题行，不需要额外留白
@@ -3444,9 +3440,9 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                // 折叠头（2026-11-08 用户要求）：点整行展开/收回。
+                // 折叠头：点整行展开/收回。
                 // ScSwitch 自身会消费点击、不冒泡到这里的 clickable，所以点开关只切开关。
-                // 通用卡头（2026-11-11 抽为 ScSlotHeader）：开关值 = 记忆 && 总闸、
+                // 通用卡头：开关值 = 记忆 && 总闸、
                 // 总闸关时置灰、整行可点折叠、行高锁 32dp —— 四件事都在组件里统一。
                 ScSlotHeader(
                     title = "压缩器（单段）",
@@ -3466,17 +3462,16 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                             delay(100)  // ~10fps，与三段表同频
                         }
                     }
-                    // 【2026-11-09 用户要求】去掉内层「面板 + 描边」，把浅灰背景直接铺满整张卡片
+                    // 去掉内层「面板 + 描边」，把浅灰背景直接铺满整张卡片
                     // （背景改由 ScCard 的 background 参数承担，仅展开时生效；收起仍是白卡）。
                     // 好处：不必再套一层圆角容器，VFD 窗与旋钮共用同一张底，边界更干净。
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                    // 【合并窗 2026-11-09】电平柱与旋钮组共用**同一块深底窗**，中间不断开。
+                    // 【合并窗】电平柱与旋钮组共用**同一块深底窗**，中间不断开。
                     // 之前是两个独立 Box 各自带背景、中间留 14dp 白缝，读起来是「两块贴片」；
                     // 合并后是一整块仪表面板——左半显示、右半操作，中间只留 12dp 呼吸。
-                    //
                     // 宽度预算（卡片内约 308dp，减去窗外内边距 20 → 288dp）：
                     // 左栏 **128dp**（三柱各 ~30dp）+ 间距 12dp + 右栏 148dp（两列各 74dp）。
                     // 左栏从 118 抬回 128：26dp 宽柱放 `-25dB` 已经贴边，再长一点就溢出；
@@ -3488,7 +3483,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                             .background(Color(0xFF46545F))
                             .padding(horizontal = 10.dp, vertical = 10.dp),
                     ) {
-                    // **整组居中**（2026-11-09 用户要求「整体往右移动，与边框居中」）：
+                    // **整组居中**：
                     // 窗内实际宽度（约 305dp）大于「左 128 + 间距 12 + 右 148 = 288dp」，
                     // 原来右栏用 weight(1f) 会吃下全部剩余 → 右栏内部右边空出一大块，
                     // 柱组仍贴左缘，整组看起来偏左。
@@ -3532,15 +3527,14 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                                 )
                             }
                         }
-                        // ── 右栏：两组旋钮，**纵向**排列（2026-11-09 用户要求「纵向两组」）──
+                        // ── 右栏：两组旋钮，**纵向**排列──
                         // 组 1「静态曲线」阈值 / 压缩比 / 拐点 —— 决定压多少
                         // 组 2「时间补偿」Attack / Release / 增益 —— 决定怎么压
                         // 每组内部竖着排 3 个、两组左右并排：右栏 182dp / 2 列 → 每列 91dp，
                         // 旋钮可从 52dp 回到 72dp（三列时被压窄，盘面数值与标签都挤）。
                         // 右栏：两组旋钮（无自身背景，与左侧三条柱共用同一块合并窗）。
                         // 盘面用 faceDark 深灰蓝——嵌在面板里，而不是白瓷贴在深灰上。
-                        //
-                        // **间距必须用固定值而非 SpaceEvenly**（2026-11-09 用户反馈「左窄右宽」）：
+                        // **间距必须用固定值而非 SpaceEvenly**：
                         // 左栏三条柱用 spacedBy(10) 正好占满 128dp、贴住窗内左边界；
                         // 右栏若用 SpaceEvenly，两列 72dp 共 144dp 只占 148dp 中的 144，
                         // 右侧会余 1.33dp，与左栏的「贴死」形成可察觉的不对称。
@@ -3752,7 +3746,7 @@ internal fun ScBandDetailContent(viewModel: MainViewModel) {
                             Spacer(modifier = Modifier.width(4.dp))
                             ScAdvChip("2x", compressorOversample >= 1.5f) { viewModel.setCompressorOversample(2f) }
                         }
-                        // 侧链高通（2026-11-11 补 UI）：档位而非连续旋钮 —— 常用值就这几个，
+                        // 侧链高通：档位而非连续旋钮 —— 常用值就这几个，
                         // 且「关 / 80 / 120 / 200」四种取舍比拖旋钮更容易理解：
                         //   关   低频也参与触发（低频动态大时反而更稳，电子乐常用）
                         //   80  轻度，只切掉次低频（播客/男声，保住 85~180Hz 的检测）
@@ -4613,7 +4607,7 @@ internal fun ScFdnDetailContent(viewModel: MainViewModel) {
     val fdnWet by viewModel.fdnWet.collectAsStateWithLifecycle()
     val fdnDry by viewModel.fdnDry.collectAsStateWithLifecycle()
     val fdnMode by viewModel.fdnMode.collectAsStateWithLifecycle()
-    // **不再套 ScCard**（2026-11-11 用户要求「参数调节滑块区域不用边框包裹」）：
+    // **不再套 ScCard**：
     // 这个函数现在是混响组详情页里的**槽卡内容**，外层槽卡已经有白卡外壳（描边 + 阴影），
     // 里面再包一层 ScCard 就成了卡片套卡片 —— 滑块四周会多出一圈描边和一圈内缩。
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -4652,7 +4646,7 @@ internal fun ScFdnDetailContent(viewModel: MainViewModel) {
 }
 
 /**
- * 低音保护详情内容（2026-11-11，原名「动态低音」）。
+ * 低音保护详情内容。
  *
  * 改名原因：这个效果器**开/关几乎听不出差别** —— 它实际做的是次低频清理与
  * 低频峰值保护，中间的「动态增强」实测最多 0.65dB（人耳低频可辨阈值 1~3dB）。
@@ -4680,9 +4674,8 @@ internal fun ScDynamicBassDetailContent(viewModel: MainViewModel) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            // 只保留「低音频率」与「保护」两个旋钮（2026-11-11 用户反馈
+            // 只保留「低音频率」与「保护」两个旋钮（用户反馈
             // 「开与不开都没什么效果」后精简）。
-            //
             // 移除的两个是「强度」与「动态深度」：它们在 DSP 里是
             // `max_boost = boost_depth × 12dB × amount` 的**乘积关系**，
             // 调哪个都一样；而且实测增强量最多 0.65dB（人耳低频可辨阈值 1~3dB），
@@ -4728,7 +4721,7 @@ internal fun ScDynamicBassDetailContent(viewModel: MainViewModel) {
 
         Text(
             // 注意：Compose `Text` **不解析 Markdown**，这里不能写 `**粗体**`
-            // （2026-11-11 踩过：界面上直接显示了星号）。强调靠文字本身。
+            // 。强调靠文字本身。
             text = "本效果器不做增强，只做两件事：① 次低频清理 —— 切掉耳机/喇叭放不出的" +
                 "极低频，把单元行程留给听得到的频段；② 峰值保护 —— 分频点以下的低频超过阈值" +
                 "时压住，防止小尺寸单元机械过载。要「听得出低音变多」请用低音增强。",
@@ -4977,7 +4970,7 @@ internal fun ScVirtualBassDetailContent(viewModel: MainViewModel) {
  *
  * 前两个**与输出设备无关**（分频重构 / M/S+EQ+瞬态），第三个**只适合外放**。
  *
- * **三者可以同时开启**（2026-11-11 取消互斥）：叠加听感交给用户判断。
+ * **三者可以同时开启**：叠加听感交给用户判断。
  * 唯一的设备约束 —— 耳机输出时虚拟低音默认关，且每次开启弹风险提示。
  *
  * 虚拟低音带**按设备的软性排斥**：耳机输出时点开会弹一次风险提示，
@@ -5016,7 +5009,7 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                // 标题改名「动态低音」→「低音保护」（2026-11-11 用户反馈）：
+                // 标题改名「动态低音」→「低音保护」：
                 // 这个效果器**开/关几乎听不出差别**，因为它实际在做的是
                 // ① 次低频清理（切掉耳机放不出的 30Hz 以下）② 低频峰值保护（防单元过载）。
                 // 中间的「动态增强」实测最多只有 +0.65dB，远低于人耳低频可辨阈值
@@ -5114,7 +5107,7 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
                         if (virtualBassEnabled) {
                             viewModel.setVirtualBassEnabled(false)
                         } else if (viewModel.isHeadphoneOutput()) {
-                            // 耳机下**每次**开启都弹提示（2026-11-11 用户要求）：
+                            // 耳机下**每次**开启都弹提示：
                             // 不做「确认一次就不再提醒」的记忆 —— 这个效果器在耳机上的
                             // 副作用是持续的，用户每次开启前都该被提醒一次。
                             showHeadphoneWarning = true
@@ -5148,7 +5141,7 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
 
     }
 
-    // ---- 耳机下的风险提示（2026-11-11，参照 wecho 的交互）----
+    // ---- 耳机下的风险提示----
     if (showHeadphoneWarning) {
         AlertDialog(
             onDismissRequest = { showHeadphoneWarning = false },   // 点外部 = 取消，不开启
@@ -5172,9 +5165,8 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
             dismissButton = {
                 TextButton(
                     onClick = {
-                        // 「关闭提醒」= **不开启**（2026-11-11 对齐
+                        // 「关闭提醒」= **不开启**（对齐
                         // `wecho_projectV2.5.1_studio_rack` 的语义）。
-                        //
                         // 之前我把它实现成「开启 + 记住不再提示」，那是理解错了：
                         // 那边 `pop(false)` 之后根本不调用 update(enabled, true)。
                         // 文案叫「关闭提醒」，实际作用是取消这次操作。
@@ -5278,7 +5270,7 @@ internal fun ScReverbGroupDetail(viewModel: MainViewModel) {
         ) {
             Column(
                 modifier = Modifier.padding(
-                    // 左右 14 → 4dp（2026-11-11 用户要求收窄）：
+                    // 左右 14 → 4dp：
                     // ScCard 自带 16dp，再叠 14dp 会让内层卡片的可用宽度少掉 30dp/侧
                     start = 20.dp,
                     end = 20.dp,
@@ -5321,7 +5313,7 @@ internal fun ScReverbGroupDetail(viewModel: MainViewModel) {
         ) {
             Column(
                 modifier = Modifier.padding(
-                    // 左右 14 → 4dp（2026-11-11 用户要求收窄）：
+                    // 左右 14 → 4dp：
                     // ScCard 自带 16dp，再叠 14dp 会让内层卡片的可用宽度少掉 30dp/侧
                     start = 20.dp,
                     end = 20.dp,
@@ -5359,7 +5351,7 @@ internal fun ScReverbGroupDetail(viewModel: MainViewModel) {
 }
 
 /**
- * 卷积混响的**内容**（2026-11-11 抽出，不含页头）。
+ * 卷积混响的**内容**。
  *
  * 为什么去掉页头与开关：它现在作为「混响」效果组的一个槽卡渲染，
  * 页头由 ScEffectDetailPage 提供、开关由 ScSlotHeader 提供 —— 同一个开关
@@ -5402,7 +5394,7 @@ internal fun ScConvolverContent(viewModel: MainViewModel) {
                             fontSize = 12.sp,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                             color = if (selected) Color.White else ScColors.TextSub,
-                            // 四等分 chip：窄屏预设名较长时不折成两行（2026-11-07 批次 2）
+                            // 四等分 chip：窄屏预设名较长时不折成两行
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Center,
@@ -5514,7 +5506,7 @@ internal fun ScConvolverContent(viewModel: MainViewModel) {
                             sizeDp = size,
                             steps = 7,
                             textScale = 0.75f,
-                            // 双击归位到「关」（索引 0，2026-11-08）；离散档位不开长按输入
+                            // 双击归位到「关」（索引 0）；离散档位不开长按输入
                             resetValue = 0f,
                             format = { v ->
                                 val i = v.toInt().coerceIn(0, 6)
@@ -5606,7 +5598,7 @@ internal fun ScConvolverContent(viewModel: MainViewModel) {
                             )
                         }
                     }
-                    // ---- 病态 IR 警示（2026-10-26 双声实证判据） ----
+                    // ---- 病态 IR 警示 ----
                     if (analysis.getOrNull(1028)?.toInt() ?: 0 >= 2) {
                         val risk = analysis.getOrNull(1038)?.toInt() ?: 0
                         if (risk > 0) {
@@ -6336,7 +6328,7 @@ internal fun ScScriptRackSection(
 }
 
 /**
- * 机架详情页主体（按草图 2026-11-13）：
+ * 机架详情页主体（按草图）：
  * 顶部总开关在页头；下面槽位 1/2/3 每行 = 脚本名 / 参数 / 开关；再下面是「脚本库」列表。
  * 参数区（编辑器 + 控件）点某槽位的「参数」后展开，作用于该槽位。
  */
@@ -7185,7 +7177,7 @@ private fun matchesScript(title: String, query: String): Boolean {
 }
 
 /**
- * 脚本编辑器整页（按截图 2026-11-13）：
+ * 脚本编辑器整页（按截图）：
  * 顶栏（返回 / 应用 / 撤销 / 菜单）+ 行号 + 深色代码区 + 状态栏 + 符号键行。
  */
 @Composable
@@ -7207,7 +7199,7 @@ internal fun ScScriptEditorPage(
     var codeSp by remember { mutableStateOf(12) }
 
     // 撤销 / 重做：历史放在 remember 持有的普通对象里。
-    // 之前用局部 `var ... by remember { mutableStateOf(listOf()) }` + 局部 fun，
+    // 之前用局部 `var ... by remember { mutableStateOf(listOf) }` + 局部 fun，
     // 在事件 lambda 里读写时容易读到旧快照（表现为"点了没反应"）。
     val history = remember(lane) { EditorHistory() }
     var historyVersion by remember { mutableStateOf(0) }

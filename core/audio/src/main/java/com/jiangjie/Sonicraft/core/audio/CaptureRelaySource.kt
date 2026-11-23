@@ -41,7 +41,7 @@ class CaptureRelaySource(
     /** 排除清单：这些 uid 的播放不被捕获（黑名单功能，重启内录生效） */
     private val excludedUids: IntArray = IntArray(0),
     private val push: (FloatArray, Int) -> Unit,
-    /** 投影失效回调（2026-11-03 僵尸投影事故）：read 恒负时采集线程一次性上报，调用方止损 */
+    /** 投影失效回调：read 恒负时采集线程一次性上报，调用方止损 */
     private val onDead: ((String) -> Unit)? = null,
 ) {
     private var record: AudioRecord? = null
@@ -56,7 +56,7 @@ class CaptureRelaySource(
     private val lastRead = AtomicLong(0)
     private val partialReads = AtomicLong(0)  // read < 请求帧数（AudioRecord 异常信号）
     private val errorReads = AtomicLong(0)
-    // 投影失效判定（2026-11-03 僵尸投影事故）：连续负 read 计数与一次性上报标志。
+    // 投影失效判定：连续负 read 计数与一次性上报标志。
     // A16 特权免弹窗投影实测：AudioRecord 建立成功但 read 恒 -2，每秒 ~160 次全错，
     // 原实现只计数不判定 = 僵尸会话被当正常推进，引擎吃空数据 → 接管静音 + 无声。
     private val errorStreak = AtomicLong(0)
@@ -89,7 +89,7 @@ class CaptureRelaySource(
 
         // 匹配 MEDIA + GAME：短视频/游戏等内容音。故意不匹配 UNKNOWN——该 usage 常被
         // 通知/系统短音使用，误捕会产生"提示音双声"；抖音等主流 app 短视频走 MEDIA/GAME。
-        // 注意：努比亚要求 AudioPlaybackCaptureConfiguration 至少匹配一个 usage，否则 build() 抛异常。
+        // 注意：努比亚要求 AudioPlaybackCaptureConfiguration 至少匹配一个 usage，否则 build 抛异常。
         // excludeUid(自己)：防回环——不捕获本 app 引擎自己的输出（WEcho 同款做法）。
         // excludeUid(黑名单)：用户排除清单的 app 不被捕获（排除自身的重复 excludeUid 系统会忽略）。
         val captureConfig = try {
@@ -134,8 +134,8 @@ class CaptureRelaySource(
             return false
         }
 
-        // L10（2026-11-03 审计）：record 赋值后的启动段（startRecording/供给协程/诊断
-        // 协程）若抛同步异常，调用方拿到 false/异常未必调 stop()——AudioRecord+协程
+        // L10：record 赋值后的启动段（startRecording/供给协程/诊断
+        // 协程）若抛同步异常，调用方拿到 false/异常未必调 stop——AudioRecord+协程
         // 全泄漏（record 已赋值、job 半初始化等中间态无人清理）。兜底自清理后再抛。
         try {
             record = audioRecord

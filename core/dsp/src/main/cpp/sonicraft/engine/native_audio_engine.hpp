@@ -30,8 +30,8 @@ namespace sonicraft::engine {
 /**
  * 内录接管实时引擎（Mode B）。
  *
- * 数据流：Java 采集线程（AudioRecord + AudioPlaybackCapture）调用 PushInput() 写入输入
- * 环形缓冲 → AAudio 输出回调 OnData() 从环形缓冲取帧 → DspGraph 就地处理 → 写入 AAudio 输出。
+ * 数据流：Java 采集线程（AudioRecord + AudioPlaybackCapture）调用 PushInput 写入输入
+ * 环形缓冲 → AAudio 输出回调 OnData 从环形缓冲取帧 → DspGraph 就地处理 → 写入 AAudio 输出。
  *
  * 线程模型：
  *  - 采集线程：唯一的生产者（PushInput）
@@ -70,7 +70,7 @@ class NativeAudioEngine {
 
   /** 运行时下发节点参数（非旁路型）。node_index 为 AddNode 返回的索引。 */
   /**
-   * 设置输出缓冲帧数（用户可调，2026-11-06）。
+   * 设置输出缓冲帧数（用户可调）。
    * frames<=0 表示恢复默认（2×burst，下限 384 帧）。
    * 运行中调用会立即作用到当前流；下次开流沿用该值。
    */
@@ -137,11 +137,11 @@ class NativeAudioEngine {
    */
   std::string LoadImpulseResponse(const char* path);
 
-  /** 尾分区上限（低端机负载分档）：须在 Start() 前（Prepare 前）调用。0 = 不限制。 */
+  /** 尾分区上限（低端机负载分档）：须在 Start 前（Prepare 前）调用。0 = 不限制。 */
   void SetTailPartitionLimit(int max_parts);
 
   /**
-   * 多频段每段计量（2026-11-08，供 UI 的 IN/GR/OUT 电平表）。
+   * 多频段每段计量。
    * out 长度须 >= 9，索引 [band*3 + 0/1/2] = 入峰值 / GR(dB) / 出峰值，band 0=低 1=中 2=高。
    * 返回 false = 引擎未就绪或无多频段节点。非实时线程调用（UI 轮询）。
    */
@@ -180,7 +180,7 @@ class NativeAudioEngine {
   /**
    * 重建输出流（非实时线程调用，看门狗/错误回调触发）。微信来电等场景触发系统
    * 音频路由切换 → AAudio 流 error → 无回调即引擎停摆（stats 冻结/静音不恢复）。
-   * 内部持锁与 Stop() 互斥；失败自动延迟重试一次。
+   * 内部持锁与 Stop 互斥；失败自动延迟重试一次。
    */
   bool RestartOutputStream();
 
@@ -232,7 +232,7 @@ class NativeAudioEngine {
   std::atomic<bool> test_tone_{false};
   float test_tone_phase_{0.0f};
 
-  // 输出流重建（错误回调/看门狗触发）：与 Stop() 互斥；restarting_ 防错误回调重入
+  // 输出流重建（错误回调/看门狗触发）：与 Stop 互斥；restarting_ 防错误回调重入
   std::mutex restart_mutex_;
   std::atomic<bool> restarting_{false};
 
@@ -251,7 +251,7 @@ class NativeAudioEngine {
   // 默认 200→50ms（设备切换属正常单发事件，应最快恢复；连续失败另有退避阶梯）
   std::atomic<int> pending_backoff_ms_{50};
 
-  // 连续错误退避（2026-11-01：capture 全零 → 引擎输出空流 → 系统省电 disconnect
+  // 连续错误退避（capture 全零 → 引擎输出空流 → 系统省电 disconnect
   // → -899 → 重建 → 再全零，4.7s/轮无限循环 163 次）。30s 无错即视为新故障序列。
   std::atomic<int> error_streak_{0};
   std::atomic<long> last_error_ts_{0};

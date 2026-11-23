@@ -62,7 +62,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import org.json.JSONArray
 
-/** Capture 策略扫描结果（2026-11-04 诊断页）：rows=(包名,uid,policy)；
+/** Capture 策略扫描结果：rows=(包名,uid,policy)；
  *  error 非空=扫描失败原因（特权未连/dumpsys 失败/包列表空）——必须上 UI，
  *  此前静默返回空列表导致「点扫描出 0」无法定位。 */
 data class CapturePolicyScan(
@@ -87,7 +87,7 @@ class MainViewModel @Inject constructor(
     private val irExtensions = setOf("wav", "irs", "pcm", "fir", "ir")
 
     /**
-     * IR 装载互斥（P1，2026-10-27 自检）：loadLibraryIr / setTrimSickHead 重装 /
+     * IR 装载互斥（P1 自检）：loadLibraryIr / setTrimSickHead 重装 /
      * applyEq 恢复链路三个 IO 协程入口可能并发进入 native 装载，交错写 slot 5
      * spec——串行化保证同一时刻只有一次完整装载（native 侧另有 t_eff 关闸防
      * 实时线程读撕裂，双保险）。
@@ -128,7 +128,7 @@ class MainViewModel @Inject constructor(
     /** 上次进程被强杀遗留的 DP 静音效果提示（只能重启清除，必须让用户看见） */
     val residueWarning: StateFlow<String?> = takeover.residueWarning
 
-    /** 双后端切换 / 全灭提示（2026-11-23）：非空时 UI 需醒目展示，可手动关闭 */
+    /** 双后端切换 / 全灭提示：非空时 UI 需醒目展示，可手动关闭 */
     private val _backendNotice = MutableStateFlow<String?>(null)
     val backendNotice: StateFlow<String?> = _backendNotice.asStateFlow()
 
@@ -143,14 +143,13 @@ class MainViewModel @Inject constructor(
         // 启动时把持久化的 audio_mode 同步给 UI（否则设置页高亮会一直是默认值）。
         // 注意：**必须用异步调度**。viewModelScope 默认 Main.immediate，在构造函数里
         // launch 会同步执行 lambda，而 `prefs` 字段尚未初始化 → 启动即 NPE 崩溃
-        // （2026-11-05 实测崩溃栈 MainViewModel.<init>:132）。
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 _audioMode.value = prefs.getString(KEY_AUDIO_MODE, MODE_LOOPBACK) ?: MODE_LOOPBACK
             }
         }
         // 引擎停止/失败 → 立即释放接管静音。否则「引擎没输出了、原声又被压着」
-        // 就是全静音（2026-11-05 事故同族）。
+        // 就是全静音。
         viewModelScope.launch {
             engine.state.collect { st ->
                 // 引擎（重新）就绪后，节点内参数已回到默认值 → 开关类参数会"显示开启却无效"，
@@ -178,7 +177,6 @@ class MainViewModel @Inject constructor(
                 }
                 // 只在「明确停止/失败」时释放。**不能用「非 Running 就释放」**：
                 // start 过程会经过 Ready/Preparing，那样会把建链前的预静音当场撤销
-                // （2026-11-05 实测：预静音成功=1，但随即 DP=0、副本也没了）。
                 val ended = st is com.jiangjie.Sonicraft.core.engine.EngineState.Stopped ||
                     st is com.jiangjie.Sonicraft.core.engine.EngineState.Failed
                 if (ended) {
@@ -189,7 +187,7 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * 采集断链告警（2026-11-01 事故）：capture 全零断链时保险丝回滚接管保直出。
+     * 采集断链告警：capture 全零断链时保险丝回滚接管保直出。
      * 起判定与状态迁至 TakeoverController（进程级，UI 生死无关），此处转发。
      */
     val captureBrokenWarning: StateFlow<String?> = takeover.captureBrokenWarning
@@ -198,7 +196,7 @@ class MainViewModel @Inject constructor(
     fun clearCaptureBrokenWarning() = takeover.clearCaptureBrokenWarning()
 
     /**
-     * 自身播放权限自愈警示（2026-11-03 全静音事故）：ZTE 后台音频治理把本 app 置
+     * 自身播放权限自愈警示：ZTE 后台音频治理把本 app 置
      * PLAY_AUDIO=deny → 输出轨 -inf → 全链死寂。自愈探针自动恢复后挂此横幅（引导
      * 电池白名单）。判定与状态在 TakeoverController（进程级），此处转发。
      */
@@ -495,7 +493,7 @@ class MainViewModel @Inject constructor(
     private val _limiterEnabled = MutableStateFlow(prefs.getBoolean(KEY_LIMITER_ENABLED, true))
     val limiterEnabled: StateFlow<Boolean> = _limiterEnabled.asStateFlow()
 
-    // ---- 自定义脚本效果器（2026-11-12 原型，默认关） ----
+    // ---- 自定义脚本效果器 ----
     private val _scriptEffectEnabled = MutableStateFlow(prefs.getBoolean("script_effect_enabled", false))
     val scriptEffectEnabled: StateFlow<Boolean> = _scriptEffectEnabled.asStateFlow()
 
@@ -575,7 +573,7 @@ class MainViewModel @Inject constructor(
     private val _compressorRatio = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_RATIO, 4f))
     val compressorRatio: StateFlow<Float> = _compressorRatio.asStateFlow()
 
-    // ---- 界面缩放（2026-11-09，从 wecho 定制版移植）----
+    // ---- 界面缩放----
     // wecho 是 autoScale(按 440dp 基准自动算) × uiScale(粗调) × uiFineScale(微调)，
     // 实际作用于 UI 的是后两者的乘积；autoScale 由调用方按屏幕宽度实时算。
     /** 缩放粗调：0.8~1.3（对应 wecho 设置页的主滑块） */
@@ -610,7 +608,7 @@ class MainViewModel @Inject constructor(
     /** 微调归 100%（wecho 的「重置微调」） */
     fun resetUiFineScale() = setUiFineScale(1f)
 
-    /** 起音（ms，2026-11-09 暴露到 UI） */
+    /** 起音（ms，已暴露到 UI） */
     private val _compressorAttack = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_ATTACK, 10f))
     val compressorAttack: StateFlow<Float> = _compressorAttack.asStateFlow()
 
@@ -626,7 +624,7 @@ class MainViewModel @Inject constructor(
     private val _compressorMakeup = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_MAKEUP, 0f))
     val compressorMakeup: StateFlow<Float> = _compressorMakeup.asStateFlow()
 
-    // ---- 2026-11-11 新增四项（并联 / 检测模式 / 前瞻 / 过采样）----
+    // ---- 并联 / 检测模式 / 前瞻 / 过采样 ----
     /** 并联混合：0 = 全干、1 = 全湿 */
     private val _compressorMix = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_MIX, 1f))
     val compressorMix: StateFlow<Float> = _compressorMix.asStateFlow()
@@ -735,7 +733,7 @@ class MainViewModel @Inject constructor(
 
     /** 卷积混响开关（bypass = !enabled）；与算法混响相互独立，可同时开启 */
     /**
-     * 混响组**总闸**（2026-11-11，音效库「混响」卡片那个开关）。
+     * 混响组**总闸**。
      * 关 = 卷积与算法两个节点同时旁通，各槽记忆不动。
      */
     fun setReverbSectionEnabled(enabled: Boolean) {
@@ -924,7 +922,7 @@ class MainViewModel @Inject constructor(
         _userIrMessage.value = null
     }
 
-    // ---- b 脉冲库：目录即真相（2026-10-25，取代旧「最近使用」LRU 记账） ----
+    // ---- b 脉冲库：目录即真相 ----
     /** 库条目：name = 显示名（文件名去扩展名），file = pulse/ 内文件名 */
     data class IrLibraryEntry(val name: String, val file: String, val sizeBytes: Long = 0L)
 
@@ -1036,7 +1034,7 @@ class MainViewModel @Inject constructor(
             .orEmpty()
     }
 
-    // ---- b 专用脉冲目录 + 批量导入/导出（2026-10-25，工程阶段朴素 UI） ----
+    // ---- b 专用脉冲目录 + 批量导入/导出 ----
 
     /** 专用脉冲目录：所有 IR 文件统一存放于此（filesDir/pulse，私有持久） */
     /** 脉冲库目录：外部私有目录（/sdcard/Android/data/<pkg>/files/pulse），
@@ -1435,7 +1433,7 @@ class MainViewModel @Inject constructor(
     /** 从脉冲库加载 IR（pulse/ 文件已持久化，不依赖 content Uri 重授权） */
     fun loadLibraryIr(entry: IrLibraryEntry) {
         viewModelScope.launch(Dispatchers.IO) {
-            // P1（2026-10-27 自检）：装载+切预设是临界区，与其他装载入口互斥
+            // P1：装载+切预设是临界区，与其他装载入口互斥
             // （并发重装会交错写 slot 5 spec）；结果回调留在锁外
             irLoadMutex.withLock {
                 runCatching {
@@ -1475,7 +1473,7 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * 病态 IR 自动对齐开关（方案 A，2026-10-26；2026-10-27 范围扩大）：前置
+     * 病态 IR 自动对齐开关（方案 A，范围已扩大）：前置
      * 静音 >30ms 的 IR 装载时自动裁除静音前缀（含设计型纯零延迟，病态一律
      * 校正），湿声与干声对齐消除双声。切换后对当前挂着的自定义 IR 立即重装
      * 生效；关闭后警示卡回归。
@@ -1508,7 +1506,7 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * 湿声电平自动校准开关（批次 2，2026-10-27，默认开）：装载新 IR 时按其
+     * 湿声电平自动校准开关（批次 2，默认开）：装载新 IR 时按其
      * 形态（波峰因数）自动设湿声电平——脉冲型增强、扩散长尾收敛、同房间形态
      * ≈1.0 无感迁移。打开时立即对当前挂着的 IR 应用一次；关闭后湿声电平
      * 全手动（不再自动覆盖）。
@@ -1518,7 +1516,7 @@ class MainViewModel @Inject constructor(
         prefs.edit().putBoolean(KEY_WET_AUTO_CAL, enabled).apply()
         if (enabled) {
             // 强制对当前 IR 重新校准一次；prefs 同步清（否则重启后旧记录
-            // 又把重校准跳过——2026-10-27 真机迁移验证发现的遗漏）
+            // 又把重校准跳过——真机迁移验证发现的遗漏）
             lastCalIrName = null
             prefs.edit().remove(KEY_LAST_CAL_IR).apply()
             maybeAutoCalWet(_userIrAnalysis.value)
@@ -2167,7 +2165,7 @@ class MainViewModel @Inject constructor(
         MutableStateFlow(prefs.getFloat(KEY_VIRTUAL_BASS_ENVELOPE_RATE, 80f))
     val virtualBassEnvelopeRate: StateFlow<Float> = _virtualBassEnvelopeRate.asStateFlow()
 
-    // ---- 低音增强（2026-11-11，设备无关）----
+    // ---- 低音增强----
 
     /** 低音增强开关（槽记忆）。与动态低音/虚拟低音三者互斥。 */
     private val _bassEnhanceEnabled =
@@ -2239,7 +2237,7 @@ class MainViewModel @Inject constructor(
         engine.setBypass(AudioEngine.DYNAMIC_BASS_NODE_INDEX, !dyn)
         engine.setBypass(AudioEngine.BASS_ENHANCE_NODE_INDEX, !enh)
         engine.setBypass(AudioEngine.VIRTUAL_BASS_NODE_INDEX, !vir)
-        // 可观测性（2026-11-11 P1 修复）：建链后到底有没有重放旁路，
+        // 可观测性：建链后到底有没有重放旁路，
         // 以前只能靠「听不出来」猜。现在 autostart_diag.txt 里可直接回读。
         writeDiag("lowfreqBypass: sec=$sec dyn=$dyn enh=$enh vir=$vir")
     }
@@ -2304,7 +2302,7 @@ class MainViewModel @Inject constructor(
         )
     }
 
-    // ---- 虚拟低音（2026-11-11，手机内置扬声器专用）----
+    // ---- 虚拟低音----
 
     /** 虚拟低音开关（槽记忆）。开它会把动态低音的**记忆**也置 false。 */
     fun setVirtualBassEnabled(enabled: Boolean) {
@@ -2359,7 +2357,7 @@ class MainViewModel @Inject constructor(
         )
     }
 
-    // ---- 低音增强（2026-11-11，设备无关）----
+    // ---- 低音增强----
 
     /** 低音增强开关（槽记忆）。开启时把另外两个低频槽的记忆置 false。 */
     fun setBassEnhanceEnabled(enabled: Boolean) {
@@ -2626,7 +2624,7 @@ class MainViewModel @Inject constructor(
             "fdn_wet" -> setFdnWet(v)
             "fdn_dry" -> setFdnDry(v)
             "fdn_mode" -> setFdnMode(v)
-            // ---- 低频管家 / 组总闸（2026-11-14 补：设备切换时整组不跟随）----
+            // ---- 低频管家 / 组总闸----
             "lowfreq_section_enabled" -> setLowfreqSectionEnabled(v > 0.5f)
             "dynamic_bass_enabled" -> setDynamicBassEnabled(v > 0.5f)
             "dynamic_bass_amount" -> setDynamicBassAmount(v)
@@ -2962,7 +2960,7 @@ class MainViewModel @Inject constructor(
      *
      * **调用时机是硬约束**：必须在「保存上一个设备的配置」**之后**调用，
      * 否则关闭动作会把上一台设备的快照改成 false —— 切回去时用户看到状态丢失
-     * （2026-11-14 实测：`device_last_speaker.virtual_bass_enabled` 被写成 0）。
+     * 。
      */
     private fun enforceVirtualBassOnHeadphone(key: String) {
         if (outputDeviceMonitor.isSpeakerOutput()) return
@@ -2986,7 +2984,7 @@ class MainViewModel @Inject constructor(
         if (!prefs.contains(devicePresetPrefix + key)) return
         val existing = prefs.getString(deviceLabelPrefix + key, null)
         // 内置扬声器展示名恒定；其余用本次**同一次发布**带来的 label（不再回读 flow，
-        // 否则可能读到上一个设备的名字——2026-11-08 09:30:19 的竞态）。
+        // 否则可能读到上一个设备的名字——竞态）。
         // 与 existing 不同即写：既做首次回填，也能纠正被写坏的历史值。
         val want = if (key == "speaker") "扬声器" else label
         if (want.isBlank() || want == key) return
@@ -2998,8 +2996,7 @@ class MainViewModel @Inject constructor(
 
     private suspend fun onOutputDeviceChanged(key: String, label: String) {
         backfillDeviceLabel(key, label)
-        // 耳机输出时虚拟低音**默认关闭**（2026-11-11 用户要求）。
-        //
+        // 耳机输出时虚拟低音**默认关闭**。
         // 放在首帧判断之前：启动时就插着耳机也要落这条规则 ——
         // 否则上次在外放上开着、这次插着耳机启动，会带着一个明显不适合
         // 耳机的效果器开工。
@@ -3189,11 +3186,11 @@ class MainViewModel @Inject constructor(
             for ((k, v) in ordered) applyParam(k, v)
         }
 
-        // ★ 2026-11-23 修「引擎空闲时切设备不生效」：旧实现无论引擎什么状态都先
+        // ★ 修「引擎空闲时切设备不生效」：旧实现无论引擎什么状态都先
         // waitEngineUsable（最长 8s），Idle/Stopped 时必然超时 → 直接 return 放弃，
         // 参数既不写 state 也不落盘（用户实测：重启后 Shevery 晚起、引擎 Idle 时
         // 切耳机，参数完全没变）。引擎没跑时 setter 写 ViewModel + prefs 是安全的，
-        // 建链成功后 applyEqSettings() 会全量下发 → 延迟生效，而不是丢弃。
+        // 建链成功后 applyEqSettings 会全量下发 → 延迟生效，而不是丢弃。
         val st0 = engineState.value
         if (st0 is EngineState.Idle || st0 is EngineState.Stopped || st0 is EngineState.Failed) {
             pushAll()
@@ -3272,7 +3269,7 @@ class MainViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "检测中…")
 
     init {
-        // 2026-11-23 双后端：切换/全灭 → 提示用户（全灭时必须弹窗，不能静默失效）
+        // 双后端：切换/全灭 → 提示用户（全灭时必须弹窗，不能静默失效）
         viewModelScope.launch {
             privileged.events.collect { ev ->
                 writeDiag("后端事件：${ev.from} → ${ev.to}（${ev.reason}）")
@@ -3297,7 +3294,7 @@ class MainViewModel @Inject constructor(
             PackageManager.PERMISSION_GRANTED
 
     /**
-     * 多频段每段计量快照（2026-11-08，供 UI 的 IN/GR/OUT 电平表）。
+     * 多频段每段计量快照。
      * `v` 长度 9：[band*3 + 0/1/2] = 入峰值(线性) / GR(dB) / 出峰值(线性)，band 0=低 1=中 2=高。
      * 用 List 而非 FloatArray 是为了让 StateFlow 的值比较按**内容**判定（数组是引用比较，
      * 每次都算“变了”会引发无意义重组）。
@@ -3322,7 +3319,7 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * 特权状态（结构化，2026-11-08）：设备卡「Stellar」胶囊据此显示三态
+     * 特权状态（结构化）：设备卡「Stellar」胶囊据此显示三态
      * —— 就绪 / 待授权（黄）/ 未安装（红呼吸，点击跳下载）。
      */
     val privilegeState: StateFlow<com.jiangjie.Sonicraft.privilege.PrivilegeState> = privileged.state
@@ -3386,7 +3383,7 @@ class MainViewModel @Inject constructor(
     private fun startCaptureInBackground(token: MediaProjection) {
         viewModelScope.launch(Dispatchers.Default) {
             lifecycleMutex.withLock {
-                // 双实例竞态防（2026-11-03 三会话泄漏事故）：免弹窗 autoStart 与弹窗
+                // 双实例竞态防：免弹窗 autoStart 与弹窗
                 // launchProjection 两个入口的 isRunning 检查都在 mutex 外，Idle 窗口内
                 // 可能双双通过——此处 mutex 内复查。否则第二块把 engine 重新 prepare 后
                 // startCapture 再放行，旧 CaptureRelaySource 引用被覆盖泄漏 = 双 read
@@ -3423,7 +3420,7 @@ class MainViewModel @Inject constructor(
                     writeDiag("启动失败: ${error.javaClass.simpleName} ${error.message}")
                     SonicraftLog.e(TAG, "内录启动失败", error)
                     // 静音先行（本块开头的 takeover.start）已可能挂上静音，启动失败
-                    // 必须回滚，否则酷狗等原声被永久静音（2026-11-03 僵尸投影事故伴生坑）
+                    // 必须回滚，否则酷狗等原声被永久静音
                     runCatching { takeover.stopAndRollback() }
                     runCatching { engine.stop() }
                     context.stopService(Intent(context, ForegroundDspService::class.java))
@@ -3485,7 +3482,7 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * （2026-11-03 审计）：停止回滚专用进程级 scope。原寄宿 viewModelScope——用户
+     * ：停止回滚专用进程级 scope。原寄宿 viewModelScope——用户
      * 点停止后立刻退出 app，onCleared 取消 scope，回滚若尚未越过挂起点即被取消 =
      * appops ignore 永久残留（ mipop 类事故的同族）。本 scope 无父，回滚动作活过
      * UI 销毁，进程死亡才终止。
@@ -3507,11 +3504,11 @@ class MainViewModel @Inject constructor(
         takeover.stopAndRollback()
         rollbackTakeover()
         engine.stop(StopReason.USER_REQUESTED)
-        // ★ 2026-11-08 修「保活期间停止后再点电源键启动不了音效」主因：
-        // ① probe.stop() 撤掉 shell 侧 AudioPolicy/mix——否则播放器仍被重路由进一个
+        // ★ 修「保活期间停止后再点电源键启动不了音效」主因：
+        // ① probe.stop 撤掉 shell 侧 AudioPolicy/mix——否则播放器仍被重路由进一个
         //    没人读的 submix（原声被搬走），比"没音效"更糟；
-        // ② detach() 把链路从进程级持有者摘掉——否则 LoopbackChainHolder.isAlive 恒为
-        //    true，下次 startLoopbackCapture() 走「复用既有链路」分支直接 return，
+        // ② detach 把链路从进程级持有者摘掉——否则 LoopbackChainHolder.isAlive 恒为
+        //    true，下次 startLoopbackCapture 走「复用既有链路」分支直接 return，
         //    引擎永远不会 prepare/start（现场：电源键点了没音效、也没有任何报错）；
         // ③ loopbackRerouted 必须复位——它残留 true 时整条链路不挂静音（双声隐患）。
         runCatching { loopbackProbe?.stop() }
@@ -3633,7 +3630,7 @@ class MainViewModel @Inject constructor(
         engine.setParam(AudioEngine.EQ_NODE_INDEX, AudioEngine.EQ_PARAM_PREGAIN_DB, clamped)
     }
 
-    // ---- AutoEq 独立校正（2026-11-14）----
+    // ---- AutoEq 独立校正----
     // 与 PEQ 完全独立：自带段数/增益/Q/频率/类型/预增益与开关，下发到 AUTO_EQ_NODE_INDEX。
     // 这样导入型号校正**不会覆盖**用户手调的 PEQ，两者可各自旁路。
     private val _autoEqEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTOEQ_ENABLED, false))
@@ -4159,7 +4156,7 @@ class MainViewModel @Inject constructor(
             // 这只应在引擎真死（error/CAPTURE_DEAD）时发生，故单独留证便于区分。
             writeDiag("自动启动重建: 链在手但引擎不在可用态（engineState=${engineState.value}）")
         }
-        // 模式选择（2026-11-05 定案）：默认 Loopback —— **首启即当作能力探测**。
+        // 模式选择：默认 Loopback —— **首启即当作能力探测**。
         // 建不起来/取不到音频时弹窗告知并可切平替（不做热回退）。
         // 只有用户确认过「切 Stellar+MP」之后才直接走 MP 链路。
         val mode = prefs.getString(KEY_AUDIO_MODE, MODE_LOOPBACK) ?: MODE_LOOPBACK
@@ -4184,7 +4181,7 @@ class MainViewModel @Inject constructor(
             }
             writeDiag("Stellar binder 已就绪，走免弹窗恢复")
         }
-        // （2026-11-03 审计）：tryCreateSilentProjection 内部是特权命令（H3 加固后
+        // ：tryCreateSilentProjection 内部是特权命令（H3 加固后
         // 上限 8s）——原在主线程同步执行，而夜间 STICKY 重生恰是 Stellar binder 最不
         // 稳定场景（FGS 5s 超时闪退事故同款模式漏网面）。移 IO：本函数是 suspend，
         // 调用方（LaunchedEffect）不受阻塞。
@@ -4203,7 +4200,7 @@ class MainViewModel @Inject constructor(
         // ① stopAndRollback 主线程执行特权命令（跨进程 binder 可卡数百 ms）卡住
         //    Compose 重组 → 点击丢失/重复 → next=!current 翻回 true：回滚移 IO 线程
         //    + 500ms 防抖；
-        // ② apply() 异步落盘，紧跟停内录/进程退出时丢写：改 commit 同步落盘。
+        // ② apply 异步落盘，紧跟停内录/进程退出时丢写：改 commit 同步落盘。
         val now = System.currentTimeMillis()
         if (now - lastToggleMs < 500) return
         lastToggleMs = now
@@ -4264,7 +4261,7 @@ class MainViewModel @Inject constructor(
         _takeoverError.value = null
     }
 
-    /** 清除禁抓名单（误判恢复入口，2026-11-04 网易云案）：清 prefs 后所有 app 重新走判定 */
+    /** 清除禁抓名单（误判恢复入口，网易云案）：清 prefs 后所有 app 重新走判定 */
     fun clearCaptureBlocklist() = takeover.clearCaptureBlocklist()
 
     // DP 静音判定实验（诊断用）：对指定 uid 的活跃 session 挂 -200dB，测是否连坐副本。
@@ -4275,7 +4272,7 @@ class MainViewModel @Inject constructor(
      *
      * **必须优先用引擎实时统计**（每 250ms 更新）：水位日志是 10s 落盘一次的，
      * 建链后 1.6s 复查时读到的仍是建链前的旧数据（恒为 0）→ 误判「无数据」→
-     * 触发自动重建第二条链，白花 ~6s（2026-11-06 实测：两条链都是这么被误触发的）。
+     * 触发自动重建第二条链，白花 ~6s。
      * 文件读取仅作为引擎未运行时的兜底。
      */
     private fun lastInputLevel(): Float {
@@ -4301,7 +4298,7 @@ class MainViewModel @Inject constructor(
         return sb.toString().trim()
     }
 
-    // ---- Loopback 探针（2026-11-04 P0）：验证 AudioPolicy/AudioMix(LOOP_BACK) 路线
+    // ---- Loopback 探针：验证 AudioPolicy/AudioMix(LOOP_BACK) 路线
     // 能否抓到 BY_SYSTEM + FLAG_NO_MEDIA_PROJECTION 的流（酷狗）。app 进程零改动，
     // 只在 UserService 侧跑反射链并回传 RMS 电平。详见 docs/LOOPBACK_POLICY_PLAN.md ----
     private val _loopbackProbeState = MutableStateFlow<String?>(null)
@@ -4400,7 +4397,7 @@ class MainViewModel @Inject constructor(
     @Volatile
     private var mpFallbackInProgress = false
 
-    // ===== 首次探测 → 不支持则告知并可切换平替模式（2026-11-05 定案）=====
+    // ===== 首次探测 → 不支持则告知并可切换平替模式=====
     // 不做运行期热回退（会打断播放、且需要重启链路）。策略：
     //   1) 用户安装后首次启动即尝试 Loopback（这本身就是探测）
     //   2) 建链失败 / 建链成功但取不到音频 → 记录失败 + 弹窗告知原因
@@ -4425,7 +4422,7 @@ class MainViewModel @Inject constructor(
     val chainStarting: StateFlow<Boolean> = _chainStarting.asStateFlow()
 
     /**
-     * 启动阶段文案（，2026-11-06）：把原来一个 15 秒的「Waiting」黑箱拆成
+     * 启动阶段文案：把原来一个 15 秒的「Waiting」黑箱拆成
      * 「建链中 → 校验路由 → 收数据」，让用户知道现在卡在哪一步。
      */
     private val _chainStage = MutableStateFlow<String?>(null)
@@ -4442,7 +4439,7 @@ class MainViewModel @Inject constructor(
     val audioMode: StateFlow<String> = _audioMode.asStateFlow()
 
     /**
-     * 输出缓冲（毫秒，用户可调，2026-11-06）。
+     * 输出缓冲（毫秒，用户可调）。
      * 越小延迟越低但越容易在尖峰时欠载（爆音）；越大越稳。范围 4~24ms。
      */
     private val _bufferMs = MutableStateFlow(DEFAULT_BUFFER_MS)
@@ -4477,7 +4474,7 @@ class MainViewModel @Inject constructor(
             writeDiag("音频链路模式未变（仍为 $m）")
             return
         }
-        // **即刻生效（2026-11-06 用户要求）**：引擎在跑就按新模式重建链路。
+        // **即刻生效**：引擎在跑就按新模式重建链路。
         // 此时会有一段 1~3s 的静音（要拆旧链、建新链），期间电源键闪烁 + 胶囊 Loading。
         if (isRunning) {
             writeDiag("用户切换音频链路模式 → $m（引擎在跑，立即重启链路）")
@@ -4529,7 +4526,7 @@ class MainViewModel @Inject constructor(
         writeDiag("编排回退 → Stellar+MP（原因：$reason）")
         mpFallbackInProgress = true
         viewModelScope.launch {
-            // **不要 engine.stop()**：引擎会被随后的 startCapture
+            // **不要 engine.stop**：引擎会被随后的 startCapture
             // 复用（prepare + startCapture），先 stop 会造成「引擎已停、capture 已开读」
             // 的错位 —— 表现正是 ok=true 但 inputLevel=0（有声无音效）。
             // 这里只撤 loopback 侧的 policy/录音与静音，让 MP 链路接管同一条引擎。
@@ -4551,12 +4548,12 @@ class MainViewModel @Inject constructor(
         // Activity 被系统销毁后重新点图标 → ViewModel 重建、旧字段归零，
         // 但链路其实还活着（Binder 在 shell 服务、引擎是进程级单例）。
         // 旧逻辑会全量重建：engine.stop + 撤静音 + 重新注册 policy → 电源键闪、声音断。
-        // ★ 2026-11-08 修「停止后再启动无音效」：
+        // ★ 修「停止后再启动无音效」：
         // 原实现只看 holder 两字段非空就 return，但 holder 不反映引擎死没死。用户停止后
         // 链路未 detach（上游已修），或引擎因 error/CAPTURE_DEAD 自行停止时，这里会误判
         // 「已在运行」直接 return → 引擎永远不 prepare/start，且不报错。
         // 判据改为「链在手 且 引擎处于 Running/Preparing」才算可复用——保留 Preparing 是
-        // 因为建链瞬间 engineState 可能比 holder 滞后几十毫秒（2026-11-07 的教训）。
+        // 因为建链瞬间 engineState 可能比 holder 滞后几十毫秒。
         // 注意 Ready 不算可用：那只代表 DSP 图已建但尚未 start，复用它同样没声音。
         val st = engineState.value
         val engineUsable = st is EngineState.Running || st is EngineState.Preparing
@@ -4598,14 +4595,14 @@ class MainViewModel @Inject constructor(
             }
         }
         // 手动触发时**总是**尝试（用户点了就该试）；TTL 只用于提示当前处于已知失败期，
-        // 自动启动路径会用 loopbackFailedRecently() 直接走 MP，避免每次白等 3s。
+        // 自动启动路径会用 loopbackFailedRecently 直接走 MP，避免每次白等 3s。
         if (loopbackFailedRecently()) {
             writeDiag("Loopback 处于失败标记期（24h 内），本次仍按手动触发尝试")
         }
         // 与前台服务的 headless 恢复互斥：建链期间不许另一路再绑（否则 code=-2 令牌冲突）
         loopbackChain.building = true
         _loopbackProbeState.value = "绑定 UserService…"
-        // 2026-11-23 双后端：绑定走 PrivilegeBroker（Stellar 优先，Shizuku 兜底）
+        // 双后端：绑定走 PrivilegeBroker（Stellar 优先，Shizuku 兜底）
         privileged.bindLoopbackProbe(
             processSuffix = PrivilegedClient.PROBE_SUFFIX,
             version = PrivilegedClient.PROBE_VERSION,
@@ -4645,7 +4642,7 @@ class MainViewModel @Inject constructor(
                             runCatching { engine.stop(StopReason.USER_REQUESTED) }
                             takeover.stopAndRollback()
                             delay(600)
-                            // 撤销 E1（2026-11-16 全无声事故复盘）：
+                            // 撤销 E1：
                             // 「先静音、后建链」在重路由失败（rerouted=false）时，
                             // 副本恒为 0 而原声已被压掉 —— 用户听到彻底无声；
                             // 而下方安全网只在"有活跃音源"时才撤销静音，没音源就永久静音。
@@ -4684,7 +4681,7 @@ class MainViewModel @Inject constructor(
                                 KeepAliveJobService.schedule(context)
                                 // 关键：把用户当前 EQ/混响/宽度等参数下发到引擎。
                                 // 漏掉这步会让 DSP 跑默认平直参数 —— 输出等于原声，
-                                // 听起来就是「只有原声、没有音效」（2026-11-04 P1 实测）。
+                                // 听起来就是「只有原声、没有音效」。
                                 applyEqSettings()
                                 // REROUTE 实验：我方 RENDER mix 注册后，已存在的
                                 // track 不会被重路由（酷狗 deviceIds 仍指主输出、mix output
@@ -4694,7 +4691,7 @@ class MainViewModel @Inject constructor(
                                     val r = probe.nudgeRouting()
                                     writeDiag("重路由触发: $r")
                                 }.onFailure { writeDiag("重路由触发异常: ${it.javaClass.simpleName}") }
-                                // ★ 立刻做重路由校验（2026-11-05 时序修正）：原先这步排在
+                                // ★ 立刻做重路由校验：原先这步排在
                                 // 「电平轮询 12×700ms」之后，导致冷启动最多白等 8.4s 才有音效。
                                 // 冷启动时播放器的 track 早于我方 mix 就绪，必须靠 pause/play
                                 // 重建才能被搬进 submix —— 放在最前面，音效 1~2s 内就能出来。
@@ -4755,12 +4752,12 @@ class MainViewModel @Inject constructor(
                                 }
                                 // 无条件兜底：只要副本没数据就撤销静音。
                                 // 原先要求"有活跃音源"才撤销，没音源时静音会永久挂着
-                                // —— 这是 2026-11-16 全无声事故的第二个成因。
+                                // —— 这是全无声事故的第二个成因。
                                 if (lvlAfterStart < 0.01f && lastInputLevel() < 0.01f) {
-                                    // **先取快照**：下面的 releaseLoopbackMutesNow() 会把
+                                    // **先取快照**：下面的 releaseLoopbackMutesNow 会把
                                     // loopbackRerouted 重置为 false（那是给"引擎停止"用的），
                                     // 若在那之后判断，就永远走不到"跳过重建"分支 ——
-                                    // 这正是"划掉 App 重开要起两轮"的真因（2026-11-06 实测：
+                                    // 这正是"划掉 App 重开要起两轮"的真因（实测：
                                     // 校验已 ok 重路由，却仍然重建第二条链）。
                                     val wasRerouted = takeover.loopbackRerouted
                                     takeover.releaseLoopbackMutesNow()
@@ -4772,7 +4769,7 @@ class MainViewModel @Inject constructor(
                                     // （record 绑上了但 mix 没收到流）。自动重建一次链路，
                                     // 60s 内只重试一次，避免死循环；仍失败则保持原声直出。
                                     val nowMs = System.currentTimeMillis()
-                                    // **重路由已成立时不要重建**（2026-11-06 用户实测：
+                                    // **重路由已成立时不要重建**（实测：
                                     // 自动加载后已有音效，几百毫秒后却又停一次再建一次，
                                     // 电源键闪灰 —— 就是这里误判“无数据”触发的重建）。
                                     if (wasRerouted || takeover.loopbackRerouted) {
@@ -4811,7 +4808,7 @@ class MainViewModel @Inject constructor(
                                     )
                                     clearLoopbackFailure()
                                     // 数据确实到了 → 撤掉可能已弹出的「不支持 Loopback」提示
-                                    // （冷启动时数据晚到会先误判，2026-11-05 实测）
+                                    // （冷启动时数据晚到会先误判，实测）
                                     _loopbackUnsupported.value = null
                                 }
                                 // 重路由校验已在建链后立即执行（见上方），此处不重复，
@@ -4896,7 +4893,7 @@ class MainViewModel @Inject constructor(
                     val info = runCatching {
                         val uid = probe.serviceUid
                         // 传本 app uid 供 mix 排除——否则自家 AAudio 输出会被 LOOP_BACK
-                        // 进 mix，record 失败即形成黑洞卡死（2026-11-04 事故）
+                        // 进 mix，record 失败即形成黑洞卡死
                         val st = probe.start(48_000, android.os.Process.myUid())
                         "uid=$uid $st"
                     }.getOrElse { "调用失败: ${it.javaClass.simpleName}: ${it.message}" }
@@ -4938,8 +4935,8 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * 全机第三方 APP 投影 Capture 策略扫描（2026-11-04 诊断页数据源）。
-     * 公开 AudioManager.getAllowedCapturePolicy() 只能读自身；per-uid policy 藏在
+     * 全机第三方 APP 投影 Capture 策略扫描。
+     * 公开 AudioManager.getAllowedCapturePolicy 只能读自身；per-uid policy 藏在
      * AudioService（dumpsys audio「allowed capture policies」段，只列非默认者，
      * 缺省=BY_ALL 可抓）——走 Stellar 特权通道跑 dumpsys。酷狗实锤 BY_SYSTEM
      * （内录恒零=只能自动直出名单）。返回 (包名, uid, policy) 按 包名排序，
@@ -4963,7 +4960,7 @@ class MainViewModel @Inject constructor(
             .findAll(dump.stdout)
             .associate { it.groupValues[1].toInt() to it.groupValues[2].toInt() }
 
-        // 包→uid 映射：优先 shell 侧 `pm list packages -U`。2026-11-04 实锤：本机 ZTE
+        // 包→uid 映射：优先 shell 侧 `pm list packages -U`。实锤：本机 ZTE
         // ROM 上 App 侧 getInstalledPackages(0) 即使 QUERY_ALL_PACKAGES granted=true 仍
         // 返回 0（诊断页首版「点扫描出 0」根因），shell 身份直查 PMS 不受 Android 11+
         // 包可见性影响，447 包全量（adb 实测格式 package:xxx uid:10xxx）。
@@ -5020,7 +5017,7 @@ class MainViewModel @Inject constructor(
 
     private fun runAppops(pkg: String, mode: String): Boolean {
         val result = privileged.runCommand("cmd", "appops", "set", pkg, "PLAY_AUDIO", mode)
-        // （2026-11-03 审计）：手动轨原本只看 exitCode——exitCode 0 但 ROM 未生效的
+        // ：手动轨原本只看 exitCode——exitCode 0 但 ROM 未生效的
         // 假成功无检测（自动轨有 verifyIgnored 回读，手动轨却裸奔），且本机 logcat 恒空
         // = 零取证。补回读验证（与自动轨同款）+ 失败落 diag。
         val setOk = result.exitCode == 0
@@ -5174,7 +5171,7 @@ class MainViewModel @Inject constructor(
         engine.setBypass(AudioEngine.LIMITER_NODE_INDEX, !enabled)
     }
 
-    /** 自定义脚本效果器开关（2026-11-12 原型）：bypass = !enabled。 */
+    /** 自定义脚本效果器开关：bypass = !enabled。 */
     /** 把某槽位的 40 个参数从 prefs 重新灌入 native。
      *  用途：开关打开 / 引擎重建后兜底，避免 native 侧 params_ 仍是初值 0
      *  （gain 类脚本 slider=0 会把信号乘成 0 → "总闸一开就静音"）。 */
@@ -5588,7 +5585,6 @@ class MainViewModel @Inject constructor(
         val err = if (source.isBlank()) "" else engine.checkScript(source)
         if (err.isNotBlank()) {
             // 只在运行时旁路，**不写 prefs**：否则脚本修好后槽位永远停在关闭状态
-            // （2026-11-14：设备上 lane0 被历史失败写成 false，用户表现为"总闸开着却没效果"）
             engine.setScriptLaneEnabled(lane, false)
             if (lane == _scriptLane.value) _scriptLaneOn.value = false
         } else {
@@ -5726,7 +5722,7 @@ class MainViewModel @Inject constructor(
         engine.setParam(AudioEngine.COMPRESSOR_NODE_INDEX, AudioEngine.COMPRESSOR_PARAM_RATIO, clamped)
     }
 
-    /** 起音（ms）：实时下发（2026-11-09 暴露到 UI） */
+    /** 起音（ms）：实时下发 */
     fun setCompressorAttack(ms: Float) {
         val clamped = ms.coerceIn(0.1f, 100f)
         _compressorAttack.value = clamped
@@ -5758,7 +5754,7 @@ class MainViewModel @Inject constructor(
         engine.setParam(AudioEngine.COMPRESSOR_NODE_INDEX, AudioEngine.COMPRESSOR_PARAM_MAKEUP_DB, clamped)
     }
 
-    // ---- 2026-11-11 四项新参数 ----
+    // ---- 四项新参数 ----
 
     /** 并联混合（0 = 全干、1 = 全湿）：实时下发 */
     fun setCompressorMix(v: Float) {
@@ -5795,7 +5791,7 @@ class MainViewModel @Inject constructor(
     /**
      * 侧链高通（Hz，0 = 关闭）。
      *
-     * **这个写入端此前完全缺失**（2026-11-11 补）：只有重放在读 key、没有 setter 写，
+     * **这个写入端此前完全缺失**：只有重放在读 key、没有 setter 写，
      * 导致参数恒为默认 120、用户无法关闭或调整。
      */
     fun setCompressorSidechainHp(hz: Float) {
@@ -5811,7 +5807,7 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * 压限器**总闸**（2026-11-11，音效库卡片那个开关）。
+     * 压限器**总闸**。
      *
      * 关 = 多段与单段**同时旁通**，但两张卡的开关记忆不动 —— 这就是用户要的
      * 「关闭表示旁通，再开启时各自回到原来的状态」。
@@ -5947,7 +5943,7 @@ class MainViewModel @Inject constructor(
 
     /** 引擎进入 Running 后把持久化的 EQ/压缩器/限幅器设置补给引擎（引擎未启动时 setParam 无效） */
     private fun applyEqSettings() {
-        // 输出缓冲（用户可调，2026-11-06）：每次建链后按偏好重新应用一次
+        // 输出缓冲（用户可调）：每次建链后按偏好重新应用一次
         // （引擎重建流时缓冲会回到默认，必须补发）
         runCatching {
             val ms = prefs.getInt(KEY_BUFFER_MS, DEFAULT_BUFFER_MS).coerceIn(4, 24)
@@ -5998,7 +5994,7 @@ class MainViewModel @Inject constructor(
             _compressorRatio.value,
         )
         engine.setBypass(AudioEngine.LIMITER_NODE_INDEX, !_limiterEnabled.value)
-        // 自定义脚本效果器（2026-11-12 原型）：重建后先恢复用户脚本（新节点默认旁路，
+        // 自定义脚本效果器：重建后先恢复用户脚本（新节点默认旁路，
         // 可即时重载），再按开关设置旁路。
         if (_scriptSource.value.isNotEmpty()) {
             engine.setScriptSource(_scriptSource.value, _scriptLane.value)
@@ -6233,15 +6229,13 @@ class MainViewModel @Inject constructor(
         // 两个混响独立恢复各自旁路（可同时开启）
         engine.setBypass(AudioEngine.CONVOLVER_NODE_INDEX, !_reverbEnabled.value)
         engine.setBypass(AudioEngine.ALGORITHMIC_REVERB_NODE_INDEX, !_fdnEnabled.value)
-        // **低频管家三槽（2026-11-11 P1 修复）**：此前漏了这一步。
-        //
-        // `engine.prepare()` 会把所有节点重置为 bypass=true；前台建链成功后
+        // **低频管家三槽**：此前漏了这一步。
+        // `engine.prepare` 会把所有节点重置为 bypass=true；前台建链成功后
         // （电源键启停 / MediaProjection / Loopback 三条路径）只调本函数补发参数。
         // 本函数覆盖了 EQ/Multiband/Compressor/Limiter/Gain/Width/两种混响共 10 个节点，
         // 唯独低频管家的 3 个新节点没写 —— 于是「总闸开着、槽开关也开着，
         // 但引擎里三个节点全是旁路」，手动拨一下开关才触发本函数恢复。
-        // headless restore 走 AudioChainManager.replaySettings()（表驱动）所以那条正常。
-        //
+        // headless restore 走 AudioChainManager.replaySettings（表驱动）所以那条正常。
         // 走统一入口而不是在这里再写一遍三行 setBypass，避免又一处状态副本。
         applyLowfreqBypass()
     }
@@ -6351,7 +6345,7 @@ class MainViewModel @Inject constructor(
     private const val AUTOEQ_TYPES_PREFIX = "auto_eq_types_"
         const val KEY_LIMITER_ENABLED = "limiter_enabled"
         const val KEY_LIMITER_CEILING = "limiter_ceiling"
-        /** 界面缩放（2026-11-09，从 wecho 定制版移植）：主倍率与微调分开存 */
+        /** 界面缩放：主倍率与微调分开存 */
     const val KEY_UI_SCALE = "ui_scale"
     const val KEY_UI_FINE_SCALE = "ui_fine_scale"
 
@@ -6362,7 +6356,7 @@ class MainViewModel @Inject constructor(
         const val KEY_COMPRESSOR_RELEASE = "compressor_release_ms"
         const val KEY_COMPRESSOR_KNEE = "compressor_knee_db"
         const val KEY_COMPRESSOR_MAKEUP = "compressor_makeup_db"
-    /** 并联混合（2026-11-11，0~1，1 = 全湿） */
+    /** 并联混合 */
     const val KEY_COMPRESSOR_MIX = "compressor_mix"
     /** 检测模式（0 = peak / 1 = RMS） */
     const val KEY_COMPRESSOR_DETECT = "compressor_detect_mode"
@@ -6371,7 +6365,7 @@ class MainViewModel @Inject constructor(
     /** 过采样（1 = 关闭 / 2 = 2x） */
     const val KEY_COMPRESSOR_OVERSAMPLE = "compressor_oversample"
     /**
-     * 侧链高通（Hz，0 = 关闭）。2026-11-11 补上写入端。
+     * 侧链高通（Hz，0 = 关闭）。补上写入端。
      *
      * 此前只有 `AudioChainManager` 的**重放**读这个 key、全项目没有写入方，
      * 于是永远读到默认 120 —— 功能实际生效但**完全不可配置**，是「参数散在三处」的
@@ -6497,7 +6491,7 @@ class MainViewModel @Inject constructor(
     const val KEY_BASS_ENHANCE_CLASSIC_CENTER = "bass_enhance_classic_center"
 
     /**
-     * **已废弃**（2026-11-11 用户要求「耳机下每次开启都要弹窗」）。
+     * **已废弃**。
      *
      * 原设计是「确认一次后不再提醒」，但对照
      * `wecho_projectV2.5.1_studio_rack` 的实现后发现理解错了：

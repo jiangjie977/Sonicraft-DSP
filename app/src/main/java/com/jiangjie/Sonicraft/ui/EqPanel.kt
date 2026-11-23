@@ -93,7 +93,7 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     var showSaveDialog by remember { mutableStateOf(false) }
     var presetName by remember { mutableStateOf("") }
     // AutoEq 耳机修正（粘贴 ParametricEQ.txt 一键应用）
-    // 成功提示用品牌色、失败用红：此前所有提示都是红色，成功也像报错（2026-11-14 修）
+    // 成功提示用品牌色、失败用红：此前所有提示都是红色，成功也像报错
     // 文件导入来源名：非空时应用成功后自动存为该名字的预设（粘贴导入为 null，不污染预设库）
     var draggingBand by remember { mutableStateOf(-1) }
     var selectedBand by remember { mutableStateOf(0) }
@@ -809,7 +809,7 @@ private fun EqResponseChart(
 
 
 /**
- * 参量均衡的「实际频响曲线」卡片（2026-11-14）。
+ * 参量均衡的「实际频响曲线」卡片。
  *
  * 单独成卡、放在 EQ 面板卡**外面**（由 `ScEqDetailContent` 同级渲染）——
  * 放进面板里会形成"卡中卡"，阴影叠加、层级含混。

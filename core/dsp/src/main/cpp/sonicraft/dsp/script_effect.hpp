@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 自定义脚本效果器节点（2026-11-12，见 docs/SCRIPT_EFFECT_DESIGN.md）。
+ * 自定义脚本效果器节点。
  *
  * 后端 = 自研「类 C 栈式虚拟机」SCVM（cvm.hpp）：零外部依赖、逐样本执行、
  * 无 GC、执行期零堆分配。对齐 JamesDSP/EEL2 的实时特性，但语言是类 C 子集。
@@ -24,7 +24,7 @@
 
 namespace sonicraft::dsp {
 
-/** 脚本元素器 VM 抽象。Load() 非实时；Process() 实时线程。 */
+/** 脚本元素器 VM 抽象。Load 非实时；Process 实时线程。 */
 class ScriptVm {
  public:
   virtual ~ScriptVm() = default;
@@ -128,7 +128,7 @@ inline std::string BuildControlsJson(const cvm::Program& prog) {
 
 /**
  * 单条脚本 lane（原 ScriptEffectNode 的全部实现）。
- * bypass=true（默认）或 VM 未就绪时 Process() 原地返回（透传）；否则把整块交给 VM。
+ * bypass=true（默认）或 VM 未就绪时 Process 原地返回（透传）；否则把整块交给 VM。
  *
  * 注意：对外仍由下方 `ScriptEffectNode` 包装成多 lane，外部代码只认 ScriptEffectNode。
  */
@@ -335,7 +335,7 @@ class ScriptEffectLane : public DspNode {
   // 排版规范：4 空格缩进、函数之间空一行、函数首行写用途注释。spl0/spl1 为当前样本。
   // 注意：app 侧 ScriptDefaults.DEFAULT_SCRIPT 与本段文本保持一致。
   static constexpr const char* kDefaultScript = R"SCVM(// 内置示例：软削波 + 可调驱动
-// 语法：void init() 加载时执行一次；void sample() 每个样本执行一次
+// 语法：void init 加载时执行一次；void sample 每个样本执行一次
 // 参数声明：// sliderN: min, max（N 从 1 开始，最多 8 个）
 // slider1: 0.0, 8.0
 void init() {
@@ -823,7 +823,7 @@ class CvmScriptVm : public ScriptVm {
 
   void Process(float* const* channels, int frames) override {
     if (!ok_) return;
-    // block() 段：每块执行一次，可读写整块（为卷积/FFT 提供块级入口）
+    // block 段：每块执行一次，可读写整块（为卷积/FFT 提供块级入口）
     if (prog_.block_offset >= 0) {
       vm_.SetBlock(frames, channels[0], channels_ >= 2 ? channels[1] : nullptr);
       vm_.RunBlock();

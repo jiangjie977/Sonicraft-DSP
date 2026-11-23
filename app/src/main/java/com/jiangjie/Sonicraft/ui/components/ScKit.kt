@@ -391,7 +391,7 @@ fun ScEffectCard(
                 modifier = Modifier.padding(end = 10.dp),
             )
             // 窄屏两卡并排时（360dp 级），不设 weight 会被右侧开关挤成竖排；
-            // 且标题/副标题都不允许折行（2026-11-07 响应式批次 2）
+            // 且标题/副标题都不允许折行
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -488,7 +488,7 @@ enum class ScEffectIconKind { WAVE, EQ, BURST, PULSE, RINGS, BASS, LIMITER }
 @Composable
 fun ScPowerIcon(tint: Color, modifier: Modifier = Modifier, brush: Brush? = null) {
     Canvas(modifier = modifier.size(20.dp)) {
-        // 加粗（2026-11-06 用户要求）：1.7dp → 2.6dp
+        // 加粗：1.7dp → 2.6dp
         val stroke = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round)
         val cx = size.width / 2f
         val cy = size.height / 2f

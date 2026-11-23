@@ -13,7 +13,7 @@
 namespace sonicraft::dsp {
 
 /**
- * IR 病态检测（2026-10-26，双声实证驱动；仅限非实时线程调用）。
+ * IR 病态检测。
  *
  * 背景：用户加载 HIFI最终版2.irs 后全链五款软件（wecho/ViPERDSP/RV4A/RDSP/
  * 本项目）复听均现「干声 + 迟到湿声」双声——根因是该 IR 形态病态：0~160ms
@@ -27,13 +27,13 @@ namespace sonicraft::dsp {
  *  - 主脉冲 = 2ms RMS 包络 argmax（引擎域，重采样后、尾部裁剪后的实际内容）
  *  - 前置静音 = 主脉冲前首个「2ms 窗联合 RMS > 峰值 -60dB」的窗起点
  *    （段级能量门要压过 -76dB 级的抬升段：RV4A/RDSP 的 -80dB 首尾裁剪只砍掉
- *    41ms 深静音、双声仍剩 120ms 的教训；且 2026-10-27 SRS_2_2 实证：深静音
+ *    41ms 深静音、双声仍剩 120ms 的教训；且 SRS_2_2 实证：深静音
  *    残留段里的孤立毛刺样本会顶穿逐样本瞬时门，把 186ms 的主体迟到误判成
  *    1.1ms 前置而不裁——窗 RMS 把单样本摊薄 ~10·log10(win) dB，见
  *    HeadSilenceFrames 注释）
  *  - 双声风险：前置静音 >100ms 严重 / >30ms 可闻 / 其余正常（Haas 区）
  *  - 前置噪声 pre_noise_db：pre 段峰值相对全局峰。≤-96dB（16bit 底噪下）
- *    判「干净数字零」（设计型预延迟/延迟混响形态；2026-10-27 起不再豁免
+ *    判「干净数字零」（设计型预延迟/延迟混响形态；不再豁免
  *    裁剪——病态一律校正）；-96~-60dB 判「导出残留」——脏前置会被卷积
  *    垫进湿声背景（HIFI最终版2 的 -84~-78dB 抬升段即此形态）
  *  - 频谱 = Welch 平均周期图（1024 点 Hann 50% 重叠，段去均值抑制直流），
@@ -63,7 +63,7 @@ struct IrInspectReport {
  * 轻量前置静音检测（装载路径的自动对齐裁剪判定，O(n)，不跑频谱）。
  * 返回首个「2ms 窗联合 RMS > 峰值 -60dB」的窗起点；窗长 = rate/500 与主脉冲
  * 包络同窗，联合口径一致（amp = sqrt(L²+R²)，R 缺失视为 0）。
- * 段级（窗 RMS）而非逐样本（瞬时幅度）判定，2026-10-27 SRS_2_2 实证教训：
+ * 段级（窗 RMS）而非逐样本（瞬时幅度）判定，SRS_2_2 实证教训：
  * 深静音残留段（RMS -64.7dB）中的孤立毛刺样本（瞬时 -59dB）会顶穿逐样本
  * 瞬时门，把 186ms 的湿声主体迟到误判成 1.1ms 前置 → 不裁 → 真机干湿分离。
  * 窗 RMS 把单样本毛刺摊薄 ~10·log10(win) dB（96 样本窗 ≈ -20dB），只有
@@ -120,7 +120,7 @@ inline int HeadSilenceFrames(const std::vector<float>* diag_l,
 }
 
 /**
- * 波峰因数（湿声电平自动校准口径，批次 2，2026-10-27，O(n)）：
+ * 波峰因数（湿声电平自动校准口径，批次 2，O(n)）：
  * 返回 E_total / peak²（对角路径联合 amp = sqrt(L²+R²)，与 HeadSilenceFrames
  * 同口径；L=R 时退化为 Σx²/max(x²)）。脉冲型 IR（HRTF/舞台，单 tap 主导）
  * →≈1；扩散长尾 → 大（数量级 10~10³）；实测房间 RIR 居中。
@@ -174,7 +174,7 @@ inline void InspectIr(const WavData& wav,
   // ---- 引擎域：主脉冲 / 前置静音 / 左右对称性 ----
   // diag_l/diag_r = 对角路径（LL/RR；1ch 时 R 为 nullptr）。联合口径与
   // 取证原型一致：幅度 = sqrt(L²+R²)，包络 = 2ms 中心窗 RMS。
-  // 前置静音/pre_noise 直接调 HeadSilenceFrames（2026-10-27 口径单一化：
+  // 前置静音/pre_noise 直接调 HeadSilenceFrames（口径单一化：
   // 2ms 窗 RMS 段级判定，与裁剪路径同实现，报告卡与实际裁剪量永不漂移）。
   const int win = eng_rate / 500 > 1 ? eng_rate / 500 : 1;  // 2ms
   auto env_argmax = [&win](const std::vector<float>& x) -> int {

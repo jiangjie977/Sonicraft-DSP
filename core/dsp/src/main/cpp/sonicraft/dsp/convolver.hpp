@@ -43,14 +43,14 @@ namespace sonicraft::dsp {
  * 批次节奏：g_in 攒到 (k+1)P-H 即可计算批次 k（u = x 延迟 H），块长 64~192 均
  * 自适应（P 与块长解耦）；block=128 时每 8 块触发一批（P=8H，与规格一致）。
  *
- * wrap 项（UPC 关键细节，2026-10-24 harness 7j/7e 双 FAIL 定位）：分区 t 的完整
+ * wrap 项（UPC 关键细节，harness 7j/7e 双 FAIL 定位）：分区 t 的完整
  * 贡献 y[m] += Σ_{i<P} h_t[i]·u[m-tP-i] 中 i>r 的项（m=kP+r）落在上一输入批次
  * 的尾部——它对应 IFFT(X_{k-t-1}·H_t) 的后 P 帧。因此每批 IFFT 的 2P 帧里：
  * 前 P 帧 = 本批主段、后 P 帧 = 下一批的提前贡献。主段必须加上 overlap（上一批
  * IFFT 后段）才是完整 y_t：z[kP+r] = overlap[r] + C[r]。漏掉 overlap 会丢所有
  * 分区的跨批次尾部贡献（湿声能量缺失 + 时间轴错位），7j 黄金参照立刻暴露。
  *
- * 交叉项乘加（阶段 B，2026-10-24）：分离乘从 2 组 H（对角）扩到 4 组——
+ * 交叉项乘加（阶段 B）：分离乘从 2 组 H（对角）扩到 4 组——
  *   acc_L = X_L·H_LL + X_R·H_RL；acc_R = X_L·H_LR + X_R·H_RR
  * 两个 acc 各自 Hermitian，仍打包复 IFFT 一次出 L/R（FFT 次数 2/批不变）。
  * 每 preset 记录路径数（preset_paths_）：内置 RIR/2ch 文件 = 对角 2 组乘快路径
@@ -73,7 +73,7 @@ class ConvolverNode : public DspNode {
   static constexpr int kParamDry = 2;  // 干声电平（0~1.2，乘 kDryGain[preset]）
   static constexpr int kParamLowCut = 3;  // 湿声低切 Hz（0=关，40~400）
 
-  // ---- 预设单一定义源（X-macro，2026-10-24）----
+  // ---- 预设单一定义源（X-macro）----
   // 新增内置混响预设 = 只在本列表加一行；枚举索引、RIR 指针表、预延迟/低通
   // trait、干声增益全部由宏展开自动同步。字段：
   //   name       枚举标识（生成 kPreset<name>）
@@ -81,8 +81,7 @@ class ConvolverNode : public DspNode {
   //   rir_l/rir_r 实测 RIR 数组（rir_sonic.hpp；nullptr = 非数据预设）
   //   pre_s      预延迟秒（空间特征辅助：首次反射更晚，物理正确）
   //   lp         一阶低通系数（大空间空气吸收更暗；1.0 = 原样）
-  //
-  // **教堂 lp 2026-11-09 由 0.62 放宽到 0.85**：换真实 RIR 后谱重心从 12000Hz 降到 5991Hz、
+  // **教堂 lp 由 0.62 放宽到 0.85**：换真实 RIR 后谱重心从 12000Hz 降到 5991Hz、
   // 高频本就自然衰减，再叠加 0.62（≈7.4kHz）会把 2k-6k 砍到干声的 0.58x、>6k 砍到 0.38x，
   // 实测偏闷。0.85 对应 ≈14.5kHz，接近不削。
   //   dry        干声增益
@@ -134,7 +133,7 @@ class ConvolverNode : public DspNode {
 #undef SONICRAFT_CONV_PRESET_DEF
   // IR 上限 7680 采样（160ms@48k）。后台双声排查结论：N=16384 全频域时后台
   // CPU 降频下单块峰值 3.8ms 逼近 4ms 回调周期 → AAudio xRun（双声）。阶段 A 分区
-  // 化后单块成本降 ~5×。2026-10-24 提升 7680→32768（~680ms）再→131072（2731ms，
+  // 化后单块成本降 ~5×。提升 7680→32768（~680ms）再→131072（2731ms，
   // B1 教堂完整长尾）：tail 分区 T 32→128（X_cache ~2MB、tail_spec ~50MB 全 preset
   // 4 路径，harness 实测教堂满载 per-block 仍在实时预算内）。内置混响预设 = 实测
   // RIR（rir_sonic.hpp 按源实际帧数，上限 131072 截断 + 归一）；此上限仅约束
@@ -200,7 +199,7 @@ class ConvolverNode : public DspNode {
     current_wet_ = 1.0f;
     target_dry_ = 1.0f;
     current_dry_ = 1.0f;
-    // 干声查表基准：随预设切换 30ms 斜坡（，2026-10-25）。首次切换直跳
+    // 干声查表基准：随预设切换 30ms 斜坡。首次切换直跳
     // （dry_base_live_ 尚 false，无历史可平滑，且黄金参照 7j/7o 从第 0 块比对
     // ——直跳保证初始切换路径与旧版逐位一致）；之后运行中切换才走斜坡。
     current_dry_base_ = kDryGain[current_preset_];
@@ -213,7 +212,7 @@ class ConvolverNode : public DspNode {
     }
 
     // 内置混响预设 = 实测 RIR（rir_sonic.hpp，源 wecho 定制版 rir_data，截 680ms +
-    // 每通道归一 Σir²=0.25，g=0.5/rms）。2026-10-24 重提取 160ms→680ms：160ms 截断抹平长尾
+    // 每通道归一 Σir²=0.25，g=0.5/rms）。重提取 160ms→680ms：160ms 截断抹平长尾
     // 是三预设听感趋同的主因（教堂 2.5s 源只剩前 6.4%），680ms 后衰减时长差异
     // 回归主导。slot 5（自定义 IR）不在此填充——由 LoadImpulseResponseFromFile
     // 运行时填充。参数全部来自 kPresetDefs（X-macro 单一定义源展开）。
@@ -240,15 +239,15 @@ class ConvolverNode : public DspNode {
             dst[i] = lp;
           }
         }
-        // P2（2026-10-27 自检）：右移 pre_delay 后有效内容延伸到
+        // P2：右移 pre_delay 后有效内容延伸到
         // rir_len+pre_delay-1，传 rir_len 会静默截掉末尾 pre_delay 个样本
         // 的低通衰减尾（教堂 35ms / 大房间 15ms / 客厅 5ms，听感无差但为
         // 无意截断）。上限 kMaxIrLen 兜底（pre_delay ≪ 2048 样本，不触发）。
         const int eff_len = (kRirLens[p] + def.pre_delay <= kMaxIrLen)
                                 ? kRirLens[p] + def.pre_delay
                                 : kMaxIrLen;
-        // 频率相关衰减（2026-11-08 为**白噪声型** IR 加的补偿）。
-        // **2026-11-09 起对教堂停用**：教堂 IR 已换成 JDSP 的真实测量数据
+        // 频率相关衰减。
+        // **对教堂停用**：教堂 IR 已换成 JDSP 的真实测量数据
         // （谱重心 6012Hz / <200Hz 9.7% / 高频本就自然衰减），再叠加这个补丁
         // 会把本该保留的高频砍成「闷罐」。其余三个预设仍是白噪声型，补丁保留。
         if (p != kPresetCathedral) {
@@ -344,7 +343,7 @@ class ConvolverNode : public DspNode {
 
     // 1.5) 补上一批后半（必须先于 2) 消费！真机块 2048 帧 = 2P，消费一步
     //      可穿越整个批次槽区——若后半拖到块尾（3) 段）补，消费会读到未
-    //      写出的陈旧环带（2026-10-24 回归：全预设啵啵，b70557a 初版把
+    //      写出的陈旧环带（回归：全预设啵啵，b70557a 初版把
     //      补半放在 3) 开头所致）。同块内先写后读 = 安全窗口关闭。
     if (batch_half_ != 0) ComputeBatchHalf(batch_k_, 1);
 
@@ -416,7 +415,7 @@ class ConvolverNode : public DspNode {
     // 重建引擎立刻恢复 → 判断是脏数据（xRun 丢块等扰动）进了分区卷积状态后，
     // NaN/denormal 永久驻留，导致湿声恒零、干声照常（用户感知为「混响没了」）。
     // 判据：预设非 Dry、湿增益已生效，但湿声 RMS 恒 ~0 **而干声仍有电平**。
-    // 处置：Reset() 清卷积状态（不清预设、不清干湿增益），让卷积器自愈。
+    // 处置：Reset 清卷积状态（不清预设、不清干湿增益），让卷积器自愈。
     // 只在连续 N 块满足时触发，正常静音段（干湿都 0）不会误触发。
     if (!bypass_ && current_wet_ > 0.005f && current_preset_ != kPresetDry) {
       const float dry_rms = (frames > 0)
@@ -571,7 +570,7 @@ class ConvolverNode : public DspNode {
       }
       ir_buf[q] = std::move(resampled);
     }
-    // 湿尾裁剪（，2026-10-25）：相对 4 路径全局峰值 -80dB 阈值，取最晚
+    // 湿尾裁剪：相对 4 路径全局峰值 -80dB 阈值，取最晚
     // 有效样本位置统一截断（保持矩阵时间对齐，非逐路径独立）。其后恒零
     // 分区被 SetIrSlot2x2 的 t_eff 排除 → 长零尾 IR 的批次负载直接下降。
     // -80dB 深于 16bit 底噪（-96dB）之下的可闻下限，误裁可闻内容概率可
@@ -609,7 +608,7 @@ class ConvolverNode : public DspNode {
         }
       }
     }
-    // 病态前置自动对齐（方案 A，2026-10-26；口径 2026-10-27 段级化；范围
+    // 病态前置自动对齐（方案 A；口径段级化；范围
     // 扩大全覆盖）：前置静音 >30ms（Haas 融合区外）→ 四路径统一
     // 裁掉公共静音前缀，湿声不再迟到，干湿对齐，双声消除；噪声底一并裁掉
     // （HIFI最终版2 -61dB / super sound人声 -62dB 实证）。设计型纯零预延迟
@@ -673,14 +672,14 @@ class ConvolverNode : public DspNode {
       InspectIr(wav, diag_l, diag_r, sample_rate_, &user_ir_report_);
       user_ir_report_.trimmed_ms = last_trim_ms_;  // 裁剪信息随报告出（UI 横幅）
     }
-    // 湿声电平自动校准建议（批次 2，2026-10-27）：稳态能量归一（下方 0.3）已
+    // 湿声电平自动校准建议（批次 2）：稳态能量归一（下方 0.3）已
     // 拉平不同 IR 的总湿声响度，剩余干湿感差异来自形态——脉冲型 IR（HRTF/舞台）
     // 能量集中少数 tap、与干声同相相干融合，湿声几乎听不出「混响」；扩散长尾
     // 掩蔽干声明显发糊。以波峰因数推建议值（经验形态归一，非精确定律；只算
     // 不改湿声路径）：
     //   crest = E_total / peak²（对角联合，裁后，CrestFactor；脉冲≈1、扩散大）
     //   suggested = 1 + log2(3 / max(crest,1)) / 4，clamp 0.6~1.5
-    // 锚 = 3.0 = 音乐 DSP 卷积核典型 crest（2026-10-27 真机脉冲库 PROBE 实测
+    // 锚 = 3.0 = 音乐 DSP 卷积核典型 crest（真机脉冲库 PROBE 实测
     // 6/6 落在 2.1~5.1：魔神定制HiFi 2.2 / SRS_2_2 2.8 / Archy kodi 5.1）→
     // 主力库建议 ≈0.8~1.2（贴近用户手动值 1.0）；纯 HRTF 脉冲（crest≈1）1.40；
     // 实测房间 RIR（crest 数百~数千）→ 底格收敛（长尾本就湿）。log2 域每 16 倍
@@ -706,7 +705,7 @@ class ConvolverNode : public DspNode {
     //   依旧成立。
     // 与内置 RIR（0.5）分离的原因：HRTF/舞台类 IR 是脉冲/早反射型——能量
     // 集中在开头少数样本且与干声同相叠加（非相干抵消不成立），能量归一
-    // 0.5 后湿峰值可叠加超 1 → SoftClip 持续弯曲 = 可闻失真（2026-10-23
+    // 0.5 后湿峰值可叠加超 1 → SoftClip 持续弯曲 = 可闻失真（
     // 用户加载奥菲斯 HRTF 实测爆音杂音多）。文件 IR 用湿尾 0.3 + 湿峰值
     // 上限 0.6（干声 0.75 由 kDryGain 显式混合），稳态 |H| ≈ 1.05 以内。
     {
@@ -810,7 +809,7 @@ class ConvolverNode : public DspNode {
     const float* irs[4] = {irLL, irLR, irRL, irRR};
     if (ir_len > kMaxIrLen) ir_len = kMaxIrLen;
     if (ir_len < 0) ir_len = 0;
-    // P1 并发门（2026-10-27 自检）：slot 5 运行中重装时（换 IR / 切 trim 开关 /
+    // P1 并发门：slot 5 运行中重装时（换 IR / 切 trim 开关 /
     // 恢复链路三入口），实时线程可能正挂在 USER 预设读 spec/head。先原子清零
     // t_eff 关闸（Accumulate 求和循环整体跳过 = 装载窗口内湿尾干净静音，替代
     // 原先的撕裂频谱垃圾声）；paths 先行写（关闸期读到的值不生效）；head/spec
@@ -864,7 +863,7 @@ class ConvolverNode : public DspNode {
    * half=0：ACC 清零 + Σ_t 前半分区分离乘（锁定预设号/批号/t_eff 存档）；
    * half=1：Σ_t 后半分区 + IFFT → 前 P 帧 = z 批次（实部 L / 虚部 R）→
    *         写 tail_out 槽 (k+1)P+m。
-   * 动机（2026-10-24 蓝牙啵啵取证）：教堂 t_eff=118 单批尖峰 0.612ms 集
+   * 动机：教堂 t_eff=118 单批尖峰 0.612ms 集
    * 中消耗，供给节拍毛刺在蓝牙 A2DP 栈内断流（app 侧探针不可见）——拆
    * 半后单块批次尖峰减半。两半必须同批号/同预设：切预设/换 IR 只能发生
    * 在批间（后半用前半存档的 batch_*，区间自洽；spec 内容在加载瞬间本
@@ -988,7 +987,7 @@ class ConvolverNode : public DspNode {
   /**
    * 输出软限幅兜底：|x|≤0.9 线性直通（零失真），超出部分 tanh 平滑弯曲压到 ±1。
    * 动机：干声 tap 与湿声瞬时叠加大动态处峰值可到 ~1.3-1.5，末级限幅器被
-   * 误关时输出硬削波破音（2026-10-23 用户实听）；此安全网保证混响节点单独开启
+   * 误关时输出硬削波破音；此安全网保证混响节点单独开启
    * 也不破音。连续无导数跳变，不产生削波毛刺。
    */
   static float SoftClip(float x) {
@@ -1005,7 +1004,7 @@ class ConvolverNode : public DspNode {
   }
 
   /**
-   * 频率相关衰减（2026-11-08，修「教堂预设啵啵吱吱噪音」）。
+   * 频率相关衰减。
    *
    * **病因（实测证据）**：内置四个预设的 IR 分频段 T30 几乎相等
    * （教堂 2.40 / 2.45 / 2.45s），谱重心恒在 12000Hz（≈ sr/4，白噪声理论值），
@@ -1037,7 +1036,6 @@ class ConvolverNode : public DspNode {
     const float tau_high = 0.35f * static_cast<float>(sr);
 
     // **级联互补**分频。
-    //
     // 曾经踩过的坑：直接对 v 做二阶低通再用 `v - lp2b` 当高通 —— lp2b 相位滞后
     // 约 90°，相减时低频并没有被抵消掉（反而在低频处产生凹陷），于是低频漏进
     // "高频段"被快速衰减，高频又漏进低频段不被衰减 → 音色被扭曲，听感比修复前更糟。
@@ -1157,7 +1155,7 @@ class ConvolverNode : public DspNode {
   // 归一 0.3 基准下稳态 ~1.05 以内）。
   // 干声增益 = X-macro 单一定义源展开（每预设一行，与索引/参数表强同步）。
   // 旧教训：手工并行表在 kPresetCount 扩到 6 时只写了 5 个初值，第 6 项被编译器
-  // 补 0.0 → 自定义预设纯湿声无干声 → 实听「发闷」（2026-10-23 用户报告）。
+  // 补 0.0 → 自定义预设纯湿声无干声 → 实听「发闷」。
   // 现表长由枚举 kPresetCount 锁定，加预设不可能再漏。
 #define SONICRAFT_CONV_PRESET_DRY(name, disp, rirL, rirR, preS, lp, dry) (dry),
   static constexpr float kDryGain[kPresetCount] = {
@@ -1206,7 +1204,7 @@ class ConvolverNode : public DspNode {
   // [preset][t][路径 4][N2]；对角 preset 只占 idx0/idx3，idx1/idx2 恒零
   std::vector<float> tail_spec_re_;
   std::vector<float> tail_spec_im_;
-  // 每 preset 活跃路径组数（2=对角快路径 / 4=完整交叉）。P1 并发门（2026-10-27
+  // 每 preset 活跃路径组数（2=对角快路径 / 4=完整交叉）。P1 并发门（
   // 自检）：slot 5 运行中重装时实时线程在挂载预设上读此表，改 atomic——写序
   // 在 SetIrSlot2x2 开闸（t_eff release 写回）之前，acquire 读到新 t_eff 时
   // paths 必已可见；读端 relaxed（顺序由 t_eff 的 acquire 保证）。

@@ -56,7 +56,7 @@ object ScColors {
 /** HL-1 内容卡面：白→浅灰 180° 极缓渐变。 */
 val ScCardBrush: Brush = Brush.verticalGradient(listOf(ScColors.CardTop, ScColors.CardBottom))
 
-/** 星云渐变（135° 对角，紫蓝→蓝，2026-11-01 真机实采校准），AI 层元素专用。 */
+/** 星云渐变（135° 对角，紫蓝→蓝，真机实采校准），AI 层元素专用。 */
 val ScStarBrush: Brush = Brush.linearGradient(
     listOf(ScColors.NebPurple, ScColors.NebCore, ScColors.NebBlue),
 )

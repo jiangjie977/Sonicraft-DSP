@@ -3,7 +3,7 @@ package com.jiangjie.Sonicraft.core
 import android.os.Build
 
 /**
- * 设备/系统真实信息（2026-11-02：页头副标题与音效库设备卡文案此前写死
+ * 设备/系统真实信息（页头副标题与音效库设备卡文案此前写死
  * 「星云 AIOS / Android 15」，AVD/其他设备上一眼假——改动态读取）。
  *
  * Android 对厂商 ROM 营销名（星云 AIOS/MyOS/HyperOS…）无标准读取 API。

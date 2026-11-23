@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * 音效引擎门面。
  *
- * 职责：编排 DSP 管线，维护单一状态流。实际信号路径（2026-11-02 架构澄清，随
+ * 职责：编排 DSP 管线，维护单一状态流。实际信号路径（架构澄清，随
  * AudioSource/AudioSink 死接口清理）：
  * Kotlin 采集层（CaptureRelaySource 内录推送回调）→ JNI pushInput → native 引擎
  * （DspGraph 与 AAudio 输出均在 native 侧）；投影 token 经 [startCapture] 传入。
@@ -24,8 +24,8 @@ interface AudioEngine {
     val currentMode: EngineMode?
 
     /**
-     * 输出流停摆警示（2026-11-03 全静音事故）：看门狗检测到 processCount 5s 不增长
-     * 且重建失败时挂非 null 描述，重建成功自动清空。2026-11-03 事故里看门狗每 5s
+     * 输出流停摆警示：看门狗检测到 processCount 5s 不增长
+     * 且重建失败时挂非 null 描述，重建成功自动清空。事故里看门狗每 5s
      * 静默重试全败 22 分钟零日志零感知——此处保证「流在死、在重建、在失败」对 UI 可见。
      */
     val outputStalled: StateFlow<String?>
@@ -71,7 +71,7 @@ interface AudioEngine {
     fun vsSelfTest(): String = ""
 
     /**
-     * 自定义脚本效果器（2026-11-12 原型）：下发类 C（SCVM）脚本源。非实时线程调用；
+     * 自定义脚本效果器：下发类 C（SCVM）脚本源。非实时线程调用；
      * 旁路状态下即时重载，否则下次引擎重建生效。默认空实现。
      */
     fun setScriptSource(source: String, instance: Int = 0) {}
@@ -116,7 +116,7 @@ interface AudioEngine {
     fun scriptError(instance: Int = 0): String = ""
 
     /**
-     * 输出缓冲帧数（用户可调，2026-11-06）。
+     * 输出缓冲帧数（用户可调）。
      * 越大越抗尖峰（不爆音）、延迟越高；frames<=0 恢复默认（2×burst，下限 384 帧）。
      */
     fun setBufferFrames(frames: Int) {}
@@ -149,7 +149,7 @@ interface AudioEngine {
     fun compressorMeters(): FloatArray? = null
 
     /**
-     * 病态脏前置自动对齐开关（方案 A，2026-10-26）：开=装载 IR 时裁除脏前置
+     * 病态脏前置自动对齐开关（方案 A）：开=装载 IR 时裁除脏前置
      * （-96~-60dB 且 >30ms）静音前缀，干湿对齐；纯零前置（设计型延迟）不裁。
      * 引擎未创建时实现方应暂存，创建后补发。默认开。默认空实现。
      */
@@ -174,7 +174,7 @@ interface AudioEngine {
 
     companion object {
         /**
-         * 运行图节点索引（链序约定，与 NativeAudioEngine 构造顺序一致；2026-11-12
+         * 运行图节点索引（链序约定，与 NativeAudioEngine 构造顺序一致；
          * 加入脚本效果器后共 14 节点）：
          * 输入Gain(0) → Balance(1) → EQ(2) → 动态低音(3) → 虚拟低音(4) → 低音增强(5) →
          * Comp(6) → 多频段(7) → Conv(8) → 算法混响(9) → Width(10) → 输出Gain(11) →
@@ -221,7 +221,7 @@ interface AudioEngine {
 
         /** Limiter 绝对末级（index 15）。 */
         /**
-     * Surround71 环绕节点（2026-11-21 新增）：与矩阵环绕（[VIRTUAL_SURROUND_NODE_INDEX]）
+     * Surround71 环绕节点：与矩阵环绕（[VIRTUAL_SURROUND_NODE_INDEX]）
      * **互斥**，开一个要关另一个。参数 id 见 [S71_PARAM_*]，与本节点内部枚举一一对应。
      *
      * 注意：本节点插在 ScriptEffect(14) 与 Limiter(16) 之间，因此 **Limiter 索引由 15 变 16**。
@@ -317,7 +317,7 @@ interface AudioEngine {
         const val BASS_ENHANCE_PARAM_AMOUNT = 0
         const val BASS_ENHANCE_PARAM_DEEP = 1
         const val BASS_ENHANCE_PARAM_PUNCH = 2
-        // 模式切换与经典模式参数（2026-11-11，对照 wecho_projectV2.5.1 的 BassEffect）
+        // 模式切换与经典模式参数
         const val BASS_ENHANCE_PARAM_MODE = 3
         const val BASS_ENHANCE_PARAM_CLASSIC_GAIN = 4
         const val BASS_ENHANCE_PARAM_CLASSIC_Q = 5
@@ -401,17 +401,17 @@ interface AudioEngine {
         const val COMPRESSOR_PARAM_ATTACK_MS = 2
         const val COMPRESSOR_PARAM_RELEASE_MS = 3
         const val COMPRESSOR_PARAM_MAKEUP_DB = 4
-    /** 拐点宽度（dB，0 = 硬拐点，2026-11-09 新增） */
+    /** 拐点宽度（dB，0 = 硬拐点） */
     const val COMPRESSOR_PARAM_KNEE_DB = 5
-    /** 侧链高通截止（Hz，0 = 关闭；2026-11-09 加，默认 120，暂未暴露 UI） */
+    /** 侧链高通截止（Hz，0 = 关闭；默认 120，暂未暴露 UI） */
     const val COMPRESSOR_PARAM_SIDECHAIN_HP_HZ = 6
-    /** 并联混合（0 = 全干 / 1 = 全湿；2026-11-11） */
+    /** 并联混合（0 = 全干 / 1 = 全湿） */
     const val COMPRESSOR_PARAM_MIX = 7
-    /** 检测模式（0 = peak / 1 = RMS；2026-11-11） */
+    /** 检测模式（0 = peak / 1 = RMS） */
     const val COMPRESSOR_PARAM_DETECT_MODE = 8
-    /** 前瞻（ms，0~10；2026-11-11） */
+    /** 前瞻（ms，0~10） */
     const val COMPRESSOR_PARAM_LOOKAHEAD_MS = 9
-    /** 过采样（1 = 关闭 / 2 = 2x；2026-11-11） */
+    /** 过采样（1 = 关闭 / 2 = 2x） */
     const val COMPRESSOR_PARAM_OVERSAMPLE = 10
 
         /**

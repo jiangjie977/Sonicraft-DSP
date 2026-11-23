@@ -73,7 +73,7 @@ class VirtualBassNode : public DspNode {
 
   /**
    * 默认值**逐项对齐 `wecho yuanma/native/effects/VirtualBassEffect.cpp` 构造函数**
-   * （2026-11-12 用户实听：同机同扬声器同参数下我们的听感只有 wecho 一半）。
+   * 。
    *
    * wecho: envelope_rate=50 / mid_gain=0.08 / high_gain=0.16 / harmonic_gain=1.00。
    * wecho 没有 amount（纯替换），这里 1.0 = 不带干声；参数仍保留供耳机上手动降。
@@ -205,11 +205,9 @@ class VirtualBassNode : public DspNode {
         const float mid = mid_band_[ci].Process(x);
         const float high = high_band_[ci].Process(x);
 
-        // **按 `wecho yuanma` 1:1 还原混合公式（2026-11-12，用户实听裁定）**
-        //
+        // **按 `wecho yuanma` 1:1 还原混合公式**
         // yuanma: out = (mid_gain*0.25*bp + high_gain*0.25*hp
         //                + 2.4*y*harmonic_gain) * post_gain;  audio = out;
-        //
         // 昨天 L2 为了修「200Hz −19dB」把 mid/high 抬成 kMidThroughGain=2.5、
         // 且 post_gain 只给谐波，结果中频直通比 wecho 高 5~11 倍，谐波被稀释
         // 到「谐波÷中频」只有 wecho 的 ~6%，听感因此只剩一半。

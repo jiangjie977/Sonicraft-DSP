@@ -29,10 +29,10 @@ import javax.inject.Singleton
 
 /**
  * 引擎实现。
- *  - prepare()：创建 DSP 图并做直通自检（验证 JNI/CMake 链路）。
- *  - start()：按 currentMode 接线音频 IO；CaptureRelay 模式创建 native AAudio 引擎 +
+ *  - prepare：创建 DSP 图并做直通自检（验证 JNI/CMake 链路）。
+ *  - start：按 currentMode 接线音频 IO；CaptureRelay 模式创建 native AAudio 引擎 +
  *    内录源，并启动 4 Hz 状态轮询。
- *  - stop()：释放所有原生资源。
+ *  - stop：释放所有原生资源。
  *
  * 实时线程约束：native 侧 AAudio 回调内零分配零锁；Java 采集线程只做 AudioRecord.read
  * 与一次 JNI 推送，无重活。
@@ -61,8 +61,8 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
-     * （2026-11-03 审计）：native 句柄全调用点互斥。stop() 会 close+置 null——
-     * 原判空快照（`nativeEngine?.x()` 两步：读字段→调用）挡不住「读后删」竞态，
+     * ：native 句柄全调用点互斥。stop 会 close+置 null——
+     * 原判空快照（`nativeEngine?.x` 两步：读字段→调用）挡不住「读后删」竞态，
      * UAF 窗口随看门狗每 250ms 开合一次；H1 修复消除了死锁型长窗口，残余短窗口
      * 仍可 SIGSEGV。所有 native 调用（含 close/nativeEngine 写）统一经 nativeLock。
      */
@@ -147,7 +147,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
             AudioFormat.FRAMES_PER_BLOCK,
             DiagDirs.crashDir,
         )
-        // 低端机分档：尾分区上限须在 native Prepare 前（engine.start() 前）下发
+        // 低端机分档：尾分区上限须在 native Prepare 前（engine.start 前）下发
         if (pendingTailLimit > 0) {
             engine.setTailPartitionLimit(pendingTailLimit)
             SonicraftLog.i(TAG, "补发尾分区上限 $pendingTailLimit（引擎创建时暂存）")
@@ -162,10 +162,10 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
             channels = fmt.channelCount,
             projection = projection,
             excludedUids = excludedUids,
-            // 投影失效自动止损（2026-11-03 僵尸投影事故）：read 恒负时由采集线程直接
+            // 投影失效自动止损：read 恒负时由采集线程直接
             // 停引擎——state 变 Stopped(CAPTURE_DEAD)，TakeoverController 进程级监听
             // 该状态后回滚接管保直出。若不自动停机，僵尸会话会一直空转且保险丝要等
-            // 15s 零电平才触发（2026-11-03 14:05~14:07 实锤：用户听静音 2 分钟）。
+            // 15s 零电平才触发。
             onDead = { reason ->
                 val st = _state.value
                 if (st is EngineState.Running || st is EngineState.Suspended) {
@@ -309,7 +309,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
                 // 实为千分数却被当百分比显示，UI 放大 1000 倍（单帧 0.232ms 显示 87%，真实 8.7%）。
                 // 正确：ns ÷ 26_666.667 = 占预算百分比。
                 // 口径注：真机 AAudio 回调 192 帧（预算 4ms）时本值偏保守（偏高 ~1.5 倍），方向安全。
-                // 实时预算按**真机 192 帧 @48k = 4ms** 计算（2026-11-05 校准）。
+                // 实时预算按**真机 192 帧 @48k = 4ms** 计算。
                 // 旧值用 128 帧（2.67ms）作预算，数值天然偏高约 1.5 倍，会让用户误以为
                 // “CPU 快跑满了”。换算：percent = 耗时ns / 4_000_000 * 100。
                 val cpuPercent = (s.lastProcessNanos / 40_000f).coerceAtLeast(0f)
@@ -471,7 +471,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
             true
         } ?: false
         if (!ok) {
-            // 引擎尚未创建（内录未启动）：暂存，startCapture 创建引擎后、start() 前补发
+            // 引擎尚未创建（内录未启动）：暂存，startCapture 创建引擎后、start 前补发
             pendingTailLimit = maxParts
         }
     }
@@ -482,7 +482,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
             true
         } ?: false
         if (!ok) {
-            // 引擎尚未创建（内录未启动）：暂存，startCapture 创建引擎后、start() 前补发
+            // 引擎尚未创建（内录未启动）：暂存，startCapture 创建引擎后、start 前补发
             pendingTrimSickHead = enabled
         }
     }
@@ -490,7 +490,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
     override fun loadImpulseResponse(path: String): String? {
         // ：native 调用经锁。哨兵区分「无 native」与「native 返回 null=成功」——
         // 语义：null = 成功，非空 = 失败原因。此前 `r ?: "引擎未就绪"` 把 native 的
-        // 成功（null）误转成错误串，导致加载成功却永远不发 SetParam(4)（2026-10-23
+        // 成功（null）误转成错误串，导致加载成功却永远不发 SetParam(4)（
         // 自定义 IR「不生效」根因，诊断打点定位：native err=[null] 而上层收到未就绪）。
         val r = withNative { it.loadImpulseResponse(path) ?: LOAD_OK_SENTINEL } ?: run {
             runCatching {
@@ -551,7 +551,7 @@ class DefaultAudioEngine @Inject constructor() : AudioEngine {
         graph?.close()
         graph = null
         currentMode = null
-        // L13（2026-11-03 审计）：停止时清停摆横幅与失败计数——否则红条跨会话残留，
+        // L13：停止时清停摆横幅与失败计数——否则红条跨会话残留，
         // 下次启动引擎被误读为「仍在重建失败中」
         rebuildFailStreak = 0L
         _outputStalled.value = null

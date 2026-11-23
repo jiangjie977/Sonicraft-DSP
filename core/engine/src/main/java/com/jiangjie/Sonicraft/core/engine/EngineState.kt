@@ -9,7 +9,7 @@ package com.jiangjie.Sonicraft.core.engine
 sealed interface EngineState {
     data object Idle : EngineState
     data object Preparing : EngineState
-    /** 已准备（DSP 图已创建且自检通过），等待 start() */
+    /** 已准备（DSP 图已创建且自检通过），等待 start */
     data object Ready : EngineState
     data object Running : EngineState
     data object Suspended : EngineState
@@ -22,6 +22,6 @@ enum class StopReason {
     SOURCE_ENDED,
     AUDIO_FOCUS_LOST,
     DEVICE_DISCONNECTED,
-    /** 投影失效自动止损（2026-11-03 僵尸投影事故）：AudioRecord read 恒负，capture 已死亡。 */
+    /** 投影失效自动止损：AudioRecord read 恒负，capture 已死亡。 */
     CAPTURE_DEAD,
 }

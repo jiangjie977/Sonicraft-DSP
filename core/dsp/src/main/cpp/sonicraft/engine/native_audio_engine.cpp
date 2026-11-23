@@ -40,30 +40,27 @@ namespace {
 // 回退开关：真机 stress 若出现 xRun/水位爬升，改回 true 重编即可（低配机仍建议绑核）。
 constexpr bool kBindBigCores = false;
 
-// ---- 节点索引常量（2026-11-11，技术债 #7 收口）----
-//
+// ---- 节点索引常量----
 // 原先全部是字面量：装配处按 AddNode 的**调用顺序**隐式决定索引，而 8 处
 // node_at(N) 直接写数字。插一个节点就要人工同步 8 处 + Kotlin 常量块，
 // 漏一处的后果是「参数发给了错误的节点」—— 不崩、不报错、只有听感异常，
 // 属于最难查的那类 bug。
-//
 // 现在：装配时校验实际索引与常量一致（脱节会打印 FATAL），node_at 一律用常量。
-//
 // **必须与 Kotlin 侧 `AudioEngine.*_NODE_INDEX` 保持一致**（跨语言契约，
 // 两边任一改动都要同步；动态低音插入后会整体 +1）。
 constexpr int kNodeInputGain   = 0;
 constexpr int kNodeBalance     = 1;
 constexpr int kNodeEq          = 2;
-// AutoEq 耳机校正（2026-11-14 插入，紧跟 PEQ 之后 → 其余索引整体 +1）
+// AutoEq 耳机校正
 constexpr int kNodeAutoEq      = 3;
-// 虚拟环绕（2026-11-15 插入，紧跟 AutoEq 之后 → 其余索引整体 +1）
+// 虚拟环绕
 // 放在耳机校正之后、低频/动态之前：空间化会重塑频响，先校正再渲染才是正确顺序。
 constexpr int kNodeVirtualSurround = 4;
-// 动态低音（2026-11-11 插入，位于 EQ 与压限之间）
+// 动态低音
 constexpr int kNodeDynamicBass = 5;
-// 虚拟低音（2026-11-11 插入，紧随动态低音）
+// 虚拟低音
 constexpr int kNodeVirtualBass = 6;
-// 低音增强（2026-11-11 插入，M/S + EQ + 瞬态 + 次谐波，设备无关）
+// 低音增强
 constexpr int kNodeBassEnhance = 7;
 constexpr int kNodeCompressor  = 8;
 constexpr int kNodeMultiband   = 9;
@@ -74,7 +71,7 @@ constexpr int kNodeOutputGain  = 13;
 // 自定义脚本效果器：位于 OutputGain 之后、Limiter 之前，
 // 保证 Limiter 仍是绝对末级（用户脚本 boost 也会被限幅兜住）。
 constexpr int kNodeScriptEffect = 14;
-// Surround71 环绕（2026-11-21 新增）：独立节点，与矩阵环绕互斥。
+// Surround71 环绕：独立节点，与矩阵环绕互斥。
 // 位置在 ScriptEffect 之后、Limiter 之前 —— Limiter 仍为绝对末级，
 // 新节点的任何增益（LFE +2dB、HRTF 叠加）都会被限幅兜住。
 constexpr int kNodeS71         = 15;
@@ -124,7 +121,7 @@ NativeAudioEngine::NativeAudioEngine(int sample_rate, int channels, int max_fram
       input_ring_(static_cast<size_t>(ring_capacity_frames_) * channels, 0.0f) {
   idle_bypass_.Configure(sample_rate);
   graph_ = std::make_unique<dsp::DspGraph>(sample_rate, channels, max_frames);
-  // 运行图（2026-11-12 加入脚本效果器）：
+  // 运行图：
   //   输入Gain(0) → Balance(1) → EQ(2) → 动态低音(3) → 虚拟低音(4) → 低音增强(5) →
   //   Comp(6) → 多频段(7) → Conv(8) → 算法混响(9) → Width(10) → 输出Gain(11) →
   //   脚本效果器(12) → Lim(13)
@@ -141,7 +138,7 @@ NativeAudioEngine::NativeAudioEngine(int sample_rate, int channels, int max_fram
   auto eq = std::make_unique<dsp::ParametricEqNode>();
   eq->set_channel_count(channels);
   AddNodeAt(*graph_, std::move(eq), kNodeEq);
-  // AutoEq 耳机校正（2026-11-14，index 3）：第二个 ParametricEqNode 实例，
+  // AutoEq 耳机校正：第二个 ParametricEqNode 实例，
   // 与用户 PEQ **完全独立** —— 型号校正吃自己那 31 段，用户仍可自由调 PEQ 做个人偏好，
   // 两者互不覆盖、可各自旁路。紧贴 PEQ 之后：校正先行，后面的非线性节点
   // （动态低音/压限）看到的是已校正的信号。
@@ -159,13 +156,13 @@ NativeAudioEngine::NativeAudioEngine(int sample_rate, int channels, int max_fram
   auto dynBass = std::make_unique<dsp::DynamicBassNode>();
   dynBass->set_channel_count(channels);
   AddNodeAt(*graph_, std::move(dynBass), kNodeDynamicBass);
-  // 虚拟低音（2026-11-11，index 4）：心理声学低频扩展，**针对手机内置扬声器**。
+  // 虚拟低音：心理声学低频扩展，**针对手机内置扬声器**。
   // 与动态低音（耳机向）互斥使用 —— 两者都靠"改低频带"工作，串起来只会互相破坏：
   // 虚拟低音丢弃 <120Hz 的原信号，动态低音再去增强一个已被丢弃的频段，等于白做。
   auto vBass = std::make_unique<dsp::VirtualBassNode>();
   vBass->set_channel_count(channels);
   AddNodeAt(*graph_, std::move(vBass), kNodeVirtualBass);
-  // 低音增强（2026-11-11，index 5）：M/S + EQ + 瞬态 + 次谐波，**设备无关**。
+  // 低音增强：M/S + EQ + 瞬态 + 次谐波，**设备无关**。
   // 与动态低音/虚拟低音同属「低频管家」，三者互斥（都往低频加能量，叠加会过度）。
   auto bassEnh = std::make_unique<dsp::BassEnhanceNode>();
   bassEnh->set_channel_count(channels);
@@ -233,7 +230,7 @@ NativeAudioEngine::NativeAudioEngine(int sample_rate, int channels, int max_fram
 NativeAudioEngine::~NativeAudioEngine() {
   Stop();
   // H2：先停 worker 再析构成员——worker 线程解引用 self，必须在本函数结束前终止；
-  // worker 若在 RestartOutputStream 持锁中，上方 Stop() 已先与其串行化
+  // worker 若在 RestartOutputStream 持锁中，上方 Stop 已先与其串行化
   worker_shutdown_.store(true);
   rebuild_cv_.notify_all();
   if (rebuild_worker_.joinable()) rebuild_worker_.join();
@@ -241,7 +238,7 @@ NativeAudioEngine::~NativeAudioEngine() {
 
 bool NativeAudioEngine::Start() {
   if (running_.load()) return true;
-  // 持锁与 Stop()/RestartOutputStream() 互斥：stream_ 的所有读写点必须都在
+  // 持锁与 Stop/RestartOutputStream 互斥：stream_ 的所有读写点必须都在
   // restart_mutex_ 内（GetStats 亦持锁读），否则 JNI 侧 Watchdog 与流重建
   // 线程存在 use-after-free 竞态窗口。
   std::lock_guard<std::mutex> lock(restart_mutex_);
@@ -256,7 +253,7 @@ bool NativeAudioEngine::OpenAndStartStream() {
   AAudioStreamBuilder_setPerformanceMode(builder, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
   // 显式声明媒体属性：缺省 usage 可能被 audio policy 归入无声流（flinger track G=-inf）
   // 使用 MEDIA：这是本机**唯一已验证**在蓝牙耳机下正常出声的配置
-  // （2026-11-06 实测：MEDIA → 蓝牙出声、单声+音效；ACCESSIBILITY → 用户反馈扬声器出声，
+  // （实测：MEDIA → 蓝牙出声、单声+音效；ACCESSIBILITY → 用户反馈扬声器出声，
   //  但该次实验期间播放器处于暂停状态，无法据此判定 usage 与路由的因果关系，
   //  故结论仅为“回到已验证可用的配置”，不宣称 usage 是扬声器输出的原因。）
   AAudioStreamBuilder_setUsage(builder, AAUDIO_USAGE_MEDIA);
@@ -280,7 +277,7 @@ bool NativeAudioEngine::OpenAndStartStream() {
   AAudioStreamBuilder_delete(builder);
   if (open != AAUDIO_OK || stream_ == nullptr) return false;
 
-  // 输出缓冲余量（方案 A，2026-11-06）：
+  // 输出缓冲余量（方案 A）：
   // 实测 avgNs≈0.5ms 但 maxNs 偶发 5.88ms（卷积批次 IFFT + 调度抖动叠加），
   // 超过 192 帧(4ms) 的实时预算即 underrun 补零 —— 听感就是「偶尔爆一下」。
   // 这里把缓冲从默认（≈1~2 个 burst）提到 2 个 burst 且不少于 384 帧（≈8ms），
@@ -299,7 +296,7 @@ bool NativeAudioEngine::OpenAndStartStream() {
   running_.store(true);
 
   if (AAudioStream_requestStart(stream_) != AAUDIO_OK) {
-    // 审计 H1：不得调 Stop()——本函数仅由 Start()/RestartOutputStream()
+    // 审计 H1：不得调 Stop——本函数仅由 Start/RestartOutputStream
     // 在持有 restart_mutex_ 下调用，std::mutex 不可重入，Stop 内二次加锁 = 同线程
     // 永久死锁（此后 GetStats 全部阻塞 = 全链僵死零日志，疑为「22 分钟死寂」真身）。
     // 手动内联无锁清理：requestStart 失败的流未启动，无回调并发，直接 close 即可。
@@ -329,7 +326,6 @@ void NativeAudioEngine::OnStreamError(AAudioStream* /*stream*/, void* user_data,
   // 连续故障指数退避：50ms（路由切换单发）→ 100 → 400 → 1s → 5s（断链级循环：
   // capture 全零 → 空流被省电 disconnect → -899 循环，重建无法根治，降频保命，
   // 真正的恢复交给 Kotlin 采集断链保险丝）。30s 无错即重置为新故障序列。
-  //
   // 调整：首档 200→50、次档 400→100。设备切换（插拔耳机/连断蓝牙）必然让
   // AAudio 流 DISCONNECTED(-899)，旧档位使切换中断至少 200ms、第二次 400ms，用户可感知。
   // 单发路由切换属于正常事件，理应最快恢复；只有连续失败才需要退避保护（≥3 起仍是 400ms）。
@@ -341,7 +337,7 @@ void NativeAudioEngine::OnStreamError(AAudioStream* /*stream*/, void* user_data,
   if (streak >= 3) backoff_ms = 400;
   if (streak >= 5) backoff_ms = 1000;
   if (streak >= 8) backoff_ms = 5000;
-  // H2（2026-11-03 审计）：backoff 等待与重建移入常驻 worker——原 detached 线程在
+  // H2：backoff 等待与重建移入常驻 worker——原 detached 线程在
   // Kotlin stop→nativeDestroy→delete 后解引用 self = UAF。回调线程仅置位+notify
   // （错误回调线程禁止操作流/文件 IO，保持原约束）。
   self->pending_error_.store(static_cast<int>(error));
@@ -747,7 +743,7 @@ void NativeAudioEngine::GetIrAnalysis(jfloat* out, int n) {
   // [1028] 布局版本=4 | [1029] 源采样率 | [1030] 前置静音 ms | [1031] 主脉冲 ms
   // [1032] R/L 能量比 dB | [1033] L/R 主脉冲错位 ms | [1034] NaN 数 | [1035] Inf 数
   // [1036] 峰值 | [1037] 削波占比 | [1038] 双声风险 0/1/2 | [1039] 谱声道数 N
-  // [1040] 前置噪声 dB（≤-96 干净=设计型延迟；-96~-60 导出残留；仅报告口径，2026-10-27 起不再豁免裁剪）
+  // [1040] 前置噪声 dB（≤-96 干净=设计型延迟；-96~-60 导出残留；仅报告口径，不再豁免裁剪）
   // [1041] 装载时自动裁除的前置 ms（0=未裁，UI「已自动对齐」横幅）
   // [1042..1042+N*128) 每声道 128 点 dB 谱（峰 0dB / 底 -100dB）
   // [1554] 湿声电平自动校准建议（批次 2，0.6~1.5；未装载=1）
@@ -863,7 +859,7 @@ aaudio_data_callback_result_t NativeAudioEngine::OnData(void* audio_data, int32_
   const double rms = consumed > 0 ? std::sqrt(sum / consumed) : 0.0;
   input_level_scaled_.store(static_cast<int>(rms * 1e6));
 
-  // 空载旁路（省电，2026-10-27）：输入静音持续 4s → 跳过整条 DSP 链。
+  // 空载旁路（省电）：输入静音持续 4s → 跳过整条 DSP 链。
   // 实测 NX733J 无播放时引擎空转占 ~54% 单核大核（utime 差分），是耗电排行
   // 主因。此时输出=输入=数字静音，无需另行置零；任何超阈值块立即解冻（当块
   // 恢复全链，<1 块 ≈4ms 无感）。激活前混响尾已在全链运行中自然衰减完毕
@@ -962,7 +958,7 @@ void NativeAudioEngine::GetStats(jlong* out, int n) {
       out[13] = static_cast<jlong>(cv->DiagnWetRms() * 1000000.0f);
     }
   }
-  // 逐节点平均耗时（ns/次），索引 14..23 对应节点 0..9（2026-11-06 诊断）
+  // 逐节点平均耗时（ns/次），索引 14..23 对应节点 0..9
   if (n >= 24) {
     const std::uint64_t cnt = probe.ProcessCount() > 0 ? probe.ProcessCount() : 1;
     for (int i = 0; i < 10; ++i) {
