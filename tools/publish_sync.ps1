@@ -48,12 +48,18 @@ if ($dirty -and -not $DryRun) {
 
 # --- exclude lists -------------------------------------------------------
 # Source-side skips (may include .git: we do not copy dev history into the mirror).
-$excludeDirs = @("build", ".gradle", ".kotlin", ".codebuddy", ".git", ".cxx", "node_modules", ".idea", "keystore", "dist")
-$excludeFiles = @("*.apk", "*.jks", "*.keystore", "keystore.properties", "local.properties", "*.log", "AGENTS.md", "README.public.md")
+# docs/: development notes (design/plan/roadmap) stay local only.
+# CHANGELOG.md: internal change log, not published.
+$excludeDirs = @("build", ".gradle", ".kotlin", ".codebuddy", ".git", ".cxx", "node_modules", ".idea", "keystore", "dist", "docs")
+$excludeFiles = @("*.apk", "*.jks", "*.keystore", "keystore.properties", "local.properties", "*.log", "AGENTS.md", "README.public.md", "CHANGELOG.md")
 
 # Destination pruning (NEVER prune .git: the mirror owns its own repo).
-$pruneDirs = @("build", ".gradle", ".kotlin", ".codebuddy", ".cxx", "node_modules", ".idea", "keystore", "dist")
-$pruneFiles = @("*.apk", "*.jks", "*.keystore", "keystore.properties", "local.properties", "*.log", "AGENTS.md", "README.public.md")
+$pruneDirs = @("build", ".gradle", ".kotlin", ".codebuddy", ".cxx", "node_modules", ".idea", "keystore", "dist", "docs")
+$pruneFiles = @("*.apk", "*.jks", "*.keystore", "keystore.properties", "local.properties", "*.log", "AGENTS.md", "README.public.md", "CHANGELOG.md")
+
+# Images are pruned ONLY under tools/ (screenshots/forensics captures).
+# Never use a global *.png filter: it would delete app launcher icons.
+$toolsImagePatterns = @("*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp")
 
 # --- ensure publish repo exists (first run creates an independent history) ---
 if (-not (Test-Path (Join-Path $dst ".git"))) {
@@ -95,6 +101,13 @@ foreach ($d in $pruneDirs) {
 foreach ($pat in $pruneFiles) {
     Get-ChildItem -Path $dst -Recurse -File -Filter $pat -Force -ErrorAction SilentlyContinue |
         Where-Object { $_.FullName -notlike "*\.git\*" } |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
+# Prune screenshots/images under tools/ only (keeps app launcher icons intact).
+$toolsPath = Join-Path $dst "tools"
+if (Test-Path $toolsPath) {
+    Get-ChildItem -Path $toolsPath -Recurse -File -Include $toolsImagePatterns -Force -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
