@@ -105,10 +105,13 @@ foreach ($pat in $pruneFiles) {
 }
 
 # Prune screenshots/images under tools/ only (keeps app launcher icons intact).
+# NOTE: -Include only works when -Path ends with a wildcard; with a plain dir it silently matches nothing.
 $toolsPath = Join-Path $dst "tools"
 if (Test-Path $toolsPath) {
-    Get-ChildItem -Path $toolsPath -Recurse -File -Include $toolsImagePatterns -Force -ErrorAction SilentlyContinue |
-        Remove-Item -Force -ErrorAction SilentlyContinue
+    foreach ($pat in $toolsImagePatterns) {
+        Get-ChildItem -Path (Join-Path $toolsPath "*") -Recurse -File -Filter $pat -Force -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # Remove empty directories left behind (deepest first), except .git.
