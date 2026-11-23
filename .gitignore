@@ -1,0 +1,94 @@
+# 构建产物
+.gradle/
+.kotlin/
+build/
+*/build/
+**/build/
+local.properties
+*.log
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# 签名与密钥
+*.jks
+*.keystore
+keystore.properties
+
+# CMake 中间产物（host harness）
+tools/host-harness/build/
+
+# AGP CMake 中间产物（native 构建缓存）
+core/dsp/.cxx/
+  
+# audio forensics temp artifacts
+tools/audio-forensics/cap_*.f32
+tools/audio-forensics/forensics_st_*.f32
+tools/audio-forensics/build_log.txt
+tools/audio-forensics/build/
+tools/ui-shot/
+gradle_build.txt
+
+# SUBMIX 探针构建产物与取证截图（submix-verify 分支）
+tools/submix-probe/dexout/
+tools/submix-probe/out/
+tools/submix-probe/screen*.png
+tools/forensics_20261028/
+tools/eq-harness/*.exe
+tools/eq-harness/*.obj
+
+# 真机一次性取证残留（_live_ 前缀 = 临时 dump，证据固化后即删；入库的只有
+# autostart_diag_v2/v3 快照与审计脚本）与原始 PCM 对拍
+tools/_live_*
+!tools/_live_autostart_diag_v2.txt
+!tools/_live_autostart_diag_v3.txt
+tools/*.f32
+
+# 本地工作目录（提交消息临时文件、一次性分析脚本）
+.tmp/
+
+# harness 构建产物
+tools/dsp-harness/*.exe
+tools/dsp-harness/*.obj
+tools/eq-harness/*.exe
+tools/eq-harness/*.obj
+tools/host-harness/build/
+
+# 声学探针的中间产物（2026-11-08）：测试音可脚本重建，录音是测量数据
+# 合计约 7MB 二进制，不入库
+tools/acoustic-probe/signals/
+tools/acoustic-probe/captures/
+.codebuddy/
+*.apk
+*.aab
+tools/*_diag*.txt
+tools/verify_autoeq/*.png
+tools/_m*_screen.png
+tools/_crash_live.log
+*.local.txt
+CHANGELOG.md
+CHANGELOG.txt
+AGENTS.md
+docs/LOOPBACK_POLICY_PLAN.md
+docs/SCRIPT_EFFECT_*.md
+docs/M15_DYNAMIC_BASS_DESIGN.md
+tools/submix-revive/
+tools/crash_pull.txt
+tools/native_162142.txt
+tools/_capture_crash.bat
+tools/_verify_m*.bat
+tools/publish-gitee.ps1
+tools/export-public.ps1
+docs/DEVELOPMENT.md
+README.public.md
+tools/dev_cycle.ps1
+tools/extract_rir.ps1
+tools/eq-harness/fix181.py
+tools/eq-harness/dbg31.cpp
+tools/eq-harness/dbg_pre.cpp
+tools/pair_analysis_103.py
+tools/three_class_audit_103.py
+tools/gen_test_hrtf.py
+tools/verify_test_hrtf.py

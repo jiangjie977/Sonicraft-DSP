@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 29/30 的备份规则（31+ 由 data_extraction_rules.xml 接管）。策略同上。 -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="sonicraft_settings.xml" key="session_was_running" />
+    <exclude domain="sharedpref" path="sonicraft_settings.xml" key="system_killed_unacked" />
+    <exclude domain="file" path="crash" />
+    <exclude domain="external" path="." />
+</full-backup-content>
