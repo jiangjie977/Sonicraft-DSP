@@ -101,16 +101,20 @@ foreach ($d in $pruneDirs) {
 foreach ($pat in $pruneFiles) {
     Get-ChildItem -Path $dst -Recurse -File -Filter $pat -Force -ErrorAction SilentlyContinue |
         Where-Object { $_.FullName -notlike "*\.git\*" } |
-        Remove-Item -Force -ErrorAction SilentlyContinue
+        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
 }
 
 # Prune screenshots/images under tools/ only (keeps app launcher icons intact).
-# NOTE: -Include only works when -Path ends with a wildcard; with a plain dir it silently matches nothing.
+# NOTE 1: -Include with a plain dir path matches nothing; always use '<dir>\*'.
+# NOTE 2: piping FileInfo straight into Remove-Item silently no-ops here
+#         (its -Path does not bind from FullName in this host) -> use -LiteralPath in ForEach-Object.
 $toolsPath = Join-Path $dst "tools"
 if (Test-Path $toolsPath) {
     foreach ($pat in $toolsImagePatterns) {
-        Get-ChildItem -Path (Join-Path $toolsPath "*") -Recurse -File -Filter $pat -Force -ErrorAction SilentlyContinue |
-            Remove-Item -Force -ErrorAction SilentlyContinue
+        $hit = Get-ChildItem -Path (Join-Path $toolsPath "*") -Recurse -File -Filter $pat -Force -ErrorAction SilentlyContinue
+        foreach ($item in $hit) {
+            Remove-Item -LiteralPath $item.FullName -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
