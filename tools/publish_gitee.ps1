@@ -75,8 +75,9 @@ Write-Host "Wrote README.md + LICENSE to $dst"
 Push-Location $dst
 if (-not (Test-Path (Join-Path $dst ".git"))) {
     git init -q
-    git branch -M main
-    Write-Host "Initialized empty Gitee mirror at $dst (branch: main)"
+    # Gitee 新建仓库的默认分支是 master（不是 main）——用 master 可避免首页空白
+    git branch -M master
+    Write-Host "Initialized empty Gitee mirror at $dst (branch: master)"
 }
 
 git add -A
