@@ -3,8 +3,8 @@
   Publish README + LICENSE only to the Gitee mirror (D:\OPEN\DSP-GITEE).
 
 .DESCRIPTION
-  Gitee is used as a SHOWCASE page, not a code mirror: only README.md and LICENSE
-  are published there. Full source lives on GitHub.
+  Gitee is used as a SHOWCASE page, not a code mirror: only README.md, LICENSE
+  and RELEASE_NOTES.md are published there. Full source lives on GitHub.
 
   Why such a narrow mirror:
   - Gitee review is slow for system-level audio code, and the repo is not meant
@@ -13,8 +13,9 @@
     repository (GitHub) is enough, as long as the README points to it.
 
   Transformations applied to the published README:
-  - relative links (RELEASE_NOTES.md / PRIVACY_POLICY.md / THIRD-PARTY-NOTICES.md)
-    are rewritten to absolute GitHub URLs, because those files do NOT exist on Gitee;
+  - relative links whose target is NOT published on Gitee (PRIVACY_POLICY.md /
+    THIRD-PARTY-NOTICES.md) are rewritten to absolute GitHub URLs;
+    RELEASE_NOTES.md IS published, so its relative link is kept working;
   - a one-line banner is inserted under the title telling readers this is a
     showcase page and where the real source is.
 
@@ -50,26 +51,28 @@ if (-not (Test-Path $dst)) {
 # --- build README for Gitee ---------------------------------------------
 $readme = [IO.File]::ReadAllText((Join-Path $src "README.md"), [Text.Encoding]::UTF8)
 
-# 1) relative links -> absolute GitHub URLs (those files are not published on Gitee)
-$readme = $readme -replace '\]\(RELEASE_NOTES\.md\)', "]($gh/blob/main/RELEASE_NOTES.md)"
+# 1) rewrite ONLY the links whose targets are absent on Gitee.
+#    RELEASE_NOTES.md is published here, so its relative link is kept.
 $readme = $readme -replace '\]\(PRIVACY_POLICY\.md\)', "]($gh/blob/main/PRIVACY_POLICY.md)"
 $readme = $readme -replace '\]\(THIRD-PARTY-NOTICES\.md\)', "]($gh/blob/main/THIRD-PARTY-NOTICES.md)"
 
-# 2) banner under the first heading (explains why this repo only has 2 files)
-$banner = "> 本仓库为 **Gitee 展示页**，仅包含 README 与 LICENSE；完整源码、发行说明与问题跟踪见 " +
-    "[GitHub 仓库]($gh)。`r`n`r`n"
+# 2) banner under the first heading (explains what this repo contains)
+$banner = "> 本仓库为 **Gitee 展示页**，仅包含 README、LICENSE 与发行说明；" +
+    "完整源码、隐私政策与问题跟踪见 [GitHub 仓库]($gh)。`r`n`r`n"
 $readme = [regex]::Replace($readme, '^(#\s+Sonicraft\s*\r?\n)', "`$1`r`n$banner", 1)
 
 if ($DryRun) {
-    Write-Host "Dry run finished. README would be written to $dst with:"
-    Write-Host "  - 3 relative links rewritten to $gh"
-    Write-Host "  - 1 banner inserted under the title"
+    Write-Host "Dry run finished. Files would be written to $dst :"
+    Write-Host "  - README.md (2 links rewritten, 1 banner inserted)"
+    Write-Host "  - LICENSE"
+    Write-Host "  - RELEASE_NOTES.md"
     exit 0
 }
 
 [IO.File]::WriteAllText((Join-Path $dst "README.md"), $readme, $utf8NoBom)
 Copy-Item (Join-Path $src "LICENSE") (Join-Path $dst "LICENSE") -Force
-Write-Host "Wrote README.md + LICENSE to $dst"
+Copy-Item (Join-Path $src "RELEASE_NOTES.md") (Join-Path $dst "RELEASE_NOTES.md") -Force
+Write-Host "Wrote README.md + LICENSE + RELEASE_NOTES.md to $dst"
 
 # --- commit + push -------------------------------------------------------
 Push-Location $dst
