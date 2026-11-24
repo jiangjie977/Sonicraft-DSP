@@ -89,11 +89,14 @@ class MultibandNode : public DspNode {
   static constexpr int kParamSplit1Hz = 18;
   static constexpr int kParamSplit2Hz = 19;
 
-  // 母带温和式默认（docs/M8_MULTIBAND_LIMITER_DESIGN.md ）
-  static constexpr float kDefaultThrLow = -26.0f, kDefaultThrMid = -22.0f, kDefaultThrHigh = -20.0f;
-  static constexpr float kDefaultRatioLow = 2.5f, kDefaultRatioMid = 2.0f, kDefaultRatioHigh = 2.0f;
-  static constexpr float kDefaultAtkLow = 20.0f, kDefaultAtkMid = 15.0f, kDefaultAtkHigh = 5.0f;
-  static constexpr float kDefaultRelLow = 180.0f, kDefaultRelMid = 150.0f, kDefaultRelHigh = 120.0f;
+  // 默认值以「不损响度」为准（2026-11-24 调整，与 Kotlin MULTIBAND_DEFAULTS 对齐）：
+  // 原 -11/-22/-20 阈值 + 低段 4:1 在 1kHz 下净衰减约 11dB，用户反馈「声音变小」。
+  // 现改为高位阈值 + 低比率 + Mid 段 +0.5dB 补偿，0dBFS 正弦下净增益约 -1.25dB。
+  static constexpr float kDefaultThrLow = -3.0f, kDefaultThrMid = -3.0f, kDefaultThrHigh = -14.0f;
+  static constexpr float kDefaultRatioLow = 2.0f, kDefaultRatioMid = 2.5f, kDefaultRatioHigh = 2.0f;
+  static constexpr float kDefaultAtkLow = 10.0f, kDefaultAtkMid = 8.0f, kDefaultAtkHigh = 5.0f;
+  static constexpr float kDefaultRelLow = 120.0f, kDefaultRelMid = 150.0f, kDefaultRelHigh = 110.0f;
+  static constexpr float kDefaultGainLow = 0.0f, kDefaultGainMid = 0.5f, kDefaultGainHigh = 0.0f;
   static constexpr float kDefaultKnee = 6.0f;
   static constexpr float kDefaultFc1Hz = 200.0f;
   static constexpr float kDefaultFc2Hz = 3500.0f;
@@ -106,11 +109,11 @@ class MultibandNode : public DspNode {
     fc1_cur_ = fc1_tgt_ = kDefaultFc1Hz;
     fc2_cur_ = fc2_tgt_ = kDefaultFc2Hz;
     dyn_[0] = BandParams{kDefaultThrLow, kDefaultRatioLow, kDefaultAtkLow,
-                         kDefaultRelLow, kDefaultKnee, 0.0f};
+                         kDefaultRelLow, kDefaultKnee, kDefaultGainLow};
     dyn_[1] = BandParams{kDefaultThrMid, kDefaultRatioMid, kDefaultAtkMid,
-                         kDefaultRelMid, kDefaultKnee, 0.0f};
+                         kDefaultRelMid, kDefaultKnee, kDefaultGainMid};
     dyn_[2] = BandParams{kDefaultThrHigh, kDefaultRatioHigh, kDefaultAtkHigh,
-                         kDefaultRelHigh, kDefaultKnee, 0.0f};
+                         kDefaultRelHigh, kDefaultKnee, kDefaultGainHigh};
     for (auto& d : dyn_) d.recomputeRates(sample_rate_);
     splits1_.assign(static_cast<std::size_t>(channels_), LR4Split{});
     splits2_.assign(static_cast<std::size_t>(channels_), LR4Split{});

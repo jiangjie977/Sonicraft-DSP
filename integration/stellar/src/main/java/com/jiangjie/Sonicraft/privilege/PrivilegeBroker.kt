@@ -95,15 +95,18 @@ class PrivilegeBroker @Inject constructor(
 
     /** 重新探测并切换后端；仅在 kind 变化时发事件。 */
     private fun reevaluate(reason: String) {
-        // 不能只看 isAlive —— Stellar 活着但未授权时 bindUserService 会
-        // code=-3；此时若 Shizuku 已授权，应让后者接管（授权优先级 > 先到先得）。
-        // 两者都未授权时仍按 Stellar 优先（等用户授权）。
-        val now: PrivilegedClient = when {
-            stellar.isAlive() && stellar.state.value.permissionGranted -> stellar
-            shizuku.isAlive() && shizuku.state.value.permissionGranted -> shizuku
-            stellar.isAlive() -> stellar
-            shizuku.isAlive() -> shizuku
-            else -> noop
+        // 仲裁规则抽到 BackendChoice（纯逻辑 + 单测）：已授权优先于「先到先得」，
+        // 避免「Stellar 活着但未授权」占位导致 bindUserService 报 code=-3。
+        val kind = BackendChoice.choose(
+            stellarAlive = stellar.isAlive(),
+            stellarGranted = stellar.state.value.permissionGranted,
+            shizukuAlive = shizuku.isAlive(),
+            shizukuGranted = shizuku.state.value.permissionGranted,
+        )
+        val now: PrivilegedClient = when (kind) {
+            BackendKind.STELLAR -> stellar
+            BackendKind.SHIZUKU -> shizuku
+            BackendKind.NONE -> noop
         }
         val old = _active.value
         if (now.kind == old.kind) {

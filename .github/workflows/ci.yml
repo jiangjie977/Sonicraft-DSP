@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [ master, main ]
+    # 开发分支也要跑：本项目的实际开发在 restore-stage，只挂 master/main 等于没门禁
+    branches: [ master, main, restore-stage ]
   pull_request:
 
 # 同一分支的新推送取消旧跑，省额度
@@ -11,20 +12,55 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---- DSP 算法回归：三套 harness 全跑 ----
   host-dsp-harness:
     name: Host DSP harness (PC)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Configure
-        run: cmake -S tools/host-harness -B tools/host-harness/build -G Ninja
-      - name: Build
+
+      - name: Configure host-harness
+        run: cmake -S tools/host-harness -B tools/host-harness/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build host-harness
         run: cmake --build tools/host-harness/build
-      - name: Run
+
+      - name: Run host-harness（DSP 主回归，必须 ALL PASS）
         run: ./tools/host-harness/build/host_harness
 
+      - name: Configure eq-harness
+        run: cmake -S tools/eq-harness -B tools/eq-harness/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build eq-harness
+        run: cmake --build tools/eq-harness/build
+
+      - name: Run eq-harness（PEQ 行业标准 E1~E12）
+        run: ./tools/eq-harness/build/eq_harness
+
+      - name: Configure dsp-harness
+        run: cmake -S tools/dsp-harness -B tools/dsp-harness/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build dsp-harness
+        run: cmake --build tools/dsp-harness/build
+
+      - name: Run dsp-harness
+        run: ./tools/dsp-harness/build/dsp_harness
+
+      # 增益审计只做记录（输出、不返回非零）：压限默认值 -15dB 事故就是靠它抓到的。
+      # 用例：CI 里能看到「默认链是否透明」，回归时对比历史值。
+      - name: Configure gain-audit
+        run: cmake -S tools/gain-audit -B tools/gain-audit/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build gain-audit
+        run: cmake --build tools/gain-audit/build
+
+      - name: Run gain-audit（记录默认链增益）
+        run: ./tools/gain-audit/build/gain_audit
+        continue-on-error: true
+
+  # ---- Android 构建 + 单测 + DSP 节点重放检查 ----
   android-build:
-    name: Android assembleDebug
+    name: Android build + tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +69,10 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       # 不再用 android-actions/setup-android：它已停更，且会在 sdkmanager 许可环节失败。
       # ubuntu-latest 镜像自带 Android SDK / cmdline-tools / NDK，许可已预接受，
@@ -58,6 +98,10 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
             gradle-
+
+      # 节点旁路重放一致性：新增/改动 DSP 节点必须过（本地约定见 AGENTS.md）
+      - name: DSP node replay check
+        run: python scripts/check_node_replay.py
 
       - name: Build (assembleDebug)
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace

@@ -19,6 +19,7 @@ import android.provider.MediaStore
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jiangjie.Sonicraft.core.CompressorMigration
 import com.jiangjie.Sonicraft.core.audio.AudioFormat
 import com.jiangjie.Sonicraft.core.audio.EngineMode
 import com.jiangjie.Sonicraft.core.common.DiagDirs
@@ -84,7 +85,7 @@ class MainViewModel @Inject constructor(
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     /** 允许导入的 IR 扩展名白名单（.iir 是 IIR 滤波器，卷积架构拒绝）。须在 init 前声明 */
-    private val irExtensions = setOf("wav", "irs", "pcm", "fir", "ir")
+    private val irExtensions = IrFileNaming.DEFAULT_EXTENSIONS
 
     /**
      * IR 装载互斥（P1 自检）：loadLibraryIr / setTrimSickHead 重装 /
@@ -138,53 +139,6 @@ class MainViewModel @Inject constructor(
 
     /** 设备卡展示的路由真相：port 号 + 是否命中我方 submix */
     val routeSummary: StateFlow<String> = takeover.routeSummary
-
-    init {
-        // 启动时把持久化的 audio_mode 同步给 UI（否则设置页高亮会一直是默认值）。
-        // 注意：**必须用异步调度**。viewModelScope 默认 Main.immediate，在构造函数里
-        // launch 会同步执行 lambda，而 `prefs` 字段尚未初始化 → 启动即 NPE 崩溃
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                _audioMode.value = prefs.getString(KEY_AUDIO_MODE, MODE_LOOPBACK) ?: MODE_LOOPBACK
-            }
-        }
-        // 引擎停止/失败 → 立即释放接管静音。否则「引擎没输出了、原声又被压着」
-        // 就是全静音。
-        viewModelScope.launch {
-            engine.state.collect { st ->
-                // 引擎（重新）就绪后，节点内参数已回到默认值 → 开关类参数会"显示开启却无效"，
-                // 必须把开关切一次才生效（BS.775 / 矩阵环绕都踩过）。这里在 Running 时直接补发。
-                if (st is com.jiangjie.Sonicraft.core.engine.EngineState.Running) {
-                    // 引擎重建后全量重推矩阵环绕参数（含 7 路 Trim/Mute），
-                    // 否则 UI 显示 prefs 值、引擎却是默认值 → 假状态
-                    runCatching { pushAllVsParams() }
-                    runCatching {
-                        engine.setBypass(
-                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                            !_vsEnabled.value,
-                        )
-                        engine.setParam(
-                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                            AudioEngine.VS_PARAM_ENABLED,
-                            if (_vsEnabled.value) 1f else 0f,
-                        )
-                        engine.setParam(
-                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                            AudioEngine.VS_PARAM_BS775,
-                            if (_vsBs775.value) 1f else 0f,
-                        )
-                    }
-                }
-                // 只在「明确停止/失败」时释放。**不能用「非 Running 就释放」**：
-                // start 过程会经过 Ready/Preparing，那样会把建链前的预静音当场撤销
-                val ended = st is com.jiangjie.Sonicraft.core.engine.EngineState.Stopped ||
-                    st is com.jiangjie.Sonicraft.core.engine.EngineState.Failed
-                if (ended) {
-                    runCatching { takeover.releaseLoopbackMutesNow() }
-                }
-            }
-        }
-    }
 
     /**
      * 采集断链告警：capture 全零断链时保险丝回滚接管保直出。
@@ -285,30 +239,19 @@ class MainViewModel @Inject constructor(
         return gains
     }
 
-    private fun readEqBands(mode: Int): List<Float> = runCatching {
-        prefs.getString("eq_bands_$mode", null)
-            ?.split(",")
-            ?.map { it.toFloat() }
-    }.getOrNull()?.let { stored -> List(mode) { i -> stored.getOrElse(i) { 0f } } }
-        ?: List(mode) { 0f }
+    private fun readEqBands(mode: Int): List<Float> = EqConfigCodec.readBands(prefs, mode)
 
-    private fun persistEqBands(mode: Int, gains: List<Float>) {
-        prefs.edit().putString("eq_bands_$mode", gains.joinToString(",") { "%.2f".format(it) }).apply()
-    }
+    private fun persistEqBands(mode: Int, gains: List<Float>) =
+        EqConfigCodec.persistBands(prefs, mode, gains)
 
     /** 段数切换（10/15/31）：下发 SetParam(93) + 该模式参数重放（各模式独立记忆） */
     // 每段独立 Q（专业逻辑：Q 滑条跟随选中的频点段，各模式独立记忆）
     private val _eqBandQs = MutableStateFlow(readEqQs(_eqMode.value))
     val eqBandQs: StateFlow<List<Float>> = _eqBandQs.asStateFlow()
 
-    private fun readEqQs(mode: Int): List<Float> = runCatching {
-        prefs.getString("eq_q_$mode", null)?.split(",")?.map { it.toFloat() }
-    }.getOrNull()?.let { stored -> List(mode) { i -> stored.getOrElse(i) { 1f }.coerceIn(0.3f, 8f) } }
-        ?: List(mode) { 1f }
+    private fun readEqQs(mode: Int): List<Float> = EqConfigCodec.readQs(prefs, mode)
 
-    private fun persistEqQs(mode: Int, qs: List<Float>) {
-        prefs.edit().putString("eq_q_$mode", qs.joinToString(",") { "%.2f".format(it) }).apply()
-    }
+    private fun persistEqQs(mode: Int, qs: List<Float>) = EqConfigCodec.persistQs(prefs, mode, qs)
 
     /** 选中段的 Q 调整：下发单个 band Q + 持久化 */
     fun setEqBandQ(band: Int, q: Float) {
@@ -325,15 +268,10 @@ class MainViewModel @Inject constructor(
     private val _eqBandTypes = MutableStateFlow(readEqTypes(_eqMode.value))
     val eqBandTypes: StateFlow<List<Int>> = _eqBandTypes.asStateFlow()
 
-    private fun readEqTypes(mode: Int): List<Int> = runCatching {
-        prefs.getString("eq_type_$mode", null)?.split(",")?.map { it.toInt() }
-    }.getOrNull()?.let { stored ->
-        List(mode) { i -> stored.getOrElse(i) { 0 }.coerceIn(0, 2) }
-    } ?: List(mode) { 0 }
+    private fun readEqTypes(mode: Int): List<Int> = EqConfigCodec.readTypes(prefs, mode)
 
-    private fun persistEqTypes(mode: Int, types: List<Int>) {
-        prefs.edit().putString("eq_type_$mode", types.joinToString(",")).apply()
-    }
+    private fun persistEqTypes(mode: Int, types: List<Int>) =
+        EqConfigCodec.persistTypes(prefs, mode, types)
 
     /** 单段类型切换（AutoEQ 应用链路用；UI 不直接暴露） */
     fun setEqBandType(band: Int, type: Int) {
@@ -566,11 +504,11 @@ class MainViewModel @Inject constructor(
 
     /** 压缩阈值（dB）：包络超过该电平开始压缩 */
     private val _compressorThreshold =
-        MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_THRESHOLD, -20f))
+        MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_THRESHOLD, -3f))
     val compressorThreshold: StateFlow<Float> = _compressorThreshold.asStateFlow()
 
     /** 压缩比（x:1） */
-    private val _compressorRatio = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_RATIO, 4f))
+    private val _compressorRatio = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_RATIO, 1.4f))
     val compressorRatio: StateFlow<Float> = _compressorRatio.asStateFlow()
 
     // ---- 界面缩放----
@@ -609,19 +547,19 @@ class MainViewModel @Inject constructor(
     fun resetUiFineScale() = setUiFineScale(1f)
 
     /** 起音（ms，已暴露到 UI） */
-    private val _compressorAttack = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_ATTACK, 10f))
+    private val _compressorAttack = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_ATTACK, 15f))
     val compressorAttack: StateFlow<Float> = _compressorAttack.asStateFlow()
 
     /** 释放（ms） */
-    private val _compressorRelease = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_RELEASE, 150f))
+    private val _compressorRelease = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_RELEASE, 220f))
     val compressorRelease: StateFlow<Float> = _compressorRelease.asStateFlow()
 
     /** 拐点宽度（dB，0 = 硬拐点） */
-    private val _compressorKnee = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_KNEE, 6f))
+    private val _compressorKnee = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_KNEE, 3f))
     val compressorKnee: StateFlow<Float> = _compressorKnee.asStateFlow()
 
     /** 补偿增益（dB） */
-    private val _compressorMakeup = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_MAKEUP, 0f))
+    private val _compressorMakeup = MutableStateFlow(prefs.getFloat(KEY_COMPRESSOR_MAKEUP, 2f))
     val compressorMakeup: StateFlow<Float> = _compressorMakeup.asStateFlow()
 
     // ---- 并联 / 检测模式 / 前瞻 / 过采样 ----
@@ -1012,11 +950,7 @@ class MainViewModel @Inject constructor(
     }
 
     /** 文件名 → 显示名：去掉最后一个扩展名；旧命名 ir_ 前缀一并去掉 */
-    private fun displayNameOf(fileName: String): String {
-        val noPrefix = fileName.removePrefix("ir_")
-        val dot = noPrefix.lastIndexOf('.')
-        return if (dot > 0) noPrefix.substring(0, dot) else noPrefix
-    }
+    private fun displayNameOf(fileName: String): String = IrFileNaming.displayName(fileName)
 
     /**
      * 旧命名乱码判定：ir_ 前缀 + 含连续两个下划线（旧 sanitize 把中文全替 '_'，
@@ -1051,21 +985,14 @@ class MainViewModel @Inject constructor(
 
     /** 文件名是否为可导入候选：扩展名白名单 + 非 hidden/系统文件 + 最小体积（防 0 字节）。
      *  size < 0 表示 provider/zip 未提供大小（未知 ≠ 0 字节），放行交由实际复制结果检验。 */
-    private fun isIrCandidate(name: String, size: Long): Boolean {
-        if (name.startsWith(".")) return false
-        val ext = name.substringAfterLast('.', "").lowercase()
-        return ext in irExtensions && (size < 0L || size >= 44L)
-    }
+    private fun isIrCandidate(name: String, size: Long): Boolean =
+        IrFileNaming.isCandidate(name, size, irExtensions)
 
     /**
      * 落盘名清洗：只滤路径分隔符与控制字符，保留中文/空格等（库列表直接展示文件名，
      * 中文名变下划线不可读）。ext4 UTF-8 文件名对 fopen/native 加载无影响。
      */
-    private fun sanitizeIrFileName(raw: String): String = buildString {
-        for (c in raw) {
-            append(if (c == '/' || c == '\\' || c == '\u0000') '_' else c)
-        }
-    }.trim().take(80).ifBlank { "ir" }
+    private fun sanitizeIrFileName(raw: String): String = IrFileNaming.sanitize(raw)
 
     /** 按文件名解析 IR 实际路径：专用目录优先，旧根目录兜底（迁移异常时不丢加载能力） */
     private fun resolveIrFile(file: String): File {
@@ -3268,7 +3195,61 @@ class MainViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "检测中…")
 
+    /**
+     * 一次性迁移（2026-11-24）：旧默认压限参数在 0dBFS 输入下净衰减 11~15dB
+     * （gain-audit 实测：单段 -14.9dB、多段 -10.8dB），用户反馈「开软件声音变小」。
+     *
+     * 只替换「prefs 值精确等于旧默认」的项——用户改过任一项就不动，
+     * 避免覆盖其精调结果。迁移后同步刷新已按旧值初始化的 StateFlow。
+     */
+    private fun migrateLegacyCompressorDefaults() {
+        val e = prefs.edit()
+        var changed = 0
+
+        // 判定逻辑抽到 CompressorMigration.plan（纯函数，有单测）
+        val compKeys = arrayOf(
+            KEY_COMPRESSOR_THRESHOLD, KEY_COMPRESSOR_RATIO, KEY_COMPRESSOR_ATTACK,
+            KEY_COMPRESSOR_RELEASE, KEY_COMPRESSOR_KNEE, KEY_COMPRESSOR_MAKEUP,
+        )
+        val compLegacy = floatArrayOf(-20f, 4f, 10f, 150f, 6f, 0f)
+        val compFresh = floatArrayOf(-3f, 1.4f, 15f, 220f, 3f, 2f)
+        val compCurrent = FloatArray(compKeys.size) { prefs.getFloat(compKeys[it], compFresh[it]) }
+        for ((index, value) in CompressorMigration.plan(compCurrent, compLegacy, compFresh)) {
+            e.putFloat(compKeys[index], value)
+            changed++
+        }
+
+        val mbCurrent = FloatArray(MULTIBAND_PARAM_COUNT) { pid ->
+            prefs.getFloat(KEY_MULTIBAND_PARAM_PREFIX + pid, MULTIBAND_DEFAULTS[pid])
+        }
+        val mbPlan = CompressorMigration.plan(
+            mbCurrent,
+            MULTIBAND_DEFAULTS_LEGACY,
+            MULTIBAND_DEFAULTS,
+        )
+        for ((pid, value) in mbPlan) {
+            e.putFloat(KEY_MULTIBAND_PARAM_PREFIX + pid, value)
+            changed++
+        }
+
+        if (changed == 0) return
+        e.apply()
+        // 属性已按旧值完成初始化，迁移后重新读一遍
+        _compressorThreshold.value = prefs.getFloat(KEY_COMPRESSOR_THRESHOLD, -3f)
+        _compressorRatio.value = prefs.getFloat(KEY_COMPRESSOR_RATIO, 1.4f)
+        _compressorAttack.value = prefs.getFloat(KEY_COMPRESSOR_ATTACK, 15f)
+        _compressorRelease.value = prefs.getFloat(KEY_COMPRESSOR_RELEASE, 220f)
+        _compressorKnee.value = prefs.getFloat(KEY_COMPRESSOR_KNEE, 3f)
+        _compressorMakeup.value = prefs.getFloat(KEY_COMPRESSOR_MAKEUP, 2f)
+        _multibandParams.value = List(MULTIBAND_PARAM_COUNT) { pid ->
+            prefs.getFloat(KEY_MULTIBAND_PARAM_PREFIX + pid, MULTIBAND_DEFAULTS[pid])
+        }
+        writeDiag("迁移：压限默认参数已更新为不损响度版本（$changed 项）")
+    }
+
     init {
+        // 旧默认压限参数会白吃 11~15dB，先迁移再让 UI 绑定
+        migrateLegacyCompressorDefaults()
         // 双后端：切换/全灭 → 提示用户（全灭时必须弹窗，不能静默失效）
         viewModelScope.launch {
             privileged.events.collect { ev ->
@@ -3894,12 +3875,7 @@ class MainViewModel @Inject constructor(
     private val _eqBandFreqs = MutableStateFlow(readEqFreqs(_eqMode.value))
     val eqBandFreqs: StateFlow<List<Float>> = _eqBandFreqs.asStateFlow()
 
-    private fun readEqFreqs(mode: Int): List<Float> = runCatching {
-        prefs.getString("eq_freq_$mode", null)?.split(",")?.map { it.toFloat() }
-    }.getOrNull()?.let { stored ->
-        val table = EqMath.freqTable(mode)
-        List(mode) { i -> stored.getOrElse(i) { table.getOrElse(i) { 1000f } }.coerceIn(20f, 20000f) }
-    } ?: EqMath.freqTable(mode)
+    private fun readEqFreqs(mode: Int): List<Float> = EqConfigCodec.readFreqs(prefs, mode)
 
     fun setEqBandFreq(band: Int, hz: Float) {
         val clamped = hz.coerceIn(20f, 20000f)
@@ -3914,43 +3890,10 @@ class MainViewModel @Inject constructor(
     private val _eqUserPresets = MutableStateFlow(readEqUserPresets())
     val eqUserPresets: StateFlow<List<EqUserPreset>> = _eqUserPresets.asStateFlow()
 
-    private fun readEqUserPresets(): List<EqUserPreset> = runCatching {
-        val arr = org.json.JSONArray(prefs.getString(KEY_EQ_USER_PRESETS, "[]"))
-        (0 until arr.length()).map { idx ->
-            val ob = arr.getJSONObject(idx)
-            fun fa(k: String): List<Float> {
-                val a = ob.getJSONArray(k)
-                return (0 until a.length()).map { a.getDouble(it).toFloat() }
-            }
-            EqUserPreset(
-                ob.getString("name"), ob.getInt("mode"), fa("gains"), fa("qs"), fa("freqs"),
-                // 旧预设无 types 字段→空列表=全 PK（兼容）
-                if (ob.has("types")) {
-                    val ta = ob.getJSONArray("types")
-                    (0 until ta.length()).map { ta.getInt(it).coerceIn(0, 2) }
-                } else {
-                    emptyList()
-                },
-            )
-        }
-    }.getOrDefault(emptyList())
+    private fun readEqUserPresets(): List<EqUserPreset> = EqConfigCodec.readUserPresets(prefs)
 
-    private fun persistEqUserPresets(list: List<EqUserPreset>) {
-        val arr = org.json.JSONArray()
-        list.forEach { p ->
-            val ob = org.json.JSONObject()
-            ob.put("name", p.name)
-            ob.put("mode", p.mode)
-            listOf("gains" to p.gains, "qs" to p.qs, "freqs" to p.freqs).forEach { (k, vals) ->
-                val a = org.json.JSONArray()
-                vals.forEach { a.put(it.toDouble()) }
-                ob.put(k, a)
-            }
-            if (p.types.isNotEmpty()) ob.put("types", org.json.JSONArray(p.types))
-            arr.put(ob)
-        }
-        prefs.edit().putString(KEY_EQ_USER_PRESETS, arr.toString()).apply()
-    }
+    private fun persistEqUserPresets(list: List<EqUserPreset>) =
+        EqConfigCodec.persistUserPresets(prefs, list)
 
     fun saveEqUserPreset(name: String) {
         val n = name.trim().ifEmpty { "预设 ${_eqUserPresets.value.size + 1}" }
@@ -6289,6 +6232,60 @@ class MainViewModel @Inject constructor(
         )
     }
 
+    /**
+     * 启动期异步初始化 —— **必须放在类体末尾**。
+     *
+     * 2026-11-22 真实崩溃：本块原在类前部（第 142 行），`Dispatchers.IO` 线程池可能在
+     * 构造函数还没走到 `_audioMode`（第 4488 行）的声明处就执行 lambda，
+     * 于是 `_audioMode.value` 撞上 null → `NullPointerException:
+     * MutableStateFlow.getValue() on a null object reference`。
+     *
+     * Kotlin 的 `init` 按出现顺序执行、属性按声明顺序初始化，因此任何要访问
+     * 本类属性的 `init` 都必须在**所有属性声明之后**。
+     */
+    init {
+        // 启动时把持久化的 audio_mode 同步给 UI（否则设置页高亮会一直是默认值）
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                _audioMode.value = prefs.getString(KEY_AUDIO_MODE, MODE_LOOPBACK) ?: MODE_LOOPBACK
+            }
+        }
+        // 引擎停止/失败 → 立即释放接管静音。否则「引擎没输出了、原声又被压着」= 全静音。
+        viewModelScope.launch {
+            engine.state.collect { st ->
+                // 引擎（重新）就绪后，节点内参数已回到默认值 → 开关类参数会"显示开启却无效"，
+                // 必须把开关切一次才生效（BS.775 / 矩阵环绕都踩过）。Running 时直接补发。
+                if (st is EngineState.Running) {
+                    // 引擎重建后全量重推矩阵环绕参数（含 7 路 Trim/Mute），
+                    // 否则 UI 显示 prefs 值、引擎却是默认值 → 假状态
+                    runCatching { pushAllVsParams() }
+                    runCatching {
+                        engine.setBypass(
+                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                            !_vsEnabled.value,
+                        )
+                        engine.setParam(
+                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                            AudioEngine.VS_PARAM_ENABLED,
+                            if (_vsEnabled.value) 1f else 0f,
+                        )
+                        engine.setParam(
+                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                            AudioEngine.VS_PARAM_BS775,
+                            if (_vsBs775.value) 1f else 0f,
+                        )
+                    }
+                }
+                // 只在「明确停止/失败」时释放。**不能用「非 Running 就释放」**：
+                // start 过程会经过 Ready/Preparing，那样会把建链前的预静音当场撤销。
+                val ended = st is EngineState.Stopped || st is EngineState.Failed
+                if (ended) {
+                    runCatching { takeover.releaseLoopbackMutesNow() }
+                }
+            }
+        }
+    }
+
     private companion object {
         const val TAG = "MainVM"
         const val PREFS_NAME = "sonicraft_settings"
@@ -6390,16 +6387,25 @@ class MainViewModel @Inject constructor(
         const val MULTIBAND_PARAM_COUNT = 20
 
         /**
-         * 母带默认：0-17 每段六参 thr/ratio/atk/rel/knee/gain，18=fc1 200Hz、19=fc2 3.5kHz。
-         * 真机实听定案（NX733J，DJ/电音源）：Low 由「持续整形」改为「峰值安全网」——
-         * −26dB/2.5:1 持续压缩发闷且无力量，快释放（98ms）产生泵感「POPO」；
-         * 高阈值+4:1+10/150ms 只在 kick 峰值动作，低音长音原样通过，实听力量感回归；
-         * High 默认实听认可，Mid 未报问题维持 温和式。
+         * 默认：0-17 每段六参 thr/ratio/atk/rel/knee/gain，18=fc1 200Hz、19=fc2 3.5kHz。
+         *
+         * **不损响度优先**（2026-11-24 调整，与 native 默认对齐）：原 -11/-22/-20 阈值 +
+         * Low 4:1 在 1kHz 下净衰减约 11dB，用户反馈「开了多段压限声音变小」。
+         * 现改为高位阈值 + 低比率 + Mid 段 +0.5dB，0dBFS 正弦实测净增益约 -1.25dB。
+         * （旧值仅供老 prefs 迁移识别，见 CompressorMigration）
          */
         val MULTIBAND_DEFAULTS = floatArrayOf(
-            -11f, 4.0f, 10f, 150f, 6f, 0f,   // Low：峰值安全网（M8e 定案）
-            -22f, 2.0f, 15f, 150f, 6f, 0f,   // Mid
-            -20f, 2.0f, 5f, 120f, 6f, 0f,    // High
+            -3f, 2.0f, 10f, 120f, 6f, 0f,     // Low
+            -3f, 2.5f, 8f, 150f, 6f, 0.5f,    // Mid（+0.5dB 补偿）
+            -14f, 2.0f, 5f, 110f, 6f, 0f,     // High
+            200f, 3500f,
+        )
+
+        /** 旧默认（2026-11-24 之前）：仅用于启动时识别「用户从未改过」的 prefs 并迁移 */
+        val MULTIBAND_DEFAULTS_LEGACY = floatArrayOf(
+            -11f, 4.0f, 10f, 150f, 6f, 0f,
+            -22f, 2.0f, 15f, 150f, 6f, 0f,
+            -20f, 2.0f, 5f, 120f, 6f, 0f,
             200f, 3500f,
         )
         private val MULTIBAND_BAND_RANGES =

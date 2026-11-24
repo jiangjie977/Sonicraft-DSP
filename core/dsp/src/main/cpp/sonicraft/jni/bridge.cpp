@@ -566,62 +566,92 @@ Java_com_jiangjie_Sonicraft_core_dsp_NativeAudioEngine_nativeDestroy(
 #include <unwind.h>
 #include <dlfcn.h>
 
+// 只在安装时保存路径字符串；fd 在**崩溃那一刻**才打开。
+//
+// 2026-11-24 修复：旧实现安装时就 open(O_TRUNC)，于是每次 App 启动都创建一个
+// 0 字节 crash_native_*.txt（真机上积累了 6 个空文件），而真崩溃时反而可能
+// 因为 fd 已被关闭/进程被杀而写不出栈。改为「安装存路径、崩溃时 append」。
 static int g_crash_fd = -1;
+static char g_crash_path[512] = {0};
+
+struct CrashUnwindArg {
+  int fd;
+  int count;
+};
 
 static _Unwind_Reason_Code CrashUnwindCb(struct _Unwind_Context* ctx, void* arg) {
-  int* count = static_cast<int*>(arg);
+  auto* a = static_cast<CrashUnwindArg*>(arg);
   uintptr_t pc = _Unwind_GetIP(ctx);
-  if (pc != 0) {
-    char buf[256];
-    Dl_info info;
-    if (dladdr(reinterpret_cast<void*>(pc), &info) != 0 && info.dli_fname != nullptr) {
-      uintptr_t off = pc - reinterpret_cast<uintptr_t>(info.dli_fbase);
-      int n = snprintf(buf, sizeof(buf), "#%d %s 0x%lx\n",
-                       (*count)++, info.dli_fname, (unsigned long)off);
-      write(g_crash_fd, buf, n);
-    } else {
-      int n = snprintf(buf, sizeof(buf), "#%d 0x%lx\n", (*count)++, (unsigned long)pc);
-      write(g_crash_fd, buf, n);
-    }
+  if (pc == 0) return _URC_NO_REASON;
+  char buf[320];
+  Dl_info info;
+  int n;
+  if (dladdr(reinterpret_cast<void*>(pc), &info) != 0 && info.dli_fname != nullptr) {
+    uintptr_t off = pc - reinterpret_cast<uintptr_t>(info.dli_fbase);
+    n = snprintf(buf, sizeof(buf), "#%d %s 0x%lx\n",
+                 a->count++, info.dli_fname, (unsigned long)off);
+  } else {
+    n = snprintf(buf, sizeof(buf), "#%d 0x%lx\n", a->count++, (unsigned long)pc);
   }
+  if (n > 0) write(a->fd, buf, static_cast<size_t>(n));
   return _URC_NO_REASON;
 }
 
-static void CrashSigHandler(int sig, siginfo_t* /*info*/, void* /*ucontext*/) {
-  if (g_crash_fd >= 0) {
-    char head[64];
-    int hn = snprintf(head, sizeof(head), "\n=== native crash signal %d ===\n", sig);
-    write(g_crash_fd, head, hn);
-    int count = 0;
-    _Unwind_Backtrace(CrashUnwindCb, &count);
-    const char* tail = "=== end ===\n";
-    write(g_crash_fd, tail, strlen(tail));
-    fsync(g_crash_fd);
-    close(g_crash_fd);
-    g_crash_fd = -1;
+static void CrashSigHandler(int sig, siginfo_t* info, void* /*ucontext*/) {
+  // 约束：handler 内只做 async-signal-safe 调用（open/write/fsync/close/_exit）。
+  if (g_crash_path[0] != '\0') {
+    int fd = open(g_crash_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (fd >= 0) {
+      char head[224];
+      int hn = snprintf(head, sizeof(head),
+                        "\n=== native crash sig=%d addr=%p pid=%d tid=%d ===\n",
+                        sig,
+                        info != nullptr ? info->si_addr : nullptr,
+                        static_cast<int>(getpid()),
+                        static_cast<int>(gettid()));
+      if (hn > 0) write(fd, head, static_cast<size_t>(hn));
+      CrashUnwindArg ua{fd, 0};
+      _Unwind_Backtrace(CrashUnwindCb, &ua);
+      const char* tail = "=== end ===\n";
+      write(fd, tail, strlen(tail));
+      fsync(fd);
+      close(fd);
+    }
   }
-  signal(sig, SIG_DFL);
-  raise(sig);
+  // 恢复默认动作后直接退出：不用 signal()/raise()（非 async-signal-safe，
+  // 且可能被再次捕获造成递归）。
+  struct sigaction sa;
+  memset(&sa, 0, sizeof(sa));
+  sa.sa_handler = SIG_DFL;
+  sigemptyset(&sa.sa_mask);
+  sigaction(sig, &sa, nullptr);
+  _exit(128 + sig);
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_jiangjie_Sonicraft_CrashCapture_nativeInstall(JNIEnv* env, jclass,
                                                       jstring path) {
   const char* p = env->GetStringUTFChars(path, nullptr);
-  if (p) {
-    g_crash_fd = open(p, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (p != nullptr) {
+    snprintf(g_crash_path, sizeof(g_crash_path), "%s", p);
     env->ReleaseStringUTFChars(path, p);
   }
+
+  // 备用栈：栈溢出型 SIGSEGV 时，handler 在默认栈上无处可跑。
+  static char alt_stack[SIGSTKSZ * 4];
+  stack_t ss;
+  ss.ss_sp = alt_stack;
+  ss.ss_size = sizeof(alt_stack);
+  ss.ss_flags = 0;
+  sigaltstack(&ss, nullptr);
+
   struct sigaction sa;
   memset(&sa, 0, sizeof(sa));
   sa.sa_sigaction = CrashSigHandler;
-  sa.sa_flags = SA_SIGINFO;
+  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
   sigemptyset(&sa.sa_mask);
-  sigaction(SIGSEGV, &sa, nullptr);
-  sigaction(SIGABRT, &sa, nullptr);
-  sigaction(SIGBUS, &sa, nullptr);
-  sigaction(SIGILL, &sa, nullptr);
-  sigaction(SIGFPE, &sa, nullptr);
+  const int kSignals[] = {SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGFPE, SIGSYS};
+  for (int s : kSignals) sigaction(s, &sa, nullptr);
 }
 
 }  // extern "C"

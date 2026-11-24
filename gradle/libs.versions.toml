@@ -12,6 +12,8 @@ composeBom = "2026.06.00"
 coroutines = "1.10.2"
 annotation = "1.9.1"
 junit = "4.13.2"
+# JVM 单测用真实 org.json（Android SDK 里的 org.json 在本地单测是 stub）
+orgJson = "20240303"
 ndk = "27.0.12077973"
 cmake = "3.22.1"
 
@@ -32,6 +34,7 @@ hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
 hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

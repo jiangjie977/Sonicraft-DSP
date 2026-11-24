@@ -41,6 +41,22 @@ namespace {
 
 int failures = 0;
 
+/**
+ * 把压缩器固定到 M4b-2 基线参数（-20dB / 4:1 / 10 / 150 / knee 6 / makeup 0）。
+ *
+ * 产品默认已于 2026-11-24 改为「不损响度」的温和值（-3 / 1.4:1 / makeup +2），
+ * 因此所有依赖 -20/4:1 理论曲线的断言必须**显式设参**，不能吃默认值。
+ */
+void SetLegacyCompressorBaseline(sonicraft::dsp::CompressorNode& c) {
+    using C = sonicraft::dsp::CompressorNode;
+    c.SetParam(C::kParamThresholdDb, -20.0f);
+    c.SetParam(C::kParamRatio, 4.0f);
+    c.SetParam(C::kParamAttackMs, 10.0f);
+    c.SetParam(C::kParamReleaseMs, 150.0f);
+    c.SetParam(C::kParamKneeDb, 6.0f);
+    c.SetParam(C::kParamMakeupDb, 0.0f);
+}
+
 void Check(bool ok, const char* what) {
     std::printf("[%s] %s\n", ok ? "PASS" : "FAIL", what);
     if (!ok) ++failures;
@@ -608,6 +624,7 @@ int main(int argc, char** argv) {
         sonicraft::dsp::CompressorNode comp;
         comp.set_channel_count(kChannels);
         comp.Prepare(kSampleRate, kMaxFrames);
+        SetLegacyCompressorBaseline(comp);
         comp.SetBypass(false);
 
         const float kCStep = 2.0f * 3.141592653589793f * 1000.0f / kSampleRate;
@@ -797,7 +814,7 @@ int main(int argc, char** argv) {
             c.Prepare(kSampleRate, kMaxFrames);
             c.SetBypass(false);
             c.SetParam(sonicraft::dsp::CompressorNode::kParamMix, mix);
-            // 其余用默认：threshold=-20 / ratio=4 / knee=6 / hp=120
+            SetLegacyCompressorBaseline(c);
             const float st = 2.0f * 3.141592653589793f * 1000.0f / kSampleRate;
             float ph = 0.0f;
             const int blocks = 64;
@@ -849,6 +866,7 @@ int main(int argc, char** argv) {
             c.Prepare(kSampleRate, kMaxFrames);
             c.SetBypass(false);
             c.SetParam(sonicraft::dsp::CompressorNode::kParamDetectMode, mode);
+            SetLegacyCompressorBaseline(c);
             const float st = 2.0f * 3.141592653589793f * 1000.0f / kSampleRate;
             float ph = 0.0f;
             const int blocks = 128;   // 跑够长，让 RMS 积分完全收敛
@@ -944,6 +962,7 @@ int main(int argc, char** argv) {
             c.Prepare(kSampleRate, kMaxFrames);
             c.SetBypass(false);
             c.SetParam(sonicraft::dsp::CompressorNode::kParamOversample, os);
+            SetLegacyCompressorBaseline(c);
             const float st = 2.0f * 3.141592653589793f * 1000.0f / kSampleRate;
             float ph = 0.0f;
             const int blocks = 96;

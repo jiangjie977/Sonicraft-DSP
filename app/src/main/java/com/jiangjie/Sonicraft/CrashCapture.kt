@@ -59,9 +59,16 @@ object CrashCapture {
             default?.uncaughtException(t, e)
         }
 
+        // 旧实现每次启动都 open(O_TRUNC) 一个 crash_native_<ts>.txt，留下大量 0 字节文件。
+        // native 侧已改为「崩溃时才 append 写」，这里统一用固定文件名并清理历史空文件。
+        runCatching {
+            dir.listFiles { f -> f.name.startsWith("crash_native_") }?.forEach { f ->
+                if (f.length() == 0L) f.delete()
+            }
+        }
         try {
             System.loadLibrary("sonicraft-dsp")
-            nativeInstall(File(dir, "crash_native_$ts.txt").absolutePath)
+            nativeInstall(File(dir, "crash_native.log").absolutePath)
         } catch (e: Throwable) {
             Log.e(TAG, "native 崩溃捕获安装失败", e)
         }

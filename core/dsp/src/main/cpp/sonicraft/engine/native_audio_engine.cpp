@@ -843,8 +843,15 @@ aaudio_data_callback_result_t NativeAudioEngine::OnData(void* audio_data, int32_
     }
     consumed = need;
   } else {
-    // 欠载：已采集部分填入，剩余补零（输出静音）——每一次都是可闻咔哒声
-    underrun_blocks_.fetch_add(1, std::memory_order_relaxed);
+    // 欠载：已采集部分填入，剩余补零（输出静音）——每一次都是可闻咔哒声。
+    //
+    // 但**空载旁路期间不计数**：没有音源时采集端本来就不产数据，ring 必然空，
+    // 每 4ms 回调都算一次「欠载」，实测无音源时 underrun 每秒 +1（88 且持续增长），
+    // 把真正播放期间的欠载完全淹没。idle 激活意味着已静音 4s，
+    // 此窗口内的空 ring 是预期行为，不是故障。
+    if (!idle_bypass_.active()) {
+      underrun_blocks_.fetch_add(1, std::memory_order_relaxed);
+    }
     for (int i = 0; i < available; ++i) {
       out[i] = input_ring_[r % cap];
       ++r;

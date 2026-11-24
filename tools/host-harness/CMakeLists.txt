@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(sonicraft_host_harness CXX)
 
+# 默认 Release：harness 里有 CPU 性能断言（如 E9 31 段全开 <150ms），
+# Debug（无 /O2）会慢 2.5 倍造成假失败。CI 与本机行为必须一致。
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
+endif()
+
 # 宿主机 DSP 验证 harness：不依赖 Android/NDK，直接编译 core:dsp 的纯算法源码。
 # 用法（任选其一）：
 #   Windows: cmake -S . -B build -G Ninja && cmake --build build

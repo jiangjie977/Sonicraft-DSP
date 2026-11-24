@@ -98,5 +98,7 @@ dependencies {
     ksp(libs.hilt.compiler)
 
     testImplementation(libs.junit)
+    // Android SDK 自带的 org.json 在 JVM 单测里是 stub（调用即抛），这里接真实实现
+    testImplementation(libs.org.json)
     androidTestImplementation(platform(libs.compose.bom))
 }

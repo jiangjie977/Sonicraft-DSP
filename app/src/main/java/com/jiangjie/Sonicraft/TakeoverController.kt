@@ -12,6 +12,7 @@ import android.os.Process
 import com.jiangjie.Sonicraft.core.common.DiagDirs
 import java.io.File
 import com.jiangjie.Sonicraft.core.common.SonicraftLog
+import com.jiangjie.Sonicraft.core.SilenceFuse
 import com.jiangjie.Sonicraft.core.engine.AudioEngine
 import com.jiangjie.Sonicraft.core.engine.EngineState
 import com.jiangjie.Sonicraft.core.engine.StopReason
@@ -1100,25 +1101,32 @@ class TakeoverController @Inject constructor(
             val lvlNow = currentInputLevel()
             // 只监测已认领的真实 uid（预静音归属 0，等 takeover 认领后再管）
             val mutedUids = loopbackSessionUid.values.filter { it > 0 }.toSet()
-            if (mutedUids.isNotEmpty()) {
-                if (lvlNow > 0.005f) {
-                    // 见过副本数据后掉零才值得判定（避免建链初期静音被误撤=启动双声）
-                    dpSawAudio.addAll(mutedUids)
-                    dpSilenceStreak.clear()
-                } else if (lvlNow in 0f..0.0049f) {
-                    for (mutedUid in mutedUids) {
-                        if (mutedUid !in dpSawAudio) continue
+            for (mutedUid in mutedUids) {
+                // 判定逻辑见 SilenceFuse（纯函数，有单测）
+                when (
+                    SilenceFuse.evaluate(
+                        level = lvlNow,
+                        sawAudio = mutedUid in dpSawAudio,
+                        streak = dpSilenceStreak[mutedUid] ?: 0,
+                    )
+                ) {
+                    SilenceFuse.Decision.FRESH -> {
+                        dpSawAudio.add(mutedUid)
+                        dpSilenceStreak.remove(mutedUid)
+                    }
+                    SilenceFuse.Decision.IGNORE -> Unit
+                    SilenceFuse.Decision.COUNTING -> {
+                        dpSilenceStreak[mutedUid] = (dpSilenceStreak[mutedUid] ?: 0) + 1
+                    }
+                    SilenceFuse.Decision.RELEASE -> {
                         val streak = (dpSilenceStreak[mutedUid] ?: 0) + 1
-                        dpSilenceStreak[mutedUid] = streak
-                        if (streak >= 2) {
-                            releaseUidMutes(mutedUid)
-                            dpSilenceStreak.remove(mutedUid)
-                            dpUnfitUids.add(mutedUid)
-                            writeDiag(
-                                "DP 保险（轮询）：uid=$mutedUid 副本持续归零（连续 $streak 轮，" +
-                                    "电平=${"%.4f".format(lvlNow)}）→ 释放静音并标记直出（宁双声不静音）",
-                            )
-                        }
+                        dpSilenceStreak.remove(mutedUid)
+                        releaseUidMutes(mutedUid)
+                        dpUnfitUids.add(mutedUid)
+                        writeDiag(
+                            "DP 保险（轮询）：uid=$mutedUid 副本持续归零（连续 $streak 轮，" +
+                                "电平=${"%.4f".format(lvlNow)}）→ 释放静音并标记直出（宁双声不静音）",
+                        )
                     }
                 }
             }

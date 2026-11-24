@@ -114,12 +114,15 @@ class CompressorNode : public DspNode {
   static constexpr int kParamLookaheadMs = 9;
   static constexpr float kDefaultLookaheadMs = 0.0f;
   static constexpr float kMaxLookaheadMs = 10.0f;
-  static constexpr float kDefaultThresholdDb = -20.0f;
-  static constexpr float kDefaultRatio = 4.0f;
-  static constexpr float kDefaultAttackMs = 10.0f;
-  static constexpr float kDefaultReleaseMs = 150.0f;
-  static constexpr float kDefaultMakeupDb = 0.0f;
-  static constexpr float kDefaultKneeDb = 6.0f;
+  // 默认值以「不损响度」为准（2026-11-24 调整）：原 -20/4:1/makeup 0 在 0dBFS 输入下
+  // 净衰减约 15dB，用户反馈「开了压限声音变小」。现改为温和值：阈值高（只在峰值动作）、
+  // 低比率、带 +2dB makeup —— 0dBFS 正弦下净增益约 0dB（gain-audit 实测 +0.13dB）。
+  static constexpr float kDefaultThresholdDb = -3.0f;
+  static constexpr float kDefaultRatio = 1.4f;
+  static constexpr float kDefaultAttackMs = 15.0f;
+  static constexpr float kDefaultReleaseMs = 220.0f;
+  static constexpr float kDefaultMakeupDb = 2.0f;
+  static constexpr float kDefaultKneeDb = 3.0f;
   static constexpr float kDefaultSidechainHpHz = 120.0f;
   static constexpr float kDefaultMix = 1.0f;
   static constexpr float kDefaultDetectMode = 0.0f;
