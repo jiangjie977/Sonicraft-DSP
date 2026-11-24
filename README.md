@@ -85,6 +85,8 @@ docs/                设计文档、用户手册、架构决策记录
 - 项目主体：**GPL-3.0-only**（`LICENSE`）
 - `integration/stellar/` 下的 Stellar 代码：**MPL-2.0**（`licenses/MPL-2.0.txt`）
 
+**源码仓库**：<https://github.com/jiangjie977/Sonicraft-DSP>（GPL-3.0 第 3 条要求的源码获取入口）
+
 第三方组件归属与义务说明见 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)。
 
 ## 致谢
