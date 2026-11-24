@@ -25,8 +25,8 @@ android {
         // 35 → 36（Android 16）。国内商店与 Play 均按年度要求跟进最新 targetSdk；
         // compileSdk 早已是 36，升 target 只是启用 A16 的 targetSdk 门控行为。
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.4.1"
+        versionCode = 11
+        versionName = "0.4.2"
     }
 
     buildFeatures {

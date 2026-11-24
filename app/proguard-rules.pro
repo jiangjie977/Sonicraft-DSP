@@ -40,6 +40,12 @@
 # 3) AIDL 生成类的 descriptor 用「接口全名」，改名后服务端拒绝匹配
 -keep interface com.jiangjie.Sonicraft.privilege.** { *; }
 
+# 5) Shizuku 后端靠**反射**调 `Shizuku.newProcess`（API 13.1.5 起该方法转 private），
+#    方法名一旦被 R8 重命名，getDeclaredMethod 直接抛 NoSuchMethodException
+#    → Shevery/Shizuku 后端起不来。用户只装 Shevery 时会导致整个 App 不可用。
+-keep class dev.rikka.shizuku.** { *; }
+-keep class moe.shizuku.** { *; }
+
 # 4) Parcelable 的 CREATOR 字段名必须保留，否则反序列化取不到
 -keepclassmembers class * implements android.os.Parcelable {
     public static final ** CREATOR;
