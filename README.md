@@ -21,7 +21,7 @@ Sonicraft 不是音乐播放器。它抓取本机正在播放的音频流（任�
 
 ## 版本
 
-当前 **v0.3.0**（`versionCode 8`）。逐版变更与升级说明见 [`RELEASE_NOTES.md`](RELEASE_NOTES.md)。
+当前 **v0.4.2**（`versionCode 11`）。逐版变更与升级说明见 [`RELEASE_NOTES.md`](RELEASE_NOTES.md)。
 
 ## 系统要求
 
@@ -29,6 +29,13 @@ Sonicraft 不是音乐播放器。它抓取本机正在播放的音频流（任�
 - **需要特权通道**：本项目的音频捕获依赖系统级音频策略能力，需通过
   [Stellar](https://github.com/roro2239/Stellar)（Shizuku 的定制分支）以 ADB / Root 方式授权
 - 未授权时可退化为 MediaProjection 录制方案（需一次系统录屏授权），功能受限
+
+## 机型支持
+
+本项目开发与调试在真机 **nubia Z70 Ultra** 上完成，**其他机型未进行过验证测试**。
+
+音效接管依赖系统级音频路由（`AudioPolicy` / `AudioMix` / 隐藏 API），各厂商 ROM 的策略差异较大，
+因此不保证在其他机型上可用。如在某些机型上无法使用，开发者可下载源码自行进行适配。
 
 ## 构建
 
