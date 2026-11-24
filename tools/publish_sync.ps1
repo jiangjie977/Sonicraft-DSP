@@ -10,6 +10,12 @@
 .PARAMETER Version
   Optional version label used in the sync commit message (e.g. v0.4.2).
 
+.PARAMETER Tag
+  Optional git tag to create on the mirror's fresh commit and push to origin.
+  Idempotent: if the tag already exists it is left untouched (but still pushed).
+  The dev-tree tag is created separately (in D:\OPEN\DSP) - GitHub only sees
+  tags pushed from the mirror, because the two histories are independent.
+
 .PARAMETER DryRun
   List files that would be copied without touching the mirror.
 
@@ -17,10 +23,11 @@
   Commit to the mirror but skip git push (used when the remote is not configured yet).
 
 .EXAMPLE
-  .\tools\publish_sync.ps1 -Version v0.4.2
+  .\tools\publish_sync.ps1 -Version v0.4.2 -Tag v0.4.2
 #>
 param(
     [string]$Version = "",
+    [string]$Tag = "",
     [switch]$DryRun,
     [switch]$NoPush
 )
@@ -128,27 +135,40 @@ Get-ChildItem -Path $dst -Recurse -Directory -Force -ErrorAction SilentlyContinu
         }
     }
 
-# --- stage + commit + push ----------------------------------------------
+# --- stage + commit ------------------------------------------------------
 Push-Location $dst
 git add -A
 $staged = git status --porcelain
-if (-not $staged) {
-    Write-Host "Nothing to publish - mirror already up to date."
-    Pop-Location
-    exit 0
+if ($staged) {
+    $srcCommit = (git -C $src log -1 --format="%h")
+    $msg = if ($Version) { "sync: $Version (from DSP $srcCommit)" } else { "sync: from DSP $srcCommit" }
+    git commit -m $msg
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "git commit failed"
+        Pop-Location
+        exit 1
+    }
+} else {
+    Write-Host "Nothing to commit - mirror content already up to date."
 }
 
-$srcCommit = (git -C $src log -1 --format="%h")
-$msg = if ($Version) { "sync: $Version (from DSP $srcCommit)" } else { "sync: from DSP $srcCommit" }
-git commit -m $msg
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "git commit failed"
-    Pop-Location
-    exit 1
+# --- optional tag (idempotent) -------------------------------------------
+# GitHub only sees tags pushed from the mirror; the dev-tree tag is created
+# separately in $src. Re-running with an existing tag must stay harmless.
+if ($Tag) {
+    $existing = git tag --list $Tag
+    if ($existing) {
+        Write-Host "Tag $Tag already exists in mirror (skip create, will still push)"
+    } else {
+        $tagMsg = if ($Version) { "$Version" } else { "release $Tag" }
+        git tag -a $Tag -m $tagMsg
+        if ($LASTEXITCODE -eq 0) { Write-Host "Created annotated tag $Tag on mirror" }
+    }
 }
 
 if ($NoPush) {
-    Write-Host "Committed locally (NoPush). Configure remote then: git push -u origin HEAD"
+    Write-Host "Committed locally (NoPush)."
+    if ($Tag) { Write-Host "Push later: git push -u origin HEAD ; git push origin $Tag" }
     Pop-Location
     exit 0
 }
@@ -157,6 +177,11 @@ git push -u origin HEAD
 $pushCode = $LASTEXITCODE
 if ($pushCode -ne 0) {
     Write-Error "git push failed with exit code $pushCode (use -NoPush if remote is not configured yet)"
+}
+
+if ($Tag -and $pushCode -eq 0) {
+    git push origin $Tag
+    if ($LASTEXITCODE -ne 0) { Write-Error "git push tag $Tag failed" }
 }
 Pop-Location
 exit $pushCode
