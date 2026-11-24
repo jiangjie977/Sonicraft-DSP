@@ -182,13 +182,12 @@ fun PrivacyComplianceSection(viewModel: MainViewModel) {
                             )
                             Text(
                                 text = "根据 GPL 第 3 条，你在获得本应用二进制的同时有权获得对应" +
-                                    "源代码。获取方式：通过下方邮箱联系开发者索取，" +
-                                    "或从项目源码仓库克隆。",
+                                    "源代码。获取方式：从下方源码仓库克隆，或提交 Issue 索取。",
                                 fontSize = 12.sp,
                                 lineHeight = 17.sp,
                             )
                             Text(
-                                text = "联系邮箱：＜上架前填写＞",
+                                text = "联系方式：GitHub Issues（github.com/jiangjie977/Sonicraft-DSP/issues）",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                             )

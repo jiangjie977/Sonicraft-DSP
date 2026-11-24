@@ -3,7 +3,7 @@
 **生效日期**：2026-11-08
 **版本**：v0.2.1
 **开发者**：jiangjie（个人开发者）
-**联系邮箱**：＜上架前填写＞
+**联系方式**：GitHub Issues（https://github.com/jiangjie977/Sonicraft-DSP/issues）
 
 > 本政策适用于 Android 应用「Sonicraft」（包名 `com.jiangjie.Sonicraft`）。
 > 我们把它写得尽量短，因为事实很简单：**这个应用没有联网能力，不收集你的任何信息**。
