@@ -181,6 +181,9 @@ class BassEnhanceNode : public DspNode {
   }
 
   void Process(float* const* channels, int frames) override {
+    // 契约：channels 数组长度必须 >= channels_（DspGraph 按构造时的声道数分配，
+    // 恒等满足）。这里只挡空指针/非正帧数 —— 拿不到实际长度，无法二次校验，
+    // 越界责任在调用方，不要在这里加"猜长度"的分支。
     if (channels == nullptr || frames <= 0) return;
     if (bypass_) return;
 
@@ -216,6 +219,9 @@ class BassEnhanceNode : public DspNode {
       }
       for (auto& sp : classical_split_) sp.SnapCoeffs();
       for (auto& r : classic_reso_) r.SnapCoeffs();
+      // 计量语义与动态模式**不同**（UI 需按 mode 解读）：
+      //   动态模式 [0] = 低频包络 dB、[1] = 动态增益 dB；
+      //   经典模式 [0] 无对应量（置 -96）、[1] = 低频带提升量 dB（lowGain）。
       meter_low_db_ = -96.0f;
       meter_dyn_db_ = 20.0f * std::log10(lowGain + 1e-9f);
       return;
@@ -232,8 +238,10 @@ class BassEnhanceNode : public DspNode {
     // `kDeepGainSoftLimit = 2.0`，全参数 x=10 时收敛到 ≈2.0。
     // 这样 IMD 从 5.84% 降到 1.26%，而用户平时听的默认音色一点没变。
     const float rawDeepGain = deep_ * gain10;
-    const float knee = 1.5f;
-    const float softDeepGain_ = (rawDeepGain <= knee)
+    // knee 由默认参数推导（amount 0.5 x deep 0.3 x 10 = 1.5），不写死字面量：
+    // 否则一旦调整默认值，软限就会开始压缩默认音色（"逐位不变"的承诺静默失效）。
+    const float knee = kDefaultAmount * kDefaultDeep * 10.0f;
+    const float soft_deep_gain = (rawDeepGain <= knee)
         ? rawDeepGain
         : knee + (kDeepGainSoftLimit - knee) *
               (1.0f - std::exp(-(rawDeepGain - knee) / 1.5f));
@@ -266,7 +274,7 @@ class BassEnhanceNode : public DspNode {
       // 因为「增益随包络变化」本身就是非线性，平滑滤不掉调制本身。
       // 真正要收敛的是**极端参数下的调制深度**，见 kDeepGainSoftLimit。
       // 保留平滑是为了让增益变化不生硬，不是 IMD 的主修手段。
-      const float dyn_target = 1.0f + softDeepGain_ * (1.0f / (1.0f + env_ * 15.0f));
+      const float dyn_target = 1.0f + soft_deep_gain * (1.0f / (1.0f + env_ * 15.0f));
       dyn_gain_smooth_ += (dyn_target - dyn_gain_smooth_) * dyn_gain_coef_;
       const float dyn_gain = dyn_gain_smooth_;
 
@@ -288,7 +296,7 @@ class BassEnhanceNode : public DspNode {
         sub_flip_ = -sub_flip_;
       }
       prev_sub_ = sub_in;
-      m_low += sub_lp2_.Process(sub_in * sub_flip_) * softDeepGain_ * 1.5f;
+      m_low += sub_lp2_.Process(sub_in * sub_flip_) * soft_deep_gain * 1.5f;
 
       // ⑤ 只加增量，原信号保留
       const float delta = m_low - m_low_origin;
@@ -419,6 +427,10 @@ class BassEnhanceNode : public DspNode {
     const float sr = static_cast<float>(sample_rate_);
     env_attack_ = 1.0f - std::exp(-1.0f / (kEnvAttackMs * 0.001f * sr));
     env_release_ = 1.0f - std::exp(-1.0f / (kEnvReleaseMs * 0.001f * sr));
+    // 动态增益平滑系数必须随采样率重算。
+    // 此前只有成员初值 0.001f：48k 下恰好 20ms，但 16k/96k 会漂成 62ms/10ms，
+    // 而 kDynGainSmoothMs 成了死常量（声明了却没人用）。
+    dyn_gain_coef_ = 1.0f - std::exp(-1.0f / (kDynGainSmoothMs * 0.001f * sr));
   }
 
   int sample_rate_ = 48000;
