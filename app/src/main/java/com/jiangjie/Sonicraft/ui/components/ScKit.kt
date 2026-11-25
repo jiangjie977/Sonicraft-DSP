@@ -478,7 +478,7 @@ fun ScSwitch(
 enum class ScTabIconKind { GRID, SEARCH, HEART, PERSON }
 
 /** U6 效果卡线性图标种类（设计稿 P1 fx 卡：青绿描边 SVG 线性风格，无底色圆块）。 */
-enum class ScEffectIconKind { WAVE, EQ, BURST, PULSE, RINGS, BASS, LIMITER }
+enum class ScEffectIconKind { WAVE, EQ, BURST, PULSE, RINGS, BASS, LIMITER, RACK }
 
 /**
  * U9a 电源图标（20dp Canvas 自绘，stroke 1.7dp 圆头规范）：竖线 + 顶部开口圆弧。
@@ -606,6 +606,29 @@ fun ScEffectIcon(
                 path.cubicTo(w * 0.54f, h * 0.94f, w * 0.68f, h * 0.94f, w * 0.80f, h * 0.58f)
                 path.lineTo(w * 0.94f, h * 0.58f)
                 drawPath(path, color = tint, style = stroke)
+            }
+            ScEffectIconKind.RACK -> {
+                // 三根竖向推子轨道 + 各自的推子帽（与 EQ 的水平曲线+圆点明确区分）
+                val xs = listOf(0.22f, 0.5f, 0.78f)
+                val knobYs = listOf(0.62f, 0.38f, 0.7f)
+                xs.forEachIndexed { i, x ->
+                    val cx = w * x
+                    drawLine(
+                        tint,
+                        Offset(cx, h * 0.16f),
+                        Offset(cx, h * 0.84f),
+                        stroke.width,
+                        StrokeCap.Round,
+                    )
+                    val ky = h * knobYs[i]
+                    drawLine(
+                        tint,
+                        Offset(cx - w * 0.085f, ky),
+                        Offset(cx + w * 0.085f, ky),
+                        stroke.width * 1.7f,
+                        StrokeCap.Round,
+                    )
+                }
             }
         }
     }

@@ -3247,6 +3247,62 @@ class MainViewModel @Inject constructor(
         writeDiag("迁移：压限默认参数已更新为不损响度版本（$changed 项）")
     }
 
+    /**
+     * 导出全部配置到外部私有目录（`.../files/backup/`）。
+     *
+     * 放在外部私有目录而不是内部存储：release 版非 debuggable、`run-as` 用不了，
+     * 但外部私有目录 adb 可直接 pull；而且切换 release/debug 时不会被卸载清掉。
+     *
+     * @return 文件绝对路径
+     */
+    fun exportConfig(): Result<String> = runCatching {
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
+            .format(java.util.Date())
+        // 用 PackageManager 取版本（本项目未开启 buildConfig 特性，没有 BuildConfig 类）
+        val pkg = context.packageManager.getPackageInfo(context.packageName, 0)
+        val appLabel = "${pkg.versionName} (${pkg.longVersionCode})"
+        val json = ConfigBackup.encode(
+            all = prefs.all,
+            appLabel = appLabel,
+            nowIso = stamp,
+        )
+        val dir = File(context.getExternalFilesDir(null) ?: context.filesDir, "backup")
+            .apply { mkdirs() }
+        val file = File(dir, "sonicraft_config_$stamp.json")
+        file.writeText(json)
+        writeDiag("配置已导出：${file.name}（${prefs.all.size} 项）")
+        file.absolutePath
+    }
+
+    /**
+     * 从 SAF 选中的 JSON 导入配置。
+     *
+     * 用 `commit()` 而非 `apply()`：调用方随后要重启 App，异步落盘有丢失风险。
+     *
+     * @return 写入项数
+     */
+    fun importConfig(uri: android.net.Uri): Result<Int> = runCatching {
+        val text = context.contentResolver.openInputStream(uri)?.use {
+            it.readBytes().toString(Charsets.UTF_8)
+        } ?: error("无法读取所选文件")
+        ConfigBackup.describeError(text)?.let { error(it) }
+        val map = ConfigBackup.decode(text) ?: error("配置解析失败")
+        val editor = prefs.edit()
+        for ((key, value) in map) {
+            when (value) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Float -> editor.putFloat(key, value)
+                is Int -> editor.putInt(key, value)
+                is Long -> editor.putLong(key, value)
+                is String -> editor.putString(key, value)
+                is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+            }
+        }
+        if (!editor.commit()) error("写入配置失败")
+        writeDiag("配置已导入：${map.size} 项（需重启生效）")
+        map.size
+    }
+
     init {
         // 旧默认压限参数会白吃 11~15dB，先迁移再让 UI 绑定
         migrateLegacyCompressorDefaults()

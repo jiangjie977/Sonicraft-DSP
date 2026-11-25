@@ -187,7 +187,15 @@ class StellarPrivilegedClient @Inject constructor(
     override fun refresh() {
         val installed = StellarHelper.isManagerInstalled(context)
         val running = isAlive()
-        val granted = running && runCatching { Stellar.checkSelfPermission() }.getOrDefault(false)
+        // 授权判定同时接受 `shizuku` 权限：
+        // 本应用声明了 ShizukuProvider，Manager 会把它归类为「Shizuku 兼容应用」，
+        // 授权页只给 `shizuku` 开关（没有 stellar 开关）。若只查 stellar，用户即使
+        // 在 Manager 里点了「允许」仍被判为未授权 → bindUserService 报 code=-3。
+        // 两者是同一 uid、同一服务端鉴权，任一生效即视为已授权。
+        val granted = running && (
+            runCatching { Stellar.checkSelfPermission() }.getOrDefault(false) ||
+                runCatching { Stellar.checkSelfPermission("shizuku") }.getOrDefault(false)
+            )
         val uid = if (running) runCatching { Stellar.uid }.getOrDefault(-1) else -1
         _state.value = PrivilegeState(
             managerInstalled = installed,

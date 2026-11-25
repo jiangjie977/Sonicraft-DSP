@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
                                 getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                                     .edit()
                                     .putBoolean(KEY_PRIVACY_ACCEPTED, true)
+                                    .putInt(KEY_PRIVACY_VERSION, CURRENT_PRIVACY_VERSION)
                                     .apply()
                                 accepted = true
                             },
@@ -56,13 +57,36 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun hasAcceptedPrivacy(): Boolean =
-        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_PRIVACY_ACCEPTED, false)
+    /**
+     * 是否已同意**当前版本**的隐私条款。
+     *
+     * 为什么不能只看布尔值：《个保法》第 14 条要求条款有实质变更时**重新征得同意**。
+     * 只存 `privacy_accepted=true` 的话，条款改了老用户也不会被重新询问。
+     * 这里比较版本号，`CURRENT_PRIVACY_VERSION` 递增时老用户会自动重新看到同意页。
+     *
+     * 兼容迁移：历史版本只存了布尔值（无版本号）→ 视为已同意当前版本，避免升级时打扰。
+     */
+    private fun hasAcceptedPrivacy(): Boolean {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val version = prefs.getInt(KEY_PRIVACY_VERSION, 0)
+        if (version >= CURRENT_PRIVACY_VERSION) return true
+        if (version == 0 && prefs.getBoolean(KEY_PRIVACY_ACCEPTED, false)) {
+            prefs.edit().putInt(KEY_PRIVACY_VERSION, CURRENT_PRIVACY_VERSION).apply()
+            return true
+        }
+        return false
+    }
 
     private companion object {
         /** 与 MainViewModel.PREFS_NAME 保持一致 */
         const val PREFS_NAME = "sonicraft_settings"
         const val KEY_PRIVACY_ACCEPTED = "privacy_accepted"
+        const val KEY_PRIVACY_VERSION = "privacy_accepted_version"
+
+        /**
+         * 隐私政策版本号。**条款有实质变更时 +1**（新增权限、新增数据处理方式等），
+         * 老用户会被重新弹一次同意页。
+         */
+        const val CURRENT_PRIVACY_VERSION = 1
     }
 }

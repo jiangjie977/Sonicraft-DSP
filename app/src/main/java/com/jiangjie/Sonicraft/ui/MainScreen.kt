@@ -903,7 +903,7 @@ private fun P1LibrarySection(
                 // 副标题压到 8 字：半宽卡放不下「卷积 + 算法 · 自定义 IR」，
                 // 自定义 IR 的名字在详情页里能看到，不必挤在卡上
                 subtitle = "卷积 + 算法",
-                icon = ScEffectIconKind.WAVE,
+                icon = ScEffectIconKind.RINGS,
                 enabled = reverbSectionEnabled,
                 onClick = onOpenReverb,
                 onToggle = { viewModel.setReverbSectionEnabled(!reverbSectionEnabled) },
@@ -966,7 +966,7 @@ private fun P1LibrarySection(
             ScEffectCard(
                 title = "机架",
                 subtitle = "脚本槽位 ×3",
-                icon = ScEffectIconKind.WAVE,
+                icon = ScEffectIconKind.RACK,
                 enabled = scriptEnabled,
                 onClick = onOpenRack,
                 onToggle = { viewModel.setScriptEffectEnabled(!scriptEnabled) },

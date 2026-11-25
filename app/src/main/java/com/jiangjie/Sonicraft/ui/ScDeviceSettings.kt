@@ -1134,6 +1134,64 @@ fun ScSettingsSection(viewModel: MainViewModel) {
                     color = if (testTone) ScColors.Primary else ScColors.TextSub,
                 )
             }
+
+            // ---- 配置备份（切换 release/debug 会清数据，靠它免于重调）----
+            val ctx = LocalContext.current
+            var backupMsg by remember { mutableStateOf<String?>(null) }
+            var needRestart by remember { mutableStateOf(false) }
+            val importLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.OpenDocument(),
+            ) { uri ->
+                if (uri != null) {
+                    viewModel.importConfig(uri)
+                        .onSuccess { n ->
+                            backupMsg = "已导入 $n 项配置。"
+                            needRestart = true
+                        }
+                        .onFailure { backupMsg = "导入失败：${it.message}" }
+                }
+            }
+
+            ScSettingRow(
+                title = "导出配置",
+                subtitle = "全部参数写成 JSON，存到应用外部目录",
+                showDivider = true,
+                onClick = {
+                    viewModel.exportConfig()
+                        .onSuccess { backupMsg = "已导出：\n$it" }
+                        .onFailure { backupMsg = "导出失败：${it.message}" }
+                },
+                trailing = { Text("›", fontSize = 18.sp, color = ScColors.TextSub) },
+            )
+            ScSettingRow(
+                title = "导入配置",
+                subtitle = "从 JSON 恢复全部参数（需重启应用）",
+                showDivider = false,
+                onClick = {
+                    importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                },
+                trailing = { Text("›", fontSize = 18.sp, color = ScColors.TextSub) },
+            )
+
+            backupMsg?.let { msg ->
+                AlertDialog(
+                    onDismissRequest = { backupMsg = null },
+                    title = { Text(if (needRestart) "配置已导入" else "配置备份") },
+                    text = { Text(msg) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            backupMsg = null
+                            if (needRestart) {
+                                ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
+                                    ?.let { ctx.startActivity(it) }
+                                Runtime.getRuntime().exit(0)
+                            }
+                        }) {
+                            Text(if (needRestart) "立即重启" else "好")
+                        }
+                    },
+                )
+            }
         }
     }
 
