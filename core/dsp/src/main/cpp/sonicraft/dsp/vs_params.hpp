@@ -22,8 +22,8 @@ enum Param : int {
   kParamMode = 1,           // 0=音乐 1=电影（决定 steering 上限与平滑系数）
   kParamSurroundGain = 2,   // dB，环绕声道总增益
   kParamCenterGain = 3,     // dB，中置总增益
-  kParamRearGain = 4,       // [未实现·已废弃] 后中置增益：改用「声道 Trim · CS」，C++ 不读取
-  kParamFrontGain = 5,      // [未实现·已废弃] 前场补偿：改用「声道 Trim · FL/FR」，C++ 不读取
+  kParamRearGain = 4,           // [固定值] 后场衰减：UI 不暴露，按 -6 dB 常量生效       // [未实现·已废弃] 后中置增益：改用「声道 Trim · CS」，C++ 不读取
+  kParamFrontGain = 5,          // [固定值] 前场增益：UI 不暴露，按 0 dB 常量生效      // [未实现·已废弃] 前场补偿：改用「声道 Trim · FL/FR」，C++ 不读取
   kParamDistance = 6,       // 0~1，声源距离（影响早期反射比例）
 
   // ---- 编解码往返（0 = 完全直通，1 = 完全经过）----
@@ -32,7 +32,7 @@ enum Param : int {
   // ---- 中置处理 ----
   kParamCenterMode = 8,     // 0=关闭 1=直通 2=混合到前置（-3dB）
   kParamDialog = 9,         // -6~+6 dB，人声清晰度
-  kParamDialogEnabled = 10, // 0/1
+  kParamDialogEnabled = 10, // [固定值] 0/1：DSP 会读，但 UI 未暴露开关，固定为开（强度由 kParamDialog 控制）
 
   // ---- 低音谐波 ----
   kParamBassEnhancer = 11,      // 0~1 强度
@@ -47,7 +47,7 @@ enum Param : int {
   kParamHrtfMode = 16,       // [未实现] 0=经典 HRTF 1=Ambisonic（当前只有经典）
   kParamHeightStrength = 17, // 0~1 高度重定向强度（>3kHz）
   kParamEarlyReflection = 18,// [未实现] 早期反射量：实际由 kParamDistance 联动控制，此参数未读取
-  kParamAmbisonicMode = 19,  // [未实现] Ambisonic 模式：未实现
+  kParamAmbisonicMode = 19,  // 0=经典矩阵 / 1=HOA(12 扬声器) / 2=VBAP(12 扬声器)
   kParamStereoExpand = 20,   // 0~1 立体声展宽
 
   // ---- 头部追踪 ----
@@ -84,7 +84,13 @@ enum Param : int {
   kParamBs775 = 40,
   kParamTransientProtect = 41,   // 0/1 环绕瞬态保护（瞬态段抑制倾斜与去相关）
 
-  kParamCount = 42,
+  // ---- Ambisonic 解码器（kParamAmbisonicMode=1 时生效）----
+  kParamAmbiFocus = 42,      // 0~1 前向聚焦：0=最宽（不加窗）1=max-rE（旁瓣最小）
+
+  // ---- VBAP 解码器（kParamAmbisonicMode = 2 时生效）----
+  kParamVbapSpread = 43,     // 0~1 扩散：0=纯 VBAP（最准最硬）1=明显扩散
+
+  kParamCount = 44,
 };
 
 /** 7 声道内部顺序：FL / FR / C / SL / SR / CS / LFE */
@@ -135,8 +141,10 @@ constexpr float kDefault[kParamCount] = {
     /* mute_cs            */ 0.0f,
     /* mute_lfe           */ 0.0f,
     /* debug_raw          */ 0.0f,
-    /* transient_protect  */ 1.0f,   // 默认开启
-    /* bs775              */ 0.0f,
+    /* bs775              */ 0.0f,   // ← 顺序必须与枚举一致（bs775=40）
+    /* transient_protect  */ 1.0f,   // 默认开启（=41）
+    /* ambi_focus         */ 1.0f,   // 默认满 max-rE（旁瓣最小、前向最集中）
+    /* vbap_spread        */ 0.25f,  // 轻微扩散：纯 VBAP 只点亮 2 只扬声器，听感偏硬
 };
 
 }  // namespace sonicraft::dsp::vs

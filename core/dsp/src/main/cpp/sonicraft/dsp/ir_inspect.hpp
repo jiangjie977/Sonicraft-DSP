@@ -15,7 +15,7 @@ namespace sonicraft::dsp {
 /**
  * IR 病态检测。
  *
- * 背景：用户加载 HIFI最终版2.irs 后全链五款软件（wecho/ViPERDSP/RV4A/RDSP/
+ * 背景：用户加载 HIFI最终版2.irs 后全链五款软件（早期定制版/ViPERDSP/RV4A/RDSP/
  * 本项目）复听均现「干声 + 迟到湿声」双声——根因是该 IR 形态病态：0~160ms
  * 深静音（-84~-78dB）+ 161.4ms 孤立主脉冲（峰值 3.13）。卷积后湿声整体迟到
  * 120~161ms，远超 Haas 融合区（~30ms），人耳听成两个分离声音事件。同类社区

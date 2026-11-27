@@ -162,7 +162,7 @@ NodePtr makeVirtual() {
   n->set_channel_count(kCh);
   n->Prepare(kSr, kFrames);
   n->SetBypass(false);
-  // 测量口径对齐 `wecho yuanma` 默认值（与真机默认一致）。
+  // 测量口径对齐 `早期定制版 yuanma` 默认值（与真机默认一致）。
   // 旧版这里用「全参数拉满」(1.3/0.5/0.5/40)，bench 数据与实际听感对不上。
   n->SetParam(sonicraft::dsp::VirtualBassNode::kParamAmount, 1.0f);
   n->SetParam(sonicraft::dsp::VirtualBassNode::kParamHarmonic, 1.0f);

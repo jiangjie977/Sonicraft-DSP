@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 部分交互与布局参照本人维护的 wecho 定制版（studio_rack 分支）。
+ * 部分交互与布局参照作者本人维护的定制分支。
  */
 
 package com.jiangjie.Sonicraft.ui
@@ -136,7 +136,7 @@ import kotlinx.coroutines.delay
  * `screenWidthDp` 也跟着变 → 算 scale 时读到被自己影响过的值（循环依赖）；
  * 而且 MaterialTheme 的 typography 已经用 sp 定义，双重缩放会失控。
  *
- * wecho 的做法是给子树一块**更大的逻辑画布**（宽 = 实际宽 / scale），
+ * 早期定制版 的做法是给子树一块**更大的逻辑画布**（宽 = 实际宽 / scale），
  * 再用 FittedBox 缩回屏幕。Compose 的等价物：
  *   `requiredSize(逻辑尺寸) + graphicsLayer(scale, origin=TopStart)`
  * 子树所有 dp/sp 按比例放大，布局计算仍在「逻辑像素」里完成，不会被二次缩放。
@@ -175,6 +175,44 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     LaunchedEffect(Unit) {
         viewModel.refreshDiagnostics()
         viewModel.refreshBatteryState()
+    }
+
+    // ---- 自动备份恢复提示 ----
+    // 卸载重装 / pm clear 会清空内部 prefs（全部参数），但外部私有目录的 autobackup.json
+    // 不会被清。这里检测「当前无任何自定义配置」→ 提示从备份恢复。
+    var restoreLabel by remember { mutableStateOf<String?>(null) }
+    var restoreChecked by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (restoreChecked) return@LaunchedEffect
+        restoreChecked = true
+        // 等 1.5s：让 VM 的自动备份先跑完，避免把空配置误写进备份
+        kotlinx.coroutines.delay(1500L)
+        restoreLabel = viewModel.pendingAutoRestoreLabel()
+    }
+    restoreLabel?.let { label ->
+        AlertDialog(
+            onDismissRequest = { restoreLabel = null },
+            title = { Text("发现配置备份") },
+            text = {
+                Text(
+                    "当前没有任何自定义配置，检测到 $label 的自动备份。\n" +
+                        "是否恢复到该备份？（恢复后需要重启应用）",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    restoreLabel = null
+                    if (viewModel.restoreFromAutoBackup().isSuccess) {
+                        context.packageManager.getLaunchIntentForPackage(context.packageName)
+                            ?.let { context.startActivity(it) }
+                        Runtime.getRuntime().exit(0)
+                    }
+                }) { Text("恢复并重启") }
+            },
+            dismissButton = {
+                TextButton(onClick = { restoreLabel = null }) { Text("不用") }
+            },
+        )
     }
 
     // 通知运行时权限（Android 13+，targetSdk 35 下必须请求）：未授予时所有通知
@@ -424,10 +462,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         // 宽屏（>560dp，平板/折叠屏）内容居中限宽，避免整行被拉得过长；
         // 手机宽度 <=560dp 时 contentWidth == maxWidth，与改版前完全一致。
     // 界面缩放：autoScale(按 440dp 基准自动算)
-    // × 粗调 × 微调，最终夹在 0.68~1.69，与 wecho 的 UIScaleManager 同口径。
+    // × 粗调 × 微调，最终夹在 0.68~1.69，与 早期定制版 的 UIScaleManager 同口径。
     val uiScale by viewModel.uiScale.collectAsStateWithLifecycle()
     val uiFineScale by viewModel.uiFineScale.collectAsStateWithLifecycle()
-    // **用短边而不是屏宽**：wecho 原公式按屏宽算，
+    // **用短边而不是屏宽**：早期定制版 原公式按屏宽算，
     // 那是竖屏假设。横屏时屏宽 973dp ÷ 440 = 2.2 → 被 clamp 到上限 1.3 →
     // 整个 UI 放大 130%，字号与控件全部撑爆（真机横屏实测）。
     // 改用「短边」：竖屏短边=宽（440 → 100%），横屏短边=高（440 → 同样 100%），
@@ -815,9 +853,11 @@ private fun P1LibrarySection(
                     label = "输出增益",
                     value = outputGain,
                     min = 0f,
-                    max = 2f,
+                    // 0~2×：叠加输出级内建的 +3 dB 基准（AudioEngine.OUTPUT_MAKEUP_DB）
+                    max = AudioEngine.OUTPUT_GAIN_MAX,
                     sizeDp = knobSize,
                     textScale = 0.6f,
+                    // 显示倍数：内建基准不进这个数（0.00×=静音，1.00×=基准+0 dB）
                     format = { "%.2f×".format(it) },
                     // 阈值取 +2dB（10^(2/20) ≈ 1.259）。
                     // 输出级小幅正增益属正常操作（补偿录音偏小的曲目），到 +2dB 才提示，
@@ -942,10 +982,12 @@ private fun P1LibrarySection(
             )
         }
         val vsEnabled = viewModel.vsEnabled.collectAsStateWithLifecycle().value
-        // 空间环绕有两个引擎（矩阵环绕 / Surround71），互斥。总闸必须「任一开启即算开」，
-        // 否则打开 Surround71 后（矩阵环绕被自动关闭）总闸会显示为关。
+        // 空间环绕有三个引擎（经典环绕 / Ambisonic / 7.1 环绕），互斥。总闸必须「任一开启即算开」，
+        // 否则打开 7.1 环绕 后（经典环绕被自动关闭）总闸会显示为关。
         val s71Enabled = viewModel.s71Enabled.collectAsStateWithLifecycle().value
-        val vsAnyOn = vsEnabled || s71Enabled
+        // 第三个引擎：Ambisonic（与上面两个互斥，也在同一个 VS 节点里）
+        val vsAmbisonic = viewModel.vsAmbisonic.collectAsStateWithLifecycle().value
+        val vsAnyOn = vsEnabled || s71Enabled || vsAmbisonic
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             // 空间环绕：与机架同行（两者都是"整条总线级"的处理，语义相近）
             // 副标题压到 8 字以内：半宽卡放不下原来那句「7 声道虚拟布局 · 双耳 HRTF 渲染」
@@ -957,7 +999,7 @@ private fun P1LibrarySection(
                 onClick = onOpenVs,
                 onToggle = {
                     // 关闭 → 两个引擎都关；开启 → 恢复**上次使用的那个引擎**
-                    // （原来固定开矩阵环绕，会导致"在用 Surround71 时关掉再打开却变回矩阵环绕"）
+                    // （原来固定开经典环绕，会导致"在用 7.1 环绕 时关掉再打开却变回经典环绕"）
                     if (vsAnyOn) viewModel.closeAllSurroundEngines() else viewModel.openLastSurroundEngine()
                 },
                 modifier = Modifier.weight(1f),

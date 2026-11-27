@@ -308,7 +308,7 @@ static void freshNode(ParametricEqNode& eq) {
         report("E10 shelf LSC/HSC + mixed cascade", ok, d);
     }
 
-    // ---- E11 任意段数泛化（1~31，wecho 对齐）：默认频点表对数均分 + clamp 边界 + 无 NaN
+    // ---- E11 任意段数泛化（1~31，早期定制版 对齐）：默认频点表对数均分 + clamp 边界 + 无 NaN
     {
         bool ok = true;
         // n=7：端点 20/20000、几何中点 ≈632.5、active=7
@@ -330,7 +330,7 @@ static void freshNode(ParametricEqNode& eq) {
             for (int n = 0; n < kFrames; ++n)
                 if (!std::isfinite(L[n]) || !std::isfinite(R[n])) { ok = false; break; }
         }
-        // n=1 → fc=20000（wecho 语义：唯一段=末频点）；clamp：0→1、99→31
+        // n=1 → fc=20000（早期定制版 语义：唯一段=末频点）；clamp：0→1、99→31
         eq.SetParam(93, 1.0f);
         if (std::fabs(eq.GetParam(62) - 20000.0) > 0.01) ok = false;
         eq.SetParam(93, 0.0f);
@@ -340,7 +340,7 @@ static void freshNode(ParametricEqNode& eq) {
         report("E11 arbitrary band count 1~31", ok);
     }
 
-    // ---- E12 pre-gain ±18dB（wecho Preamp 对齐）：端点实测 ±0.1dB
+    // ---- E12 pre-gain ±18dB（早期定制版 Preamp 对齐）：端点实测 ±0.1dB
     {
         bool ok = true; double worst = 0.0;
         for (float db : {-18.0f, 18.0f}) {

@@ -34,7 +34,7 @@ object EqMath {
 
     /**
      * 段数 → 默认频点表：10/15/31 用标准档位表；其余 1~31 任意段数按 20~20k
-     * 对数均分生成（末段=20k），与 native setBandCount 同口径（wecho 对齐）。
+     * 对数均分生成（末段=20k），与 native setBandCount 同口径（早期定制版 对齐）。
      */
     fun freqTable(mode: Int): List<Float> = when (mode) {
         10 -> FREQS10

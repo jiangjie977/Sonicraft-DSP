@@ -377,7 +377,7 @@ class StereoSpatialDecoder {
     {
       // **分频延迟**：只延迟 250 Hz 以上，低频直通。
       // 依据：低频定位主要靠 ILD 与相位差，整体延迟会打乱低频方向感；
-      // 而扩散感来自高频的时延散布。WEcho 的 DiffSurroundingEffect 也是这个做法。
+      // 而扩散感来自高频的时延散布。早期定制版 的 DiffSurroundingEffect 也是这个做法。
       const float sl_hi = sur_dly_hp_l_.Process(sl);
       const float sl_lo = sl - sl_hi;
       const float sr_hi = sur_dly_hp_r_.Process(sr);

@@ -92,3 +92,10 @@ tools/pair_analysis_103.py
 tools/three_class_audit_103.py
 tools/gen_test_hrtf.py
 tools/verify_test_hrtf.py
+
+# 本地 CMake 构建目录（gain-audit 的 VS 生成器输出）
+tools/gain-audit/buildvs/
+tools/gain-audit/build/
+
+# 本地 IDE 配置（CodeBuddy/VS Code 自动生成，个人设置不入库）
+.vscode/

@@ -32,6 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 VM = ROOT / "app/src/main/java/com/jiangjie/Sonicraft/MainViewModel.kt"
 ACM = ROOT / "app/src/main/java/com/jiangjie/Sonicraft/AudioChainManager.kt"
 EG = ROOT / "app/src/main/java/com/jiangjie/Sonicraft/EffectGroups.kt"
+PR = ROOT / "app/src/main/java/com/jiangjie/Sonicraft/ParamReplay.kt"
 ENGINE = ROOT / "core/engine/src/main/java/com/jiangjie/Sonicraft/core/engine/AudioEngine.kt"
 
 TOP_FUN = re.compile(
@@ -87,6 +88,11 @@ def collect(selftest: bool = False) -> tuple[set[str], set[str], set[str]]:
     headless = bypass_nodes(body_of(acm, "private fun replaySettings()"))
     # headless 的表驱动部分在 EffectGroups 里
     headless |= set(SLOT.findall(eg))
+    # ParamReplay 是两条路径**共用**的参数表（applyVs / applyLimiter 等），
+    # 它发的旁路对前台与 headless 同时生效，因此计入双方。
+    shared = bypass_nodes(read(PR)) if PR.exists() else set()
+    front |= shared
+    headless |= shared
 
     if selftest:
         # 自检：模拟「低频管家三槽没补进前台」——应当被报出来

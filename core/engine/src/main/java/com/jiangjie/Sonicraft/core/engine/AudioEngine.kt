@@ -207,6 +207,9 @@ interface AudioEngine {
         const val BASS_ENHANCE_NODE_INDEX = 7
         const val COMPRESSOR_NODE_INDEX = 8
         const val MULTIBAND_NODE_INDEX = 9
+
+        /** 多段参数个数（[0,20) 为可调参数 id）。单一真相源，Kotlin 侧引用本常量 */
+        const val MULTIBAND_PARAM_COUNT = 20
         const val CONVOLVER_NODE_INDEX = 10
         const val ALGORITHMIC_REVERB_NODE_INDEX = 11
         const val STEREO_WIDTH_NODE_INDEX = 12
@@ -258,6 +261,9 @@ interface AudioEngine {
     const val S71_PARAM_ROOM_WET = 29
     const val S71_PARAM_CENTER_MODE = 30
     const val S71_PARAM_DIALOG = 31
+
+        /** HRTF 模型：0 = 内置 139-tap KEMAR；1..5 = 实测 HRIR 数据集（557 tap） */
+        const val S71_PARAM_HRTF_MODEL = 32
     /** 8 路声道延迟（ms）起点：FL/FR/FC/LFE/BL/BR/SL/SR 各 +0..+7 */
     const val S71_PARAM_SPEAKER_DELAY0 = 18
         const val VS_PARAM_MODE = 1
@@ -309,6 +315,13 @@ interface AudioEngine {
         const val VS_PARAM_BS775 = 40
     const val VS_PARAM_TRANSIENT_PROTECT = 41
 
+        /** Ambisonic 解码器：前向聚焦（0~1，0=最宽 1=max-rE） */
+        const val VS_PARAM_AMBI_FOCUS = 42
+
+        /** VBAP 解码器：扩散量（0~1，0=纯 VBAP 只点亮 2 只扬声器） */
+        const val VS_PARAM_VBAP_SPREAD = 43
+
+
         /**
          * 低音增强参数 id（与 native `BassEnhanceNode` 常量对齐）。
          * **跨语言契约**：任一侧改动都要同步。
@@ -349,6 +362,21 @@ interface AudioEngine {
 
         /** GainNode 参数 id（输入/输出增益共用，与 native GainNode 常量对齐）。 */
         const val GAIN_PARAM_GAIN = 0
+
+    /**
+     * 输出增益上限（线性，5.6234 = +15 dB）。
+     *
+     * 输入增益仍为 2.0（+6 dB）：前端过载不可逆，一旦采进来的波形被削平，
+     * 后面任何处理都救不回来。输出增益之后只剩脚本效果器与限幅器，
+     * 超出部分会被限幅兜住，所以可以放宽。
+     */
+    const val OUTPUT_GAIN_MAX = 2.0f
+
+    /** 输出级内建基准（+3 dB = ×1.4125），在 native 侧烘焙，不经过旋钮 */
+    const val OUTPUT_MAKEUP_DB = 3.0f
+
+    /** 输入增益上限（+6 dB），不要放宽 */
+    const val INPUT_GAIN_MAX = 2.0f
 
         /** BalanceNode 参数 id（-1=全左，0=居中，+1=全右）。 */
         const val BALANCE_PARAM_BALANCE = 0
@@ -394,6 +422,14 @@ interface AudioEngine {
          *  防 DAC Gibbs 过冲穿透 ceiling。native 默认 0（harness 默认链 bit-exact 不破），
          *  Kotlin 引擎构链后由 applyAllParams 统一下发 1。 */
         const val LIMITER_PARAM_TRUE_PEAK = 2
+
+    /** 分段门限（相对输出上限的 dB 偏移，负值）：低 / 中 / 高 */
+    const val LIMITER_PARAM_GATE_LOW_DB = 3
+    const val LIMITER_PARAM_GATE_MID_DB = 4
+    const val LIMITER_PARAM_GATE_HIGH_DB = 5
+
+    /** 去直流开关（0/1）：抵消单极性限幅累积的偏移 */
+    const val LIMITER_PARAM_DC_BLOCK = 6
 
         /** CompressorNode 参数 id（与 native CompressorNode 常量对齐）。 */
         const val COMPRESSOR_PARAM_THRESHOLD_DB = 0

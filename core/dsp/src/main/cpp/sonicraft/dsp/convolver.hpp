@@ -211,7 +211,7 @@ class ConvolverNode : public DspNode {
       lc_x1_[c] = lc_x2_[c] = lc_y1_[c] = lc_y2_[c] = 0.0f;
     }
 
-    // 内置混响预设 = 实测 RIR（rir_sonic.hpp，源 wecho 定制版 rir_data，截 680ms +
+    // 内置混响预设 = 实测 RIR（rir_sonic.hpp，源 早期定制版 rir_data，截 680ms +
     // 每通道归一 Σir²=0.25，g=0.5/rms）。重提取 160ms→680ms：160ms 截断抹平长尾
     // 是三预设听感趋同的主因（教堂 2.5s 源只剩前 6.4%），680ms 后衰减时长差异
     // 回归主导。slot 5（自定义 IR）不在此填充——由 LoadImpulseResponseFromFile
@@ -574,7 +574,7 @@ class ConvolverNode : public DspNode {
     // 有效样本位置统一截断（保持矩阵时间对齐，非逐路径独立）。其后恒零
     // 分区被 SetIrSlot2x2 的 t_eff 排除 → 长零尾 IR 的批次负载直接下降。
     // -80dB 深于 16bit 底噪（-96dB）之下的可闻下限，误裁可闻内容概率可
-    // 忽略（wecho trimIrTail 用 -140dBFS 几乎只裁数字零，JDSP shrink 用
+    // 忽略（早期定制版 trimIrTail 用 -140dBFS 几乎只裁数字零，JDSP shrink 用
     // -80/-100 双阈值——取积极档，收益是实打实的 CPU）。至少保留 1 帧。
     {
       float peak_all = 0.0f;

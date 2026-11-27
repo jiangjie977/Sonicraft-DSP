@@ -3,8 +3,11 @@
  * SPDX-FileCopyrightText: 2026 qumolangmo
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 部分逻辑移植自 WEcho（GPL-3.0，Copyright (C) 2026 qumolangmo）；
- * 本文件由 Sonicraft 于 2026-11 在 WEcho 基础上移植并修改。
+ * 本文件的部分算法移植自上游 GPL-3.0 音频项目（Flutter + C++ DSP 音频应用）的原实现，
+ * 上游版权：Copyright (C) 2026 qumolangmo，许可证 GPL-3.0（与本项目兼容）。
+ * 移植与修改：2026-11，修改部分的版权归本仓库作者。
+ *
+ * 依据 GPL-3.0 §5，保留上游版权声明与派生说明；上游源码可得性义务见 THIRD-PARTY-NOTICES.md 第三节。
  */
 #pragma once
 
@@ -21,7 +24,7 @@ namespace sonicraft::dsp {
 /**
  * 低音增强 —— **与输出设备无关**，耳机与外放都能用。
  *
- * 移植自 wecho 的 `BassEffect`（UI 里叫「低频质感」/ `lowFrequencyGain`）。
+ * 移植自上游项目的 `BassEffect`（UI 里叫「低频质感」/ `lowFrequencyGain`）。
  *
  * ## 与 M15「动态低音」的分工
  * | | 动态低音 | 低音增强（本节点） |
@@ -33,7 +36,7 @@ namespace sonicraft::dsp {
  *
  * 两者**互斥**（同属低频管家），因为都是往低频加能量，叠加会过度。
  *
- * ## 四个模块（全部照 wecho 移植）
+ * ## 四个模块（全部照 早期定制版 移植）
  * 1. **静态 EQ**：`LowShelf@60Hz (+6dB×amount)` + `Peak@45Hz (+4dB×amount)`
  * 2. **动态增益**：`1 + deep × amount × 1/(1 + env×15)`
  *    —— 电平越低增益越大，即**等响度补偿**（小音量补得多、大音量几乎不动）
@@ -48,11 +51,11 @@ namespace sonicraft::dsp {
  * - S 支路保留 >120Hz 的立体声信息，声场不被压扁
  *
  * ## 只加增量：`out = m_hp + (m_low − m_low_origin)`
- * 这是 wecho 最巧妙的一处 —— 不替换原信号，只**叠加增量**。
+ * 这是 早期定制版 最巧妙的一处 —— 不替换原信号，只**叠加增量**。
  * 所以 amount=0 / deep=0 / punch=0 时输出与原信号完全一致（探针已验证）。
  *
  * ## 参数
- *   param 0 = amount  总强度 0~1（映射 wecho 的 gain 0~10）
+ *   param 0 = amount  总强度 0~1（映射 早期定制版 的 gain 0~10）
  *   param 1 = deep    下潜量 0~1（动态增益 + 次谐波）
  *   param 2 = punch   瞬态量 0~1
  */
@@ -63,7 +66,7 @@ class BassEnhanceNode : public DspNode {
   static constexpr int kParamDeep = 1;
   static constexpr int kParamPunch = 2;
   // ---- 模式切换与经典模式参数（3~6，对照
-  //      `wecho_projectV2.5.1_studio_rack` 的 `BassEffect` 双模式实现）----
+  //      `早期定制版工程` 的 `BassEffect` 双模式实现）----
   static constexpr int kParamMode = 3;
   static constexpr int kParamClassicGain = 4;
   static constexpr int kParamClassicQ = 5;
@@ -103,7 +106,7 @@ class BassEnhanceNode : public DspNode {
   static constexpr float kClassicCenterMax = 120.0f;
   static constexpr float kClassicQMin = 0.3f;
   static constexpr float kClassicQMax = 2.0f;
-  /** wecho 经典模式的固定额外增益（`× 1.5`），保留原值 */
+  /** 早期定制版 经典模式的固定额外增益（`× 1.5`），保留原值 */
   static constexpr float kClassicExtraGain = 1.5f;
   /**
    * 经典模式共振峰（Q 旋钮，用户要求「实现功能，不可移除」）。
@@ -118,7 +121,7 @@ class BassEnhanceNode : public DspNode {
   static constexpr float kClassicResoGainMinDb = 0.6f;
   static constexpr float kClassicResoGainMaxDb = 4.0f;
 
-  // ---- wecho 的固定频率（原样保留）----
+  // ---- 早期定制版 的固定频率（原样保留）----
   static constexpr float kHpMonoHz = 20.0f;      // M 支路去 DC
   static constexpr float kEnvLpHz = 120.0f;      // 包络检测带宽
   static constexpr float kShelfHz = 60.0f;       // LowShelf 中心
@@ -130,7 +133,7 @@ class BassEnhanceNode : public DspNode {
   static constexpr float kSubLpHz = 80.0f;       // 次谐波源低通
   static constexpr float kSubLp2Hz = 40.0f;      // 次谐波后低通
   static constexpr float kSideHpHz = 120.0f;     // S 支路高通
-  // 包络时间常数（wecho 原值）
+  // 包络时间常数（早期定制版 原值）
   static constexpr float kEnvAttackMs = 30.0f;
   static constexpr float kEnvReleaseMs = 200.0f;
 
@@ -231,7 +234,7 @@ class BassEnhanceNode : public DspNode {
     // 三个参数全 0 → 输出 == 输入（只加增量的设计保证了这一点），
     // 但仍然要跑完滤波让状态保持连续，否则突然变非零会有瞬态
     const bool mono = channels_ < 2;
-    const float gain10 = amount_ * 10.0f;   // wecho 的 gain 量纲 0~10
+    const float gain10 = amount_ * 10.0f;   // 早期定制版 的 gain 量纲 0~10
     // **L3 软限（定稿）**：默认值完全不动，只压缩拉满后的极端值。
     // `knee = 1.5` 正好是默认参数（amount=0.5 × deep=0.3 × 10 = 1.5）。
     // x ≤ 1.5 时**原样通过**（默认音色逐位不变）；超过后指数渐近到
@@ -412,7 +415,7 @@ class BassEnhanceNode : public DspNode {
     configureClassicResonance();
   }
 
-  /** EQ 增益随 amount 线性缩放（wecho 就是 `6.0×gain/10` 与 `4.0×gain/10`）。 */
+  /** EQ 增益随 amount 线性缩放（早期定制版 就是 `6.0×gain/10` 与 `4.0×gain/10`）。 */
   void applyEqCoeffs(bool immediate) {
     const float g = amount_ * 10.0f;
     shelf_.ConfigureShelf(kShelfHz, sample_rate_, kShelfMaxDb * g / 10.0f, kShelfQ, true);

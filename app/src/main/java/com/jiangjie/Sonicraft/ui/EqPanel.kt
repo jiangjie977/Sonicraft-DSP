@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 部分交互与布局参照本人维护的 wecho 定制版（studio_rack 分支）。
+ * 部分交互与布局参照作者本人维护的定制分支。
  */
 package com.jiangjie.Sonicraft.ui
 
@@ -97,10 +97,10 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     // 文件导入来源名：非空时应用成功后自动存为该名字的预设（粘贴导入为 null，不污染预设库）
     var draggingBand by remember { mutableStateOf(-1) }
     var selectedBand by remember { mutableStateOf(0) }
-    // 手绘防误触锁（参照 wecho GraphicEqPanel 的锁定思路）：锁定后曲线区禁用
+    // 手绘防误触锁（参照 早期定制版 GraphicEqPanel 的锁定思路）：锁定后曲线区禁用
     // 手势，滚动页面经过时不会误改增益；只锁手绘，Q/频率/pre-gain 滑条仍可用
     var eqLocked by rememberSaveable { mutableStateOf(false) }
-    // 数字精确输入（对齐 wecho 标签点击弹对话框）：q / bandgain / freq / bands
+    // 数字精确输入（对齐 早期定制版 标签点击弹对话框）：q / bandgain / freq / bands
     var numEditField by remember { mutableStateOf<String?>(null) }
     var numEditValue by remember { mutableStateOf("") }
     // EQ 实时频谱衬底（Pro-Q 式双层）：帧循环拉取 2048 floats（前 1024=入口谱、
@@ -144,7 +144,7 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     }
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // （U9p：锁定手绘+档位行下沉并入段数行——锁改小锁字符，省一整行）
-        // 段数行（对齐 wecho Bands 数字框 + 段增删）：段数任意 1~31（改段数
+        // 段数行（对齐 早期定制版 Bands 数字框 + 段增删）：段数任意 1~31（改段数
         // 重置为默认平直），+段在尾部按几何中点加段，−段删除选中段。
         // U9p：锁+档位下沉并入本行，全行标签 SpaceBetween 均匀分配。
         // U9p3：全 clickable Text（TextButton 默认 defaultMinSize 58dp×40dp——
@@ -365,7 +365,7 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         // （U9n：GEQ/PEQ 模式切换按钮退役——仅保留参量 PEQ）
         val selFreq = freqs.getOrElse(selectedBand) { 1000f }
         val selType = eqBandTypes.getOrElse(selectedBand) { 0 }
-        // 段类型（对齐 wecho PK/LSC/HSC 下拉）：PK=钟形峰、LSC=低架、HSC=高架
+        // 段类型（对齐 早期定制版 PK/LSC/HSC 下拉）：PK=钟形峰、LSC=低架、HSC=高架
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text(text = "类型：", fontSize = 13.sp)
             listOf(0 to "PK", 1 to "LSC", 2 to "HSC").forEach { (t, name) ->
@@ -451,7 +451,7 @@ fun MultiBandEqPanel(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 },
             )
         }
-        // 数字精确输入（Q/总增益/频率/段数标签点击弹出；对齐 wecho _showValueDialog
+        // 数字精确输入（Q/总增益/频率/段数标签点击弹出；对齐 早期定制版 _showValueDialog
         // 的 clamp 精确输入。解析失败静默关闭=不改值）
         numEditField?.let { field ->
             val (title, hint) = when (field) {

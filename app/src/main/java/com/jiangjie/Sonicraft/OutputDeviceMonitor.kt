@@ -26,11 +26,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * 本批**只做感知与取证**：不改任何播放行为、不切配置、不动引擎。
  * 目的是先把「当前声音往哪出」这件事变成可观测事实，为 的按设备切换提供依据。
  *
- * 设计来源 = WEcho 已落地实现（`AudioDeviceMonitor.kt` / `ConfigApplier.kt`）：
+ * 设计来源 = 早期定制版 已落地实现（`AudioDeviceMonitor.kt` / `ConfigApplier.kt`）：
  *  - `AudioDeviceCallback` 常驻 + **500ms debounce**（插拔/蓝牙握手会连发多次）
  *  - 当前输出按**优先级表**选取（蓝牙/有线/U​​SB 优先于内置扬声器）
  *  - 设备键 = `sanitize(productName)`；内置扬声器/听筒固定为 `speaker`
- *  - **空名回落 `headphone`，绝不回落 `speaker`**——WEcho 事故：
+ *  - **空名回落 `headphone`，绝不回落 `speaker`**——早期定制版 事故：
  *    蓝牙握手期 `productName` 为空，若回落成 speaker 会被判成扬声器模式，
  *    出现「切到耳机却用扬声器配置」
  */
@@ -151,7 +151,7 @@ class OutputDeviceMonitor @Inject constructor(
         }
     }
 
-    /** 小写 + 非字母数字转下划线（同 WEcho `ConfigApplier.sanitizeDeviceName`） */
+    /** 小写 + 非字母数字转下划线（同 早期定制版 `ConfigApplier.sanitizeDeviceName`） */
     fun sanitize(name: String): String =
         name.lowercase().replace(Regex("[^a-z0-9]"), "_").ifBlank { DEVICE_KEY_HEADPHONE }
 
@@ -192,7 +192,7 @@ class OutputDeviceMonitor @Inject constructor(
         /**
          * 输出设备优先级（媒体输出口径）。
          *
-         * **刻意排除 TYPE_BLUETOOTH_SCO**（WEcho 的列表里有，我们不用）：实测蓝牙握手期会
+         * **刻意排除 TYPE_BLUETOOTH_SCO**（早期定制版 的列表里有，我们不用）：实测蓝牙握手期会
          * 冒出一个 `type=7` 的 SCO 条目，`productName` 是手机自己的机型名（NX733J）、地址全零，
          * 且先于 A2DP 出现在列表里 → 被选成当前输出，造成一次伪切换（连带复位 loopbackRerouted、
          * 空跑 nudge）。SCO 本身只用于通话，媒体播放永远不会走它，排除后 A2DP 就位即正确命中。

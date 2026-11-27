@@ -92,6 +92,28 @@ class ConfigBackupTest {
     }
 
     @Test
+    fun `有用户痕迹时判定为已配置`() {
+        assertTrue(ConfigBackup.hasUserTrace(mapOf("output_gain" to 1.4f)))
+        assertTrue(ConfigBackup.hasUserTrace(mapOf("bass_enhance_mode" to 0)))
+        assertTrue(ConfigBackup.hasUserTrace(mapOf("eq_bands_10" to "0,0,0")))
+    }
+
+    @Test
+    fun `只有同意状态不算用户痕迹`() {
+        // 新装机会自动写 privacy_accepted，不能据此认为「已有配置」
+        assertFalse(
+            ConfigBackup.hasUserTrace(
+                mapOf(
+                    "privacy_accepted" to true,
+                    "privacy_accepted_version" to 1,
+                ),
+            ),
+        )
+        assertFalse(ConfigBackup.hasUserTrace(emptyMap<String, Any>()))
+        assertFalse(ConfigBackup.hasUserTrace(mapOf("some_unknown_key" to 1f)))
+    }
+
+    @Test
     fun `未知类型被忽略而不是崩溃`() {
         val json = """
             {"version":1,"values":{
@@ -103,5 +125,73 @@ class ConfigBackupTest {
         assertNotNull(back)
         assertEquals(0.5f, back!!["ok"] as Float, 1e-6f)
         assertFalse("未知类型应被跳过", "weird" in back)
+    }
+
+    // ---- 后续增删效果器的兼容性 ----
+
+    @Test
+    fun `低版本文件仍可导入（前向兼容）`() {
+        val json = """{"version":0,"values":{"input_gain":{"t":"f","v":0.9}}}"""
+        val snap = ConfigBackup.decodeSnapshot(json)
+        assertNotNull("老版本文件不能因为版本号小就被拒", snap)
+        assertEquals(0, snap!!.version)
+        assertEquals(0.9f, snap.values["input_gain"] as Float, 1e-6f)
+        assertNull(ConfigBackup.describeError(json))
+    }
+
+    @Test
+    fun `高于当前版本的文件被拒绝并提示升级`() {
+        val json = """{"version":${ConfigBackup.FORMAT_VERSION + 1},"values":{}}"""
+        assertNull(ConfigBackup.decodeSnapshot(json))
+        val err = ConfigBackup.describeError(json)
+        assertNotNull(err)
+        assertTrue("应提示升级应用", err!!.contains("升级"))
+    }
+
+    @Test
+    fun `脉冲文件清单往返并排序`() {
+        val json = ConfigBackup.encode(
+            all = mapOf("input_gain" to 1f),
+            appLabel = "t",
+            nowIso = "now",
+            irFiles = listOf("b.irs", "a.irs"),
+        )
+        val snap = ConfigBackup.decodeSnapshot(json)
+        assertNotNull(snap)
+        assertEquals(listOf("a.irs", "b.irs"), snap!!.irFiles)
+    }
+
+    @Test
+    fun `键名迁移表改名并计数`() {
+        val (out, migrated) = ConfigBackup.applyMigrations(
+            values = mapOf("old_key" to 1.2f, "keep" to true),
+            table = mapOf("old_key" to "new_key"),
+        )
+        assertEquals(1.2f, out["new_key"] as Float, 1e-6f)
+        assertFalse("旧键不应残留", "old_key" in out)
+        assertTrue("未命中表的键原样保留", "keep" in out)
+        assertEquals(1, migrated)
+    }
+
+    @Test
+    fun `空迁移表原样返回`() {
+        val src = mapOf<String, Any?>("a" to 1f, "b" to "x")
+        val (out, migrated) = ConfigBackup.applyMigrations(src, emptyMap())
+        assertEquals(src, out)
+        assertEquals(0, migrated)
+    }
+
+    @Test
+    fun `无法识别的条目计入 ignored`() {
+        val json = """
+            {"version":1,"values":{
+              "ok":{"t":"f","v":0.5},
+              "bad":{"t":"zzz","v":1}
+            }}
+        """.trimIndent()
+        val snap = ConfigBackup.decodeSnapshot(json)
+        assertNotNull(snap)
+        assertEquals(1, snap!!.ignored)
+        assertEquals(1, snap.values.size)
     }
 }

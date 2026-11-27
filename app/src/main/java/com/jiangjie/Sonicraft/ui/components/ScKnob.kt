@@ -458,7 +458,7 @@ fun ScKnob(
                     val gp = android.graphics.Paint().apply {
                         // 过载时灯珠光晕同色转红（ledColor 已按过载量插值）
                         setColor(ledColor.copy(alpha = 0.7f).toArgb())
-                        maskFilter = android.graphics.BlurMaskFilter(ledR * 2f, android.graphics.BlurMaskFilter.Blur.NORMAL)   // blur = LED 直径（wecho blurRadius:8 同比例）
+                        maskFilter = android.graphics.BlurMaskFilter(ledR * 2f, android.graphics.BlurMaskFilter.Blur.NORMAL)   // blur = LED 直径（早期定制版 blurRadius:8 同比例）
                         isAntiAlias = true
                     }
                     cv.nativeCanvas.drawCircle(ledCx, ledCy, ledR * 1.2f, gp)

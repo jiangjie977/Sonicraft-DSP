@@ -91,14 +91,14 @@ docs/                设计文档、用户手册、架构决策记录
 
 ## 致谢
 
-本项目在 DSP 算法上**派生自开源项目 WEcho（GPL-3.0，Copyright (C) 2026 qumolangmo）**，在此致谢：
+本项目在 DSP 算法上**派生自上游 GPL-3.0 开源项目（Copyright (C) 2026 qumolangmo）**，在此致谢：
 
 - **低音增强（BassEffect）**：低频质感的多段增益 / 动态 / 次谐波结构
 - **虚拟低音**：把小型扬声器放不出的低频翻译为可放出的谐波（默认参数与原式对齐）
 
-界面交互（PEQ 数字精确输入、UI 自适应缩放、设置页层级等）参照本人维护的 wecho studio_rack 定制分支，不属于对原作者代码的复制。
+界面交互（PEQ 数字精确输入、UI 自适应缩放、设置页层级等）参照本人维护的 早期定制版 studio_rack 定制分支，不属于对原作者代码的复制。
 
-WEcho 的完整许可见其上游发布页；本项目沿用 GPL-3.0 分发，相关义务已在 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) 第三节声明。
+早期定制版 的完整许可见其上游发布页；本项目沿用 GPL-3.0 分发，相关义务已在 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) 第三节声明。
 
 ## 免责声明
 

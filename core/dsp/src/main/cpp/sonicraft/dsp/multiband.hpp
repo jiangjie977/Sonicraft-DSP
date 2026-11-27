@@ -34,14 +34,14 @@ namespace sonicraft::dsp {
  *             → 增益平滑(attack 降/release 升分支) → ×10^((g+gain_db)/20) → 段输出
  *    soft knee（Pirkle 抛物线）：knee 区 y = x + (1/R−1)(x−T+W/2)²/(2W)，W=0 退化硬 knee；
  *    knee 区边界与硬区函数值、斜率双连续。
- *  - 立体声联动（M8f，移植 wecho MultiBandLimiter 思路）：每段一个
+ *  - 立体声联动（M8f，移植 早期定制版 MultiBandLimiter 思路）：每段一个
  *    共享包络/增益，检测取跨声道 max(|L|,|R|)——消除单侧信号被独立检测时的
  *    声像移动（左压右不压 → 人声/元素跑位）。单声道退化为自身，无特判。
- *  - 段间防重新过冲（M8f，wecho 段限+总线限双层思路的轻量版）：三段独立压缩
+ *  - 段间防重新过冲（M8f，早期定制版 段限+总线限双层思路的轻量版）：三段独立压缩
  *    相加，各段包络相位重排下合成可瞬时重过 0dBFS；合成后联动峰值检测，
  *    超 kProtCeil(1.0) 瞬时回拉、τ=250ms 恢复。平时透明（LR4 合成平坦、正常
  *    峰 ≤ 输入峰），只在深压缩瞬态兜一把，减轻末级 LimiterNode 负担。
- *  - 尾部 DC blocker（M8f，wecho 思路）：trim 后一阶 DC 阻断（fc≈2Hz，
+ *  - 尾部 DC blocker（M8f，早期定制版 思路）：trim 后一阶 DC 阻断（fc≈2Hz，
  *    R=exp(−2π·2/fs)），去除多段相加的直流漂移；@20Hz 衰减 ≈0.04dB，在 9a
  *    平坦度 0.1dB 预算内（9a @20Hz 实测见 harness 日志）。
  *  - 无 lookahead：瞬时过冲由段间保护（M8f）+ 链路末级 LimiterNode(index 8)

@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 部分交互与布局参照本人维护的 wecho 定制版（studio_rack 分支）。
+ * 部分交互与布局参照作者本人维护的定制分支。
  */
 
 package com.jiangjie.Sonicraft.ui
@@ -211,12 +211,8 @@ internal fun ScFdnDetailContent(viewModel: MainViewModel) {
             //      「梳状（comb）」是 Schroeder 混响结构的说法，混用会误导懂行的人。
             //   ② 「LFO 拍频打散」：不是标准表述。标准说法是「LFO 调制延迟长度、
             //      抑制金属声（metallic artifacts）」，作用是打散模态共振，与"拍频"无关。
-            Text(
-                text = "反馈延迟网络（FDN）：每声道 8 条延迟线 + 4 级全通扩散（轻量档 4+2），" +
-                    "配分数延迟插值、高频阻尼、DC 阻断，并以 LFO 微调延迟长度抑制金属声。",
-                fontSize = 11.sp,
-                color = ScColors.TextSub,
-            )
+            ScInfoChip(body = "反馈延迟网络（FDN）：每声道 8 条延迟线 + 4 级全通扩散（轻量档 4+2），" +
+                    "配分数延迟插值、高频阻尼、DC 阻断，并以 LFO 微调延迟长度抑制金属声。", title = "低频管家")
     }
 }
 
@@ -294,23 +290,17 @@ internal fun ScDynamicBassDetailContent(viewModel: MainViewModel) {
             }
         }
 
-        Text(
-            // 注意：Compose `Text` **不解析 Markdown**，这里不能写 `**粗体**`
-            // 。强调靠文字本身。
-            text = "本效果器不做增强，只做两件事：① 次低频清理 —— 切掉耳机/喇叭放不出的" +
+        ScInfoChip(body = "本效果器不做增强，只做两件事：① 次低频清理 —— 切掉耳机/喇叭放不出的" +
                 "极低频，把单元行程留给听得到的频段；② 峰值保护 —— 分频点以下的低频超过阈值" +
-                "时压住，防止小尺寸单元机械过载。要「听得出低音变多」请用低音增强。",
-            fontSize = 11.sp,
-            color = ScColors.TextSub,
-        )
+                "时压住，防止小尺寸单元机械过载。要「听得出低音变多」请用低音增强。", title = "低频管家")
     }
 }
 
 /**
- * 低音增强详情内容。移植自 wecho 的「低频质感」/ `BassEffect`。
+ * 低音增强详情内容。移植自上游项目的「低频质感」/ `BassEffect`。
  * 作为「低频管家」组里的**槽卡内容**渲染，自身不包 ScCard。
  *
- * 三个旋钮对应 wecho 的三个参数（gain → amount 归一化到 0~1）：
+ * 三个旋钮对应 早期定制版 的三个参数（gain → amount 归一化到 0~1）：
  *   · 强度：EQ（60Hz shelf + 45Hz peak）与动态增益、次谐波的总量
  *   · 下潜：动态增益的深度 + 次谐波注入量 —— 越大越"沉"
  *   · 冲击：一阶差分放大，越大鼓点越"实"
@@ -389,13 +379,9 @@ internal fun ScBassEnhanceDetailContent(viewModel: MainViewModel) {
                     onValueChange = { viewModel.setBassEnhanceClassicQ(it) },
                 )
             }
-            Text(
-                text = "经典模式：把「频率」以下的低频单独滤出来，按「增益」叠加回原信号。" +
+            ScInfoChip(body = "经典模式：把「频率」以下的低频单独滤出来，按「增益」叠加回原信号。" +
                     "做法朴素直接，低频厚实、略带糊感。Q 越高，截止点附近越「鼓」。" +
-                    "这三个参数与动态模式完全独立，切换不会互相覆盖。",
-                fontSize = 11.sp,
-                color = ScColors.TextSub,
-            )
+                    "这三个参数与动态模式完全独立，切换不会互相覆盖。", title = "低频管家")
         } else {
             // ---- 动态模式：三个旋钮（强度 / 下潜 / 冲击）----
             Row(
@@ -430,13 +416,9 @@ internal fun ScBassEnhanceDetailContent(viewModel: MainViewModel) {
                     onValueChange = { viewModel.setBassEnhancePunch(it / 100f) },
                 )
             }
-            Text(
-                text = "动态模式：低频 EQ（60Hz 搁架 + 45Hz 钟形）叠加动态补偿 —— 音量越小" +
+            ScInfoChip(body = "动态模式：低频 EQ（60Hz 搁架 + 45Hz 钟形）叠加动态补偿 —— 音量越小" +
                     "补得越多、越大几乎不动。下潜额外生成低八度次谐波，冲击放大瞬态沿" +
-                    "让鼓点更「实」。只叠加增量、不替换原信号，中高频基本不动。",
-                fontSize = 11.sp,
-                color = ScColors.TextSub,
-            )
+                    "让鼓点更「实」。只叠加增量、不替换原信号，中高频基本不动。", title = "低频管家")
         }
     }
 }
@@ -530,13 +512,9 @@ internal fun ScVirtualBassDetailContent(viewModel: MainViewModel) {
         }
 
 
-        Text(
-            text = "把外放放不出的 80~150Hz 翻译成能放出的 160~300Hz 谐波，让大脑" +
+        ScInfoChip(body = "把外放放不出的 80~150Hz 翻译成能放出的 160~300Hz 谐波，让大脑" +
                 "「补」出低频。强度是干湿比：0 = 纯原声、100% = 只留谐波。" +
-                "中/高频直通量控制原声中段与高段保留多少。",
-            fontSize = 11.sp,
-            color = ScColors.TextSub,
-        )
+                "中/高频直通量控制原声中段与高段保留多少。", title = "低频管家")
     }
 }
 
@@ -618,7 +596,7 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
             }
         }
 
-        // ---- 槽 2：低音增强（设备无关，移植自 wecho「低频质感」）----
+        // ---- 槽 2：低音增强（设备无关，移植自上游项目的「低频质感」）----
         ScCard(
             padded = false,
             modifier = Modifier
@@ -722,12 +700,8 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
             onDismissRequest = { showHeadphoneWarning = false },   // 点外部 = 取消，不开启
             title = { Text("虚拟低音更适合外放", fontSize = 16.sp) },
             text = {
-                Text(
-                    text = "该算法通过心理声学模拟增强低频效果，更适合小型扬声器外放。" +
-                        "耳机使用时易出现低频浑浊、失真，耳机模式请尽量关闭此功能。",
-                    fontSize = 13.sp,
-                    color = ScColors.TextSub,
-                )
+                ScInfoChip(body = "该算法通过心理声学模拟增强低频效果，更适合小型扬声器外放。" +
+                        "耳机使用时易出现低频浑浊、失真，耳机模式请尽量关闭此功能。", title = "低频管家")
             },
             confirmButton = {
                 TextButton(
@@ -741,7 +715,7 @@ internal fun ScLowfreqGroupDetail(viewModel: MainViewModel) {
                 TextButton(
                     onClick = {
                         // 「关闭提醒」= **不开启**（对齐
-                        // `wecho_projectV2.5.1_studio_rack` 的语义）。
+                        // `早期定制版工程` 的语义）。
                         // 之前我把它实现成「开启 + 记住不再提示」，那是理解错了：
                         // 那边 `pop(false)` 之后根本不调用 update(enabled, true)。
                         // 文案叫「关闭提醒」，实际作用是取消这次操作。

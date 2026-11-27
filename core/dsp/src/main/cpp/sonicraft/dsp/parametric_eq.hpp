@@ -1,6 +1,6 @@
 #pragma once
 // 多段参量均衡器（peaking/low-shelf/high-shelf，RBJ cookbook）。SPDX-License-Identifier: GPL-3.0-only
-// 容量 31 段；段数 1~31 任意（SetParam(93)，对齐 wecho 自定义段数）：10/15/31 用标准
+// 容量 31 段；段数 1~31 任意（SetParam(93)，对齐 早期定制版 自定义段数）：10/15/31 用标准
 // 频点表，其余段数按 20~20k 对数均分生成默认表；切段数时频点重置+状态清零。每段三参数：
 // 增益(±12dB)/Q(0.3~8)/频率(20~20k)，外加段类型（95~125：0=PK peaking / 1=LSC low
 // shelf / 2=HSC high shelf，shelf 为 RBJ S=1 最大平坦口径，Q 对 shelf 无效）。
@@ -182,10 +182,10 @@ class ParametricEqNode : public DspNode {
       band_type_[i] = (t >= 0 && t <= 2) ? t : 0;
       recomputeBand(i);
     } else if (param_id == kParamBandCount) {
-      // 段数 1~31 任意（wecho 对齐：非标准档按对数均分生成默认频点表）
+      // 段数 1~31 任意（早期定制版 对齐：非标准档按对数均分生成默认频点表）
       setBandCount(static_cast<int>(clamp(value, 1.0f, 31.0f)));
     } else if (param_id == kParamPreGainDb) {
-      // 总增益（dB ±18，对齐 wecho Preamp）：输出乘系数，防大提升削波/深坑补偿
+      // 总增益（dB ±18，对齐 早期定制版 Preamp）：输出乘系数，防大提升削波/深坑补偿
       pre_gain_tgt_ = std::pow(10.0f, clamp(value, -18.0f, 18.0f) / 20.0f);
     }
   }
@@ -268,7 +268,7 @@ class ParametricEqNode : public DspNode {
     active_bands_ = n;
     __android_log_print(ANDROID_LOG_INFO, "M9EQ", "setBandCount n=%d", n);
     for (int i = 0; i < n; ++i) {
-      // 10/15/31 用标准档位表；其余段数按 20~20k 对数均分（末段=20k，wecho 同口径）
+      // 10/15/31 用标准档位表；其余段数按 20~20k 对数均分（末段=20k，早期定制版 同口径）
       float fc;
       if (n == 10) fc = kFreqs10[i];
       else if (n == 15) fc = kFreqs15[i];

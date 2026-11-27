@@ -9,9 +9,11 @@
 #include <vector>
 
 #include "sonicraft/dsp/dsp_node.hpp"
+#include "sonicraft/dsp/hoa.hpp"
+#include "sonicraft/dsp/vbap.hpp"
 #include "sonicraft/dsp/vs_decoder.hpp"
 #include "sonicraft/dsp/vs_encoder.hpp"
-#include "sonicraft/dsp/vs_hrtf.hpp"
+#include "sonicraft/dsp/vs_hrtf_engine.hpp"
 #include "sonicraft/dsp/convolver.hpp"
 #include "sonicraft/dsp/vs_params.hpp"
 #include "sonicraft/dsp/vs_post.hpp"
@@ -63,7 +65,30 @@ class VirtualSurroundNode final : public DspNode {
       hrtf_up_[static_cast<std::size_t>(i)].Configure(kUpAz[i], 35.0f);
       hf_hp_[static_cast<std::size_t>(i)].SetHighPass(3000.0f, sr);
     }
+    // ---- Ambisonic：12 虚拟扬声器（B 布局）+ 10 声源球谐系数 ----
+    for (int s = 0; s < kAmbiSources; ++s) {
+      vs::HoaEncoder::SourceCoeffs(kAmbiSrcAz[s], kAmbiSrcEl[s], ambi_coeff_[s]);
+    }
+    for (int j = 0; j < vs::HoaDecoder::kSpeakers; ++j) {
+      auto& h = hrtf_ambi_[static_cast<std::size_t>(j)];
+      h.Prepare(sr);
+      h.Configure(vs::HoaDecoder::kSpkAz[j], vs::HoaDecoder::kSpkEl[j]);
+    }
+    // VBAP：声源方位与 HOA 完全一致（6 水平 + 4 上方 35°），表在首次用到时构建
+    vbap_.Init(kAmbiSrcAz, kAmbiSrcEl, kAmbiSources,
+               vs::HoaDecoder::kSpkAz, vs::HoaDecoder::kSpkEl,
+               param_[vs::kParamVbapSpread]);
+    vbap_ready_ = true;
+    vbap_dirty_ = false;
+
+    // 矩阵在首次需要时按 focus 构建（见 Process），这里只把状态清成"未构建"
+    ambi_ready_ = false;
+    ambi_dirty_ = true;
+    ambi_focus_used_ = -1.0f;
+
     hrtf_model_.Prepare(sr);
+    // 模型编号由参数 kParamHrtfModel 决定；Prepare 后强制下一次 Process 重新下发
+    hrtf_model_applied_ = -1;
     post_.Prepare(sr);
     // 房间卷积复用现成的 ConvolverNode：它已内置 Dry/小房/客厅/音乐厅/大教堂 五档 RIR，
     // 与我们的 roomSize 取值 0..4 一一对应（0 = 关，不跑）。
@@ -84,6 +109,7 @@ class VirtualSurroundNode final : public DspNode {
     round_trip_.Reset();
     for (auto& h : hrtf_ch_) h.Reset();
     for (auto& h : hrtf_up_) h.Reset();
+    for (auto& h : hrtf_ambi_) h.Reset();
     for (auto& b : hf_hp_) b.Reset();
     hrtf_model_.Reset();
     post_.Reset();
@@ -100,6 +126,24 @@ class VirtualSurroundNode final : public DspNode {
   void SetParam(int param_id, float value) override {
     if (param_id < 0 || param_id >= vs::kParamCount) return;
     target_[param_id] = value;
+    // Ambisonic 解码矩阵与 focus 绑定：参数一变就标脏，由 Process 重建一次。
+    // 重建是 9×9 高斯-约当（约 1.5 k flops，微秒级），只发生在用户改参数时。
+    if (param_id == vs::kParamAmbiFocus || param_id == vs::kParamAmbisonicMode) {
+      ambi_dirty_ = true;
+      vbap_dirty_ = true;
+    }
+    if (param_id == vs::kParamVbapSpread) {
+      vbap_dirty_ = true;
+    }
+    // HRTF 模型同样不能等 Process：空闲时 Process 不跑，模型切换会"显示已切、实际没换"。
+    // 切换只做指针替换 + 一次性 O(557) 归一化，代价可控。
+    if (param_id == vs::kParamHrtfModel) {
+      const int model = static_cast<int>(value + 0.5f);
+      if (model != hrtf_model_applied_) {
+        ApplyHrtfModel(model);
+        hrtf_model_applied_ = model;
+      }
+    }
   }
 
   /**
@@ -113,16 +157,36 @@ class VirtualSurroundNode final : public DspNode {
    * apply_correction=true 时把校正系数写回渲染器（ITD 缩放、ILD 修调），再测一轮确认收敛。
    */
   vs::LocalizationSelfTest::Report RunLocalizationSelfTest(bool apply_correction = true) {
-    last_report_ = vs::LocalizationSelfTest::Run(hrtf_model_, static_cast<float>(sample_rate_),
-                                                 apply_correction);
+    // 按**当前解码器**的扬声器集合测：经典 = 7 声道 5.1；Ambisonic = 12 扬声器（含 35° 仰角）。
+    // 用错集合会得到"通过"的假象——12 扬声器里有 4 个在头顶，5.1 那张表根本测不到。
+    // 读 target_ 而不是 param_：param_ 是逐样本平滑后的值，只有在音频真的流过时才会推进；
+    // 空闲状态（没有音频、或节点被 bypass）下它可能还停在 0，导致自检选错布局。
+    if (target_[vs::kParamAmbisonicMode] > 0.5f) {
+      static const char* kAmbiLabels[vs::HoaDecoder::kSpeakers] = {
+          "H0", "H45", "H90", "H135", "H180", "H225", "H270", "H315",
+          "UFL", "UFR", "UBL", "UBR"};
+      last_report_ = vs::LocalizationSelfTest::RunLayout(
+          hrtf_model_, static_cast<float>(sample_rate_),
+          vs::HoaDecoder::kSpkAz, vs::HoaDecoder::kSpkEl,
+          kAmbiLabels, vs::HoaDecoder::kSpeakers, apply_correction);
+    } else {
+      last_report_ = vs::LocalizationSelfTest::Run(hrtf_model_, static_cast<float>(sample_rate_),
+                                                   apply_correction);
+    }
     if (apply_correction) {
-      // 校正同样作用到 7 个声道渲染器，否则自检与实际渲染口径不一致
+      // 校正同样作用到实际渲染用的 HRTF，否则自检与实际渲染口径不一致
       for (auto& h : hrtf_ch_) h.SetCalibration(last_report_.itd_scale, last_report_.ild_trim);
+      for (auto& h : hrtf_ambi_) h.SetCalibration(last_report_.itd_scale, last_report_.ild_trim);
     }
     return last_report_;
   }
 
   const vs::LocalizationSelfTest::Report& last_self_test() const { return last_report_; }
+
+  /** 诊断用：读取「命令值」（target_），用于确认 UI 的推送是否真的到达 native */
+  float DebugTarget(int id) const {
+    return (id >= 0 && id < vs::kParamCount) ? target_[id] : -1.0f;
+  }
 
   void Process(float* const* channels, int frames) override {
     if (frames <= 0 || channels == nullptr) return;
@@ -137,16 +201,40 @@ class VirtualSurroundNode final : public DspNode {
     const bool want = param_[vs::kParamEnabled] > 0.5f && !bypass_;
     if (!want && render_gain_ <= 0.0f) return;  // 完全旁路：逐样本透传，零开销
 
+    // HRTF 模型：0 = 参数化（默认，低算力）；1..5 = 实测 IR（557 tap 卷积）
+    const int hrtf_model = static_cast<int>(param_[vs::kParamHrtfModel] + 0.5f);
+    if (hrtf_model != hrtf_model_applied_) {
+      ApplyHrtfModel(hrtf_model);
+      hrtf_model_applied_ = hrtf_model;
+    }
+
+    // 解码方式：0=经典矩阵 / 1=HOA / 2=VBAP（后两者都是 12 只虚拟扬声器，共用 12 路 HRTF）
+    const int decoder = static_cast<int>(param_[vs::kParamAmbisonicMode] + 0.5f);
+    render_decoder_ = decoder;
+    const bool ambi_on = decoder > 0;
+
+    // HOA 解码矩阵：只在开启且参数变化时重建一次（求逆不在每个回调里跑）
+    if (decoder == 1 && (ambi_dirty_ || !ambi_ready_)) {
+      ambi_ready_ = hoa_.Init(param_[vs::kParamAmbiFocus]);
+      ambi_focus_used_ = param_[vs::kParamAmbiFocus];
+      ambi_dirty_ = false;
+    }
+    // VBAP 表：声源方位固定（6 水平 + 4 上方），只在扩散量变化时重建
+    if (decoder == 2 && (vbap_dirty_ || !vbap_ready_)) {
+      vbap_ready_ = vbap_.RebuildSpread(param_[vs::kParamVbapSpread]);
+      vbap_dirty_ = false;
+    }
+
     // ---- 三段立体声展宽（低 / 中 / 高独立权重）----
     // 为什么分段：低频展宽会破坏单声道兼容（左右反相成分在单声道折叠时抵消），
     // 而高频展宽几乎不影响兼容性、却最容易被感知为"空间感"。
-    // 单一宽度做不到这个区分（WEcho 的 ExtStereoImager 就是三段式）。
+    // 单一宽度做不到这个区分（早期定制版 的 ExtStereoImager 就是三段式）。
     // 权重：低 0.35 / 中 1.0 / 高 1.45，再乘用户的总强度 kParamStereoExpand。
     if (param_[vs::kParamStereoExpand] > 0.01f && channels[1] != nullptr) {
       float* pl = channels[0];
       float* pr = channels[1];
       const float raw_w = param_[vs::kParamStereoExpand];
-      const float w = (raw_w < 0.0f) ? 0.0f : ((raw_w > 1.5f) ? 1.5f : raw_w);
+      const float w = (raw_w < 0.0f) ? 0.0f : ((raw_w > 2.0f) ? 2.0f : raw_w);
       for (int i = 0; i < frames; ++i) {
         const float m = (pl[i] + pr[i]) * 0.5f;
         const float sd = (pl[i] - pr[i]) * 0.5f;
@@ -229,7 +317,8 @@ class VirtualSurroundNode final : public DspNode {
 
     // 仅解码测试也走双耳渲染：trim 作用在 7 声道上，再逐路 HRTF 送双耳输出。
     // 若在这里直接下混，测试链就断了（听的不是最终链路的解码结果）。
-    RenderFrames(channels[0], channels[1], frames, goal, step, false);
+    RenderFrames(channels[0], channels[1], frames, goal, step, false,
+                 ambi_on && (decoder == 2 ? vbap_ready_ : ambi_ready_));
 
     // 房间卷积（湿声）：放在双耳渲染之后 —— 先空间化再进房间，房间才不会被 HRTF 染色串掉。
     // 预设映射：1=小房 2=客厅 3=音乐厅 4=大教堂；0=关（完全不跑，零开销）。
@@ -313,7 +402,8 @@ class VirtualSurroundNode final : public DspNode {
   }
 
   /** 逐声道 HRTF 累加到双耳，再与干声按 render_gain_ 交叉淡化 */
-  void RenderFrames(float* l, float* r, int frames, float goal, float step, bool direct = false) {
+  void RenderFrames(float* l, float* r, int frames, float goal, float step, bool direct = false,
+                    bool ambi = false) {
     // 逐声道 trim（dB → 线性）与静音；LFE 不做 HRTF，直接按增益混入双耳
     float gain[vs::kChannelCount];
     for (int c = 0; c < vs::kChannelCount; ++c) {
@@ -334,6 +424,12 @@ class VirtualSurroundNode final : public DspNode {
                              ? param_[vs::kParamHeightStrength] : 0.0f;
     static constexpr int kUpSrc[4] = {vs::kFL, vs::kFR, vs::kSL, vs::kSR};
 
+    // Ambisonic 分支的常量（循环外算好，避免逐样本 pow）。
+    // 「高度强度（上方包围）」与经典路径的高度重定向共用同一参数：
+    // 0 = 只有水平面，1 = 上方 4 路声源最强。
+    const float ambi_upper = param_[vs::kParamHeightStrength];
+    const float rear_lin = std::pow(10.0f, param_[vs::kParamRearGain] / 20.0f);
+
     for (int i = 0; i < frames; ++i) {
       float wet_l = 0.0f;
       float wet_r = 0.0f;
@@ -349,6 +445,10 @@ class VirtualSurroundNode final : public DspNode {
         const float lfe = layout_[static_cast<std::size_t>(vs::kLFE) * max_frames_ + i] * gain[vs::kLFE];
         wet_l = fl + 0.7071068f * cc + 0.7071068f * sl + 0.7071068f * cs + lfe;
         wet_r = fr + 0.7071068f * cc + 0.7071068f * sr + 0.7071068f * cs + lfe;
+      } else if (ambi) {
+        // ambi 标志已按「当前解码器就绪」判定；具体走 HOA 还是 VBAP 由 render_decoder_ 决定
+        // Ambisonic：10 声源 → HOA(9ch) → 12 虚拟扬声器（B 布局）→ 12 路 HRTF
+        RenderAmbiSample(i, gain, ambi_upper, rear_lin, &wet_l, &wet_r);
       } else {
         for (int c = 0; c < vs::kChannelCount; ++c) {
           const float x = layout_[static_cast<std::size_t>(c) * max_frames_ + i] * gain[c];
@@ -387,6 +487,91 @@ class VirtualSurroundNode final : public DspNode {
     }
   }
 
+  /**
+   * Ambisonic 路径的单样本渲染。
+   *
+   * 10 路声源（方位固定，见 kAmbiSrcAz/El）→ 二阶球谐编码（9ch）→
+   * 12 虚拟扬声器解码（B 布局，伪逆 + max-rE）→ 每扬声器独立 HRTF → 双耳。
+   *
+   * 前/后半球分流：后半球（135/180/225 + 后上 ±135）额外乘 rear_gain，
+   * 与经典路径的 `rear_gain` 语义一致（否则后场会比前场还响）。
+   * LFE 不进 HRTF，直接按增益混入双耳 —— 与经典路径保持一致。
+   */
+  void RenderAmbiSample(int i, const float gain[vs::kChannelCount], float upper_gain,
+                        float rear_lin, float* wet_l, float* wet_r) {
+    const auto idx = [this, i](int c) {
+      return static_cast<std::size_t>(c) * static_cast<std::size_t>(max_frames_) +
+             static_cast<std::size_t>(i);
+    };
+
+    float src[kAmbiSources];
+    src[0] = layout_[idx(vs::kFL)] * gain[vs::kFL];
+    src[1] = layout_[idx(vs::kFR)] * gain[vs::kFR];
+    src[2] = layout_[idx(vs::kC)] * gain[vs::kC];
+    // 侧/后与后中置沿用参考实现的 1.8 倍提升（矩阵下混会压低这些声道）
+    src[3] = layout_[idx(vs::kSL)] * gain[vs::kSL] * 1.8f;
+    src[4] = layout_[idx(vs::kSR)] * gain[vs::kSR] * 1.8f;
+    src[5] = layout_[idx(vs::kCS)] * gain[vs::kCS] * 1.8f;
+
+    // 上方 4 路：与「高度重定向」同源（FL/FR/SL/SR 的 >3 kHz）
+    const float up = upper_gain * 0.5f;
+    if (up > 0.001f) {
+      for (int k = 0; k < 4; ++k) {
+        const int c = kUpSrcCh[k];
+        src[6 + k] = hf_hp_[static_cast<std::size_t>(k)].Process(layout_[idx(c)] * gain[c]) * up;
+      }
+    } else {
+      for (int k = 0; k < 4; ++k) src[6 + k] = 0.0f;
+    }
+
+    float ambi[vs::HoaEncoder::kChannels];
+    if (render_decoder_ < 2) {
+      // 只有走 HOA 才需要球谐编码（VBAP 直接查矩阵，省 90 MAC/样本）
+      for (int k = 0; k < vs::HoaEncoder::kChannels; ++k) ambi[k] = 0.0f;
+      for (int s = 0; s < kAmbiSources; ++s) {
+        const float g = src[s];
+        if (g == 0.0f) continue;
+        const float* cf = ambi_coeff_[s];
+        for (int k = 0; k < vs::HoaEncoder::kChannels; ++k) ambi[k] += g * cf[k];
+      }
+    }
+
+    float spk[vs::HoaDecoder::kSpeakers];
+    if (render_decoder_ >= 2) {
+      // VBAP：直接把 10 路声源按方位摆到 12 只扬声器（矩阵已在 Prepare/改扩散时算好）
+      vbap_.Decode(src, spk);
+    } else {
+      hoa_.Decode(ambi, spk);
+    }
+
+    float wl = 0.0f;
+    float wr = 0.0f;
+    for (int j = 0; j < vs::HoaDecoder::kSpeakers; ++j) {
+      float hl = 0.0f;
+      float hr = 0.0f;
+      hrtf_ambi_[static_cast<std::size_t>(j)].ProcessSample(spk[j], &hl, &hr);
+      const bool rear = (j >= 3 && j <= 5) || j == 10 || j == 11;
+      const float g = rear ? rear_lin : 1.0f;
+      wl += hl * g;
+      wr += hr * g;
+    }
+
+    const float lfe = layout_[idx(vs::kLFE)] * gain[vs::kLFE];
+    *wet_l = wl + lfe;
+    *wet_r = wr + lfe;
+  }
+
+  // ---- Ambisonic：10 路声源方位（水平 6 + 上方 4，与 B 布局的上方扬声器同向）----
+  static constexpr int kAmbiSources = 10;
+  static constexpr float kAmbiSrcAz[kAmbiSources] = {
+      -30.0f, 30.0f, 0.0f, -110.0f, 110.0f, 180.0f, -45.0f, 45.0f, -135.0f, 135.0f,
+  };
+  static constexpr float kAmbiSrcEl[kAmbiSources] = {
+      0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 35.0f, 35.0f, 35.0f, 35.0f,
+  };
+  /** 上方 4 路所取自的声道（与高度重定向一致） */
+  static constexpr int kUpSrcCh[4] = {vs::kFL, vs::kFR, vs::kSL, vs::kSR};
+
   bool bypass_ = true;   // 默认旁路，接入图后由 UI 打开
   float render_gain_ = 0.0f;
   int sample_rate_ = 48000;
@@ -412,11 +597,40 @@ class VirtualSurroundNode final : public DspNode {
   float er_lp_l_ = 0.0f;
   float er_lp_r_ = 0.0f;
   std::array<float*, vs::kChannelCount> ch_ptr_{};
-  std::array<vs::ParametricHrtf, vs::kChannelCount> hrtf_ch_{};
+  std::array<vs::HrtfEngine, vs::kChannelCount> hrtf_ch_{};
   // 上方 4 个虚拟声源（±30° / ±110°，仰角 +35°）与其 3 kHz 高通
-  std::array<vs::ParametricHrtf, 4> hrtf_up_{};
+  std::array<vs::HrtfEngine, 4> hrtf_up_{};
   std::array<vs::Biquad, 4> hf_hp_{};
-  vs::ParametricHrtf hrtf_model_;
+
+  /**
+   * 把 HRTF 模型下发到全部渲染实例。
+   *
+   * 为什么放在 Process 里而不是 SetParam：SetParam 只写 target_，模型编号要等
+   * 参数平滑到位后才是稳定值；这里用「与上次生效值比较」的方式，只在真正变化时
+   * 触发一次重装载（每实例 O(557) 的峰值归一化 + ITD/ILD 测量，共 23 实例）。
+   */
+  void ApplyHrtfModel(int model) {
+    for (auto& h : hrtf_ch_) h.SetModel(model);
+    for (auto& h : hrtf_up_) h.SetModel(model);
+    for (auto& h : hrtf_ambi_) h.SetModel(model);
+    hrtf_model_.SetModel(model);
+  }
+
+  // ---- Ambisonic / VBAP 路径（共用 12 只虚拟扬声器与 12 路 HRTF）----
+  std::array<vs::HrtfEngine, vs::HoaDecoder::kSpeakers> hrtf_ambi_{};
+  vs::VbapDecoder vbap_;
+  bool vbap_ready_ = false;
+  bool vbap_dirty_ = true;
+  /** 当前渲染用的解码方式：0 经典 / 1 HOA / 2 VBAP */
+  int render_decoder_ = 0;
+  vs::HoaDecoder hoa_;
+  float ambi_coeff_[kAmbiSources][vs::HoaEncoder::kChannels]{};
+  bool ambi_ready_ = false;
+  bool ambi_dirty_ = true;
+  float ambi_focus_used_ = -1.0f;
+  vs::HrtfEngine hrtf_model_;
+  /** 当前已生效的 HRTF 模型（-1 = 未下发） */
+  int hrtf_model_applied_ = -1;
   vs::LocalizationSelfTest::Report last_report_{};
 };
 

@@ -311,7 +311,7 @@ class MainViewModel @Inject constructor(
         _trebleGain.value = bands[bands.size - 1]
     }
 
-    // ---- 段数自定义（对齐 wecho：1~31 任意段数 + 尾部加段/删选中段）----
+    // ---- 段数自定义（对齐 早期定制版：1~31 任意段数 + 尾部加段/删选中段）----
     // 注意与 setEqMode 的分工：档位按钮 10/15/31 走 setEqMode（各档独立记忆，
     // 无历史时平直）；自定义段数/增删段直接以调用方给定的四元组整体下发+持久化
     // （native SetParam(93) 会重置频点/Q/增益/类型，所以顺序必须是先 BAND_COUNT
@@ -344,7 +344,7 @@ class MainViewModel @Inject constructor(
         _trebleGain.value = gains.lastOrNull() ?: 0f
     }
 
-    /** 自定义段数（1~31，wecho Bands 数字框语义）：重置为该段数默认平直配置 */
+    /** 自定义段数（1~31，早期定制版 Bands 数字框语义）：重置为该段数默认平直配置 */
     fun setEqBandCountCustom(n: Int) {
         val m = n.coerceIn(1, 31)
         if (m == _eqMode.value) return
@@ -352,7 +352,7 @@ class MainViewModel @Inject constructor(
         applyBandCount(m, table, List(m) { 0f }, List(m) { 1f }, List(m) { 0 })
     }
 
-    /** 尾部加一段（wecho 语义：fc 取末两段几何中点，<2 段取 1k），平直 PK/Q=1 */
+    /** 尾部加一段（早期定制版 语义：fc 取末两段几何中点，<2 段取 1k），平直 PK/Q=1 */
     fun addEqBand() {
         val m = _eqMode.value
         if (m >= 31) return
@@ -371,7 +371,7 @@ class MainViewModel @Inject constructor(
         applyBandCount(m + 1, freqs, gains, qs, types)
     }
 
-    /** 删除指定段（wecho 红 ✕ 语义，至少保留 1 段） */
+    /** 删除指定段（早期定制版 红 ✕ 语义，至少保留 1 段） */
     fun removeEqBand(band: Int) {
         val m = _eqMode.value
         if (m <= 1) return
@@ -487,6 +487,17 @@ class MainViewModel @Inject constructor(
 
     /** 上限（dBFS，负值）：输出峰值不超过该电平 */
     private val _limiterCeiling = MutableStateFlow(prefs.getFloat(KEY_LIMITER_CEILING, -1f))
+
+    // 分段限幅：三段门限（相对输出上限的 dB 偏移）与去直流开关。
+    // 默认 -8 / -5 / -2 dB：低频留最多余量（能量大），高频只做轻度收峰。
+    private val _limiterGateLow = MutableStateFlow(prefs.getFloat(KEY_LIMITER_GATE_LOW, -5f))
+    val limiterGateLow: StateFlow<Float> = _limiterGateLow.asStateFlow()
+    private val _limiterGateMid = MutableStateFlow(prefs.getFloat(KEY_LIMITER_GATE_MID, -5f))
+    val limiterGateMid: StateFlow<Float> = _limiterGateMid.asStateFlow()
+    private val _limiterGateHigh = MutableStateFlow(prefs.getFloat(KEY_LIMITER_GATE_HIGH, -2f))
+    val limiterGateHigh: StateFlow<Float> = _limiterGateHigh.asStateFlow()
+    private val _limiterDcBlock = MutableStateFlow(prefs.getBoolean(KEY_LIMITER_DC_BLOCK, true))
+    val limiterDcBlock: StateFlow<Boolean> = _limiterDcBlock.asStateFlow()
     val limiterCeiling: StateFlow<Float> = _limiterCeiling.asStateFlow()
 
     // ---- M4b-2 压缩器控制（宽缓压平动态，消除限幅器单独工作的呼吸感） ----
@@ -512,13 +523,13 @@ class MainViewModel @Inject constructor(
     val compressorRatio: StateFlow<Float> = _compressorRatio.asStateFlow()
 
     // ---- 界面缩放----
-    // wecho 是 autoScale(按 440dp 基准自动算) × uiScale(粗调) × uiFineScale(微调)，
+    // 早期定制版 是 autoScale(按 440dp 基准自动算) × uiScale(粗调) × uiFineScale(微调)，
     // 实际作用于 UI 的是后两者的乘积；autoScale 由调用方按屏幕宽度实时算。
-    /** 缩放粗调：0.8~1.3（对应 wecho 设置页的主滑块） */
+    /** 缩放粗调：0.8~1.3（对应 早期定制版 设置页的主滑块） */
     private val _uiScale = MutableStateFlow(prefs.getFloat(KEY_UI_SCALE, 1f))
     val uiScale: StateFlow<Float> = _uiScale.asStateFlow()
 
-    /** 缩放微调：0.9~1.1（对应 wecho 的微调滑块，用于细抠到 1% 一档） */
+    /** 缩放微调：0.9~1.1（对应 早期定制版 的微调滑块，用于细抠到 1% 一档） */
     private val _uiFineScale = MutableStateFlow(prefs.getFloat(KEY_UI_FINE_SCALE, 1f))
     val uiFineScale: StateFlow<Float> = _uiFineScale.asStateFlow()
 
@@ -543,7 +554,7 @@ class MainViewModel @Inject constructor(
         prefs.edit().putFloat(KEY_UI_FINE_SCALE, clamped).apply()
     }
 
-    /** 微调归 100%（wecho 的「重置微调」） */
+    /** 微调归 100%（早期定制版 的「重置微调」） */
     fun resetUiFineScale() = setUiFineScale(1f)
 
     /** 起音（ms，已暴露到 UI） */
@@ -1524,6 +1535,16 @@ class MainViewModel @Inject constructor(
         // 模式与开关
         engine.setParam(node, AudioEngine.VS_PARAM_BS775, if (_vsBs775.value) 1f else 0f)
         engine.setParam(node, AudioEngine.VS_PARAM_MODE, _vsMode.value.toFloat())
+        // 「选哪个解码器 / 哪套 HRTF / VBAP 扩散」也必须在这里推：
+        // 之前只有用户点开关时才推，重启后节点停在默认值（经典矩阵 + 参数化 HRTF），
+        // 于是「UI 显示 Ambisonic/VBAP 开着，实际跑的是经典环绕」。
+        engine.setParam(
+            node,
+            AudioEngine.VS_PARAM_AMBISONIC,
+            if (_vsAmbisonic.value) _vsAmbiDecoder.value.toFloat() else 0f,
+        )
+        engine.setParam(node, AudioEngine.VS_PARAM_HRTF_MODEL, _vsHrtfModel.value.toFloat())
+        engine.setParam(node, AudioEngine.VS_PARAM_VBAP_SPREAD, _vsVbapSpread.value)
         engine.setParam(node, AudioEngine.VS_PARAM_ENCODE_STRENGTH, _vsEncodeStrength.value)
     }
 
@@ -1534,28 +1555,30 @@ class MainViewModel @Inject constructor(
      * 参数、听感全变，很容易被当成"总闸没记忆/坏了"。
      */
     fun openLastSurroundEngine() {
-        if (prefs.getInt(KEY_LAST_SURROUND_ENGINE, 0) == 1) setS71Enabled(true) else setVsEnabled(true)
+        when (prefs.getInt(KEY_LAST_SURROUND_ENGINE, 0)) {
+            1 -> setS71Enabled(true)
+            2 -> setAmbisonicEnabled(true)
+            else -> setVsEnabled(true)
+        }
     }
 
     /** 首页总闸关闭：两个引擎都关（互斥保证只会有一个是开的）。 */
     fun closeAllSurroundEngines() {
         if (_vsEnabled.value) setVsEnabled(false)
         if (_s71Enabled.value) setS71Enabled(false)
+        if (_vsAmbisonic.value) setAmbisonicEnabled(false)
     }
 
     fun setVsEnabled(enabled: Boolean) {
         _vsEnabled.value = enabled
+        // 互斥：切回经典解码时关掉 Ambisonic（同一节点，解码方式互斥）
+        if (enabled) applyAmbisonicState(false)
         // 互斥：打开矩阵环绕则关闭 Surround71（反之在 setS71Enabled 内处理）
         if (enabled && _s71Enabled.value) setS71Enabled(false)
         prefs.edit().putBoolean(KEY_VS_ENABLED, enabled).apply()
         // 记录「最后使用的环绕引擎」，供首页总闸恢复（0=矩阵环绕 1=Surround71）
         if (enabled) prefs.edit().putInt(KEY_LAST_SURROUND_ENGINE, 0).apply()
-        engine.setBypass(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, !enabled)
-        engine.setParam(
-            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-            AudioEngine.VS_PARAM_ENABLED,
-            if (enabled) 1f else 0f,
-        )
+        syncVsNodeEnabled()
         // **开启时把 7 路 Trim / Mute 全量重推**。
         // 为什么必须：引擎重建（切设备/重启/重装）后节点内参数回到默认值，
         // 而 UI 仍显示 prefs 里的值 → 用户看到"Trim 设了却没生效"的假状态。
@@ -1571,8 +1594,10 @@ class MainViewModel @Inject constructor(
         _s71Enabled.value = enabled
         prefs.edit().putBoolean(KEY_S71_ENABLED, enabled).apply()
         if (enabled) prefs.edit().putInt(KEY_LAST_SURROUND_ENGINE, 1).apply()
-        // 互斥：两个空间化器同时开启会叠加成乱声
+        // 互斥：三个空间化器同时开启会叠加成乱声
+        if (enabled) applyAmbisonicState(false)
         if (enabled && _vsEnabled.value) setVsEnabled(false)
+        if (enabled) syncVsNodeEnabled()
         engine.setBypass(AudioEngine.S71_NODE_INDEX, !enabled)
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ENABLED, if (enabled) 1f else 0f)
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_BOOST_DB, _s71BassBoost.value)
@@ -1585,6 +1610,7 @@ class MainViewModel @Inject constructor(
             )
         }
         // 开启时把共用的空间参数全量推一遍
+        engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_HRTF_MODEL, _vsHrtfModel.value.toFloat())
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ROOM_SIZE, _vsRoomSize.value.toFloat())
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_ROOM_WET, _vsRoomWet.value)
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_CENTER_MODE, _vsCenterMode.value.toFloat())
@@ -1880,7 +1906,8 @@ class MainViewModel @Inject constructor(
     val vsRearSpace: StateFlow<Float> = _vsRearSpace.asStateFlow()
 
     fun setVsRearSpace(v0: Float) {
-        val v = if (v0.isFinite()) v0.coerceIn(0f, 1f) else _vsRearSpace.value
+        // 上限放宽到 2.0：对齐参考实现的「环绕声扩展」范围（0~2，默认 2.0 是宽容值）
+        val v = if (v0.isFinite()) v0.coerceIn(0f, 2f) else _vsRearSpace.value
         _vsRearSpace.value = v
         prefs.edit().putFloat(KEY_VS_REAR_SPACE, v).apply()
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_STEREO_EXPAND, v)
@@ -1937,6 +1964,25 @@ class MainViewModel @Inject constructor(
     private val _vsDialog = MutableStateFlow(prefs.getFloat(KEY_VS_DIALOG, 0f))
     val vsDialog: StateFlow<Float> = _vsDialog.asStateFlow()
 
+    // ---- Ambisonic 解码器（第三个空间化器，与矩阵环绕 / Surround71 互斥）----
+    private val _vsAmbisonic = MutableStateFlow(prefs.getBoolean(KEY_VS_AMBISONIC, false))
+    val vsAmbisonic: StateFlow<Boolean> = _vsAmbisonic.asStateFlow()
+
+    // HRTF 模型：0 = 参数化（低算力）；1..5 = 实测 HRIR 数据集（557 tap 卷积）
+    private val _vsHrtfModel = MutableStateFlow(prefs.getInt(KEY_VS_HRTF_MODEL, 0))
+    val vsHrtfModel: StateFlow<Int> = _vsHrtfModel.asStateFlow()
+
+    /** 解码方式：1 = HOA（球谐，声场连续）/ 2 = VBAP（摆位，定位准） */
+    private val _vsAmbiDecoder = MutableStateFlow(prefs.getInt(KEY_VS_AMBI_DECODER, 1))
+    val vsAmbiDecoder: StateFlow<Int> = _vsAmbiDecoder.asStateFlow()
+
+    /** VBAP 扩散：0 = 纯 VBAP，1 = 明显扩散 */
+    private val _vsVbapSpread = MutableStateFlow(prefs.getFloat(KEY_VS_VBAP_SPREAD, 0.25f))
+    val vsVbapSpread: StateFlow<Float> = _vsVbapSpread.asStateFlow()
+
+    private val _vsAmbiFocus = MutableStateFlow(prefs.getFloat(KEY_VS_AMBI_FOCUS, 1f))
+    val vsAmbiFocus: StateFlow<Float> = _vsAmbiFocus.asStateFlow()
+
     private val _vsBassEnh = MutableStateFlow(prefs.getFloat(KEY_VS_BASS_ENH, 0f))
     val vsBassEnh: StateFlow<Float> = _vsBassEnh.asStateFlow()
 
@@ -1989,6 +2035,117 @@ class MainViewModel @Inject constructor(
         engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_BASS_ENHANCER_MODE, v.toFloat())
         engine.setParam(AudioEngine.S71_NODE_INDEX, AudioEngine.S71_PARAM_BASS_ENHANCER_MODE, v.toFloat())
 
+    }
+
+    /** 只落状态与节点参数，不做互斥跳转（供其他 setter 内部调用，避免相互递归） */
+    private fun applyAmbisonicState(enabled: Boolean) {
+        _vsAmbisonic.value = enabled
+        prefs.edit().putBoolean(KEY_VS_AMBISONIC, enabled).apply()
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_AMBISONIC,
+            if (enabled) _vsAmbiDecoder.value.toFloat() else 0f,
+        )
+        if (enabled) prefs.edit().putInt(KEY_LAST_SURROUND_ENGINE, 2).apply()
+    }
+
+    /** 节点是否该开：经典矩阵环绕 **或** Ambisonic 任一开启即开（共用一个节点） */
+    private fun syncVsNodeEnabled() {
+        val on = _vsEnabled.value || _vsAmbisonic.value
+        engine.setBypass(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, !on)
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_ENABLED,
+            if (on) 1f else 0f,
+        )
+    }
+
+    /**
+     * Ambisonic 解码器总闸。
+     *
+     * 互斥：三个空间化器（矩阵环绕 / Ambisonic / Surround71）同时开会叠加成乱声，
+     * 因此开启本项会先关掉另外两个。
+     */
+    fun setAmbisonicEnabled(enabled: Boolean) {
+        if (enabled) {
+            if (_vsEnabled.value) setVsEnabled(false)
+            if (_s71Enabled.value) setS71Enabled(false)
+        }
+        applyAmbisonicState(enabled)
+        syncVsNodeEnabled()
+        if (enabled) {
+            // 节点可能刚被重建过，全量重推一次，避免"UI 显示开了、引擎里是默认值"
+            pushAllVsParams()
+            runCatching { saveLiveConfig(outputDeviceMonitor.current.value.key) }
+        }
+    }
+
+    /**
+     * 解码方式：1 = HOA（二阶球谐 → 12 扬声器，声场连续、定位偏糊）；
+     * 2 = VBAP（每个声源只给包围它的 2 只扬声器，定位准、声场不连续）。
+     *
+     * 两者共用同一组 12 只虚拟扬声器与 12 路 HRTF，所以可以纯 A/B。
+     */
+    fun setVsAmbiDecoder(mode: Int) {
+        val v = if (mode == 2) 2 else 1
+        _vsAmbiDecoder.value = v
+        prefs.edit().putInt(KEY_VS_AMBI_DECODER, v).apply()
+        // 只有 Ambisonic 开启时才下发；关闭时该参数应保持 0（经典矩阵解码）
+        if (_vsAmbisonic.value) {
+            engine.setParam(
+                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                AudioEngine.VS_PARAM_AMBISONIC,
+                v.toFloat(),
+            )
+        }
+    }
+
+    fun setVsVbapSpread(v: Float) {
+        val t = v.coerceIn(0f, 1f)
+        _vsVbapSpread.value = t
+        prefs.edit().putFloat(KEY_VS_VBAP_SPREAD, t).apply()
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_VBAP_SPREAD,
+            t,
+        )
+    }
+
+    /**
+     * HRTF 模型：0 = 参数化；1..5 = 实测 HRIR（KEMAR / KEMAR-Hannover / CIPIC / ARI / LISTEN）。
+     *
+     * 实测模型用 557 tap 时域卷积，算力约为参数化模型的 10 倍以上；
+     * 切换在音频线程内完成（SetModel 只换指针 + 重新归一化），无爆音。
+     */
+    fun setVsHrtfModel(model: Int) {
+        val v = model.coerceIn(0, 5)
+        _vsHrtfModel.value = v
+        prefs.edit().putInt(KEY_VS_HRTF_MODEL, v).apply()
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_HRTF_MODEL,
+            v.toFloat(),
+        )
+        // Surround71 是独立节点，自己有 HRIR 卷积器：模型必须单独下发，否则「切了没反应」
+        engine.setParam(
+            AudioEngine.S71_NODE_INDEX,
+            AudioEngine.S71_PARAM_HRTF_MODEL,
+            v.toFloat(),
+        )
+        // 模型属于逐设备渲染偏好，立刻存进设备快照，否则下次回放旧值会把它改回去
+        runCatching { saveLiveConfig(outputDeviceMonitor.current.value.key) }
+    }
+
+    /** 前向聚焦：0 = 声场最宽，1 = max-rE（旁瓣最小、前向最集中） */
+    fun setAmbiFocus(v: Float) {
+        val value = v.coerceIn(0f, 1f)
+        _vsAmbiFocus.value = value
+        prefs.edit().putFloat(KEY_VS_AMBI_FOCUS, value).apply()
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_AMBI_FOCUS,
+            value,
+        )
     }
 
     fun setVsRearCenter(enabled: Boolean) {
@@ -2099,7 +2256,7 @@ class MainViewModel @Inject constructor(
         MutableStateFlow(prefs.getBoolean(KEY_BASS_ENHANCE_ENABLED, false))
     val bassEnhanceEnabled: StateFlow<Boolean> = _bassEnhanceEnabled.asStateFlow()
 
-    /** 总强度 0~1（映射 wecho 的 gain 0~10） */
+    /** 总强度 0~1（映射 早期定制版 的 gain 0~10） */
     private val _bassEnhanceAmount =
         MutableStateFlow(prefs.getFloat(KEY_BASS_ENHANCE_AMOUNT, 0.5f))
     val bassEnhanceAmount: StateFlow<Float> = _bassEnhanceAmount.asStateFlow()
@@ -2115,7 +2272,7 @@ class MainViewModel @Inject constructor(
     val bassEnhancePunch: StateFlow<Float> = _bassEnhancePunch.asStateFlow()
 
     /**
-     * 模式：0 = 经典、1 = 动态（默认，与 wecho 新版一致）。
+     * 模式：0 = 经典、1 = 动态（默认，与 早期定制版 新版一致）。
      * 经典模式只做「低通 60Hz + 按 dB 叠加」，音色更传统；
      * 动态模式是 M/S + 包络 + 瞬态 + 次谐波那一套。
      * **两套参数完全独立存储**，切模式不会互相覆盖。
@@ -2293,7 +2450,7 @@ class MainViewModel @Inject constructor(
         applyLowfreqBypass()
     }
 
-    /** 总强度 0~1（映射 wecho 的 gain 0~10） */
+    /** 总强度 0~1（映射 早期定制版 的 gain 0~10） */
     fun setBassEnhanceAmount(v: Float) {
         val c = v.coerceIn(0f, 1f)
         _bassEnhanceAmount.value = c
@@ -2380,7 +2537,10 @@ class MainViewModel @Inject constructor(
     val balance: StateFlow<Float> = _balance.asStateFlow()
 
     /** 输出增益（0~2，1=原样）：响度补偿（Limiter 之前，超限被限幅器兜住） */
-    private val _outputGain = MutableStateFlow(prefs.getFloat(KEY_OUTPUT_GAIN, 1f))
+    // 钳位在读取时也做一次：历史值可能停在旧的 +15 dB 上限（5.62）
+    private val _outputGain = MutableStateFlow(
+        prefs.getFloat(KEY_OUTPUT_GAIN, 1f).coerceIn(0f, AudioEngine.OUTPUT_GAIN_MAX),
+    )
     val outputGain: StateFlow<Float> = _outputGain.asStateFlow()
 
     fun setInputGain(gain: Float) {
@@ -2400,7 +2560,8 @@ class MainViewModel @Inject constructor(
     }
 
     fun setOutputGain(gain: Float) {
-        val clamped = gain.coerceIn(0f, 2f)
+        // 旋钮 0~2×，叠加输出级的 +12 dB 内建基准（见 AudioEngine.OUTPUT_MAKEUP_DB）
+        val clamped = gain.coerceIn(0f, AudioEngine.OUTPUT_GAIN_MAX)
         _outputGain.value = clamped
         prefs.edit().putFloat(KEY_OUTPUT_GAIN, clamped).apply()
         engine.setBypass(AudioEngine.OUTPUT_GAIN_NODE_INDEX, false)
@@ -2513,6 +2674,10 @@ class MainViewModel @Inject constructor(
             "multiband_enabled" -> setMultibandEnabled(v > 0.5f)
             "limiter_enabled" -> setLimiterEnabled(v > 0.5f)
             "limiter_ceiling" -> setLimiterCeiling(v)
+            "limiter_gate_low" -> setLimiterGate(0, v)
+            "limiter_gate_mid" -> setLimiterGate(1, v)
+            "limiter_gate_high" -> setLimiterGate(2, v)
+            "limiter_dc_block" -> setLimiterDcBlock(v > 0.5f)
             "reverb_enabled" -> setReverbEnabled(v > 0.5f)
             "reverb_preset" -> setReverbPreset(v.toInt())
             "user_wet_gain" -> setUserWetGain(v)
@@ -2521,7 +2686,8 @@ class MainViewModel @Inject constructor(
             "gate_threshold" -> setGateThreshold(v)
             "stereo_width_enabled" -> setStereoWidthEnabled(v > 0.5f)
             "stereo_width" -> setStereoWidth(v)
-            "vs_enabled" -> setVsEnabled(v > 0.5f)
+            // 引擎选择不从快照/预设回放（见 snapshotParams 的说明）
+            "vs_enabled" -> Unit
             "vs_mode" -> setVsMode(v.toInt())
             "vs_encode_strength" -> setVsEncodeStrength(v)
             "vs_room_size" -> setVsRoomSize(v.toInt())
@@ -2533,9 +2699,13 @@ class MainViewModel @Inject constructor(
             "vs_dialog" -> setVsDialog(v)
             "vs_bass_enh" -> setVsBassEnh(v)
             "vs_bass_enh_mode" -> setVsBassEnhMode(v.toInt())
-            "s71_enabled" -> setS71Enabled(v > 0.5f)
-            "last_surround_engine" -> prefs.edit()
-                .putInt(KEY_LAST_SURROUND_ENGINE, if (v > 0.5f) 1 else 0).apply()
+            "vs_ambisonic_enabled" -> setAmbisonicEnabled(v > 0.5f)
+            "vs_ambi_focus" -> setAmbiFocus(v)
+            "vs_ambi_decoder" -> setVsAmbiDecoder(v.toInt())
+            "vs_vbap_spread" -> setVsVbapSpread(v)
+            "vs_hrtf_model" -> setVsHrtfModel(v.toInt())
+            "s71_enabled" -> Unit
+            "last_surround_engine" -> Unit
             "s71_upmix" -> setS71Upmix(v)
             "s71_externalize" -> setS71Externalize(v)
             "s71_bass_boost" -> setS71BassBoost(v)
@@ -2671,6 +2841,10 @@ class MainViewModel @Inject constructor(
         }.toTypedArray(),
         "limiter_enabled" to if (_limiterEnabled.value) 1f else 0f,
         "limiter_ceiling" to _limiterCeiling.value,
+        "limiter_gate_low" to _limiterGateLow.value,
+        "limiter_gate_mid" to _limiterGateMid.value,
+        "limiter_gate_high" to _limiterGateHigh.value,
+        "limiter_dc_block" to if (_limiterDcBlock.value) 1f else 0f,
         "reverb_enabled" to if (_reverbEnabled.value) 1f else 0f,
         "reverb_preset" to _reverbPreset.value.toFloat(),
         "user_wet_gain" to _userWetGain.value,
@@ -2679,7 +2853,10 @@ class MainViewModel @Inject constructor(
         "gate_threshold" to _gateThreshold.value,
         "stereo_width_enabled" to if (_stereoWidthEnabled.value) 1f else 0f,
         "stereo_width" to _stereoWidth.value,
-        "vs_enabled" to if (_vsEnabled.value) 1f else 0f,
+        // 注意：引擎选择（vs_enabled / vs_ambisonic / s71_enabled / last_surround_engine）
+        // **故意不进逐设备快照**。它们是全局偏好，且三者互斥——若回放旧快照里的
+        // `vs_enabled=1`，会触发互斥把 Ambisonic 关掉并写回 prefs，
+        // 表现为「开机后 Ambisonic 自己关了」（2026-11-26 真机复现）。
         "vs_mode" to _vsMode.value.toFloat(),
         "vs_encode_strength" to _vsEncodeStrength.value,
         "vs_room_size" to _vsRoomSize.value.toFloat(),
@@ -2691,8 +2868,13 @@ class MainViewModel @Inject constructor(
         "vs_dialog" to _vsDialog.value,
         "vs_bass_enh" to _vsBassEnh.value,
         "vs_bass_enh_mode" to _vsBassEnhMode.value.toFloat(),
-        "s71_enabled" to if (_s71Enabled.value) 1f else 0f,
-        "last_surround_engine" to prefs.getInt(KEY_LAST_SURROUND_ENGINE, 0).toFloat(),
+        "vs_ambisonic_enabled" to if (_vsAmbisonic.value) 1f else 0f,
+        "vs_ambi_focus" to _vsAmbiFocus.value,
+        "vs_ambi_decoder" to _vsAmbiDecoder.value.toFloat(),
+        "vs_vbap_spread" to _vsVbapSpread.value,
+        "vs_hrtf_model" to _vsHrtfModel.value.toFloat(),
+
+
         "s71_upmix" to _s71Upmix.value,
         "s71_externalize" to _s71Externalize.value,
         "s71_bass_boost" to _s71BassBoost.value,
@@ -2753,7 +2935,7 @@ class MainViewModel @Inject constructor(
     }
 
     // ================= ：按输出设备自动切换音效 =================
-    // 双模式语义沿用 WEcho：自适应（每个设备各存一套）/ 聚合（全部共用当前配置）。
+    // 双模式语义沿用 早期定制版：自适应（每个设备各存一套）/ 聚合（全部共用当前配置）。
     // 聚合模式 = 现状行为，本模块整段旁路，改动面为零。
 
     /** 隐私政策同意标记（**必须与 MainActivity.KEY_PRIVACY_ACCEPTED 一致**，撤回时改写这里） */
@@ -2901,7 +3083,7 @@ class MainViewModel @Inject constructor(
      *
      * 顺序不可颠倒：判等 → 自适应开关 → 抢锁 → 等引擎 ready → 下发。
      * **等 ready 是硬要求**：路由变化会 detach AAudio 流并触发重连，窗口内下发的参数
-     * 会被重启吞掉，表现为「切了设备但音效没生效」（WEcho 是同进程同步下发，无此窗口）。
+     * 会被重启吞掉，表现为「切了设备但音效没生效」（早期定制版 是同进程同步下发，无此窗口）。
      */
     /**
      * 回填展示名：历史绑定（本功能上线前绑的）只有键没有名字，设备一旦被使用就补记，
@@ -3248,31 +3430,63 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * 导出全部配置到外部私有目录（`.../files/backup/`）。
+     * 导出配置到公共目录 **`下载/Sonicraft/`**，一次点击完成。
      *
-     * 放在外部私有目录而不是内部存储：release 版非 debuggable、`run-as` 用不了，
-     * 但外部私有目录 adb 可直接 pull；而且切换 release/debug 时不会被卸载清掉。
+     * 为什么用 MediaStore 而不是 SAF 的「保存到」对话框：
+     * 1. SAF **不能让程序自动创建子目录**（用户必须手动新建），而这里要求固定落在
+     *    `Download/Sonicraft`；MediaStore 插入时给 `RELATIVE_PATH`，系统会自动建目录；
+     * 2. `下载/` 是**用户公共目录**：卸载 App、`pm clear` 都不会动它 —— 这是配置文件
+     *    能跨版本存活的前提（App 私有目录 `Android/data|media/<pkg>` 都会被清）。
      *
-     * @return 文件绝对路径
+     * @return 展示用路径「下载/Sonicraft/<文件名>」
      */
-    fun exportConfig(): Result<String> = runCatching {
-        val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
-            .format(java.util.Date())
-        // 用 PackageManager 取版本（本项目未开启 buildConfig 特性，没有 BuildConfig 类）
-        val pkg = context.packageManager.getPackageInfo(context.packageName, 0)
-        val appLabel = "${pkg.versionName} (${pkg.longVersionCode})"
-        val json = ConfigBackup.encode(
-            all = prefs.all,
-            appLabel = appLabel,
-            nowIso = stamp,
-        )
-        val dir = File(context.getExternalFilesDir(null) ?: context.filesDir, "backup")
-            .apply { mkdirs() }
-        val file = File(dir, "sonicraft_config_$stamp.json")
-        file.writeText(json)
-        writeDiag("配置已导出：${file.name}（${prefs.all.size} 项）")
-        file.absolutePath
+    fun exportConfigToDownloads(): Result<String> = runCatching {
+        val fileName = suggestedConfigFileName()
+        val json = ConfigBackup.encode(prefs.all, appLabel(), nowStamp(), irFileNames())
+        val resolver = context.contentResolver
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, fileName)
+            put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/json")
+            put(
+                android.provider.MediaStore.Downloads.RELATIVE_PATH,
+                android.os.Environment.DIRECTORY_DOWNLOADS + "/" + CONFIG_DOWNLOAD_SUBDIR,
+            )
+            put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(
+            android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            values,
+        ) ?: error("无法在「下载/$CONFIG_DOWNLOAD_SUBDIR」创建文件")
+        try {
+            resolver.openOutputStream(uri)?.use { out ->
+                out.write(json.toByteArray(Charsets.UTF_8))
+            } ?: error("无法写入文件")
+            // 写完再清 IS_PENDING，避免文件管理器看到半截文件
+            values.clear()
+            values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        } catch (t: Throwable) {
+            runCatching { resolver.delete(uri, null, null) }
+            throw t
+        }
+        val shown = "下载/$CONFIG_DOWNLOAD_SUBDIR/$fileName"
+        writeDiag("配置已导出：$shown（${prefs.all.size} 项）")
+        shown
     }
+
+    /** 导出文件名（带时间戳，便于多份并存） */
+    fun suggestedConfigFileName(): String = "sonicraft_config_${nowStamp()}.json"
+
+    /**
+     * 导入选择器的**初始目录** = `下载/Sonicraft`（与导出一致）。
+     *
+     * 用 `externalstorage` provider 的文档 URI；若该目录尚不存在，系统会自行回落到「下载」，
+     * 不会导致选择器打不开。
+     */
+    fun importStartFolderUri(): android.net.Uri = android.provider.DocumentsContract.buildDocumentUri(
+        "com.android.externalstorage.documents",
+        "primary:${android.os.Environment.DIRECTORY_DOWNLOADS}/$CONFIG_DOWNLOAD_SUBDIR",
+    )
 
     /**
      * 从 SAF 选中的 JSON 导入配置。
@@ -3281,14 +3495,23 @@ class MainViewModel @Inject constructor(
      *
      * @return 写入项数
      */
-    fun importConfig(uri: android.net.Uri): Result<Int> = runCatching {
+    fun importConfig(uri: android.net.Uri): Result<ConfigBackup.Outcome> = runCatching {
         val text = context.contentResolver.openInputStream(uri)?.use {
             it.readBytes().toString(Charsets.UTF_8)
         } ?: error("无法读取所选文件")
+        importConfigFromText(text).getOrThrow()
+    }
+
+    /** 配置文本 → 写入 prefs（URI 导入与自动恢复共用） */
+    private fun importConfigFromText(text: String): Result<ConfigBackup.Outcome> = runCatching {
         ConfigBackup.describeError(text)?.let { error(it) }
-        val map = ConfigBackup.decode(text) ?: error("配置解析失败")
+        val snapshot = ConfigBackup.decodeSnapshot(text) ?: error("配置解析失败")
+        // 旧键名 → 当前键名（重命名过 prefs 键时靠这张表，否则老备份会静默失效）
+        val (values, migrated) = ConfigBackup.applyMigrations(snapshot.values)
+
         val editor = prefs.edit()
-        for ((key, value) in map) {
+        var written = 0
+        for ((key, value) in values) {
             when (value) {
                 is Boolean -> editor.putBoolean(key, value)
                 is Float -> editor.putFloat(key, value)
@@ -3296,16 +3519,110 @@ class MainViewModel @Inject constructor(
                 is Long -> editor.putLong(key, value)
                 is String -> editor.putString(key, value)
                 is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+                else -> continue
             }
+            written++
         }
         if (!editor.commit()) error("写入配置失败")
-        writeDiag("配置已导入：${map.size} 项（需重启生效）")
-        map.size
+
+        // 备份里有、本机脉冲目录没有的文件：只提示，不阻断导入
+        val localIr = irFileNames().toSet()
+        val missing = snapshot.irFiles.filter { it !in localIr }
+
+        writeDiag(
+            "配置已导入：写入 $written 项（键名迁移 $migrated，忽略 ${snapshot.ignored}，" +
+                "缺脉冲 ${missing.size}），来源格式 v${snapshot.version}（需重启生效）",
+        )
+        ConfigBackup.Outcome(
+            written = written,
+            migrated = migrated,
+            ignored = snapshot.ignored,
+            missingIrFiles = missing,
+        )
+    }
+
+    /** 当前脉冲库文件名（含扩展名）：导出写清单、导入报缺件都用它 */
+    private fun irFileNames(): List<String> = runCatching {
+        pulseDir.listFiles()?.filter { it.isFile }?.map { it.name } ?: emptyList()
+    }.getOrDefault(emptyList())
+
+    // ---- 自动备份（防「卸载重装 / pm clear」丢配置）----
+
+    /**
+     * 自动备份文件位置 = `/sdcard/Android/media/<pkg>/Sonicraft/autobackup.json`。
+     *
+     * **不能用 `getExternalFilesDir()`**（`Android/data/<pkg>/`）：那个目录在
+     * `pm clear` 和**卸载**时都会被系统删除——实测 2026-11-25：备份写进去后
+     * 一 `pm clear` 就没了，备份机制等于失效。
+     * `Android/media/<pkg>/` 属于「用户媒体」，卸载后保留，才是备份该待的地方。
+     */
+    private val autoBackupFile: File
+        get() {
+            val mediaDir = context.getExternalMediaDirs()?.firstOrNull()
+            val root = File(
+                mediaDir ?: context.getExternalFilesDir(null) ?: context.filesDir,
+                "Sonicraft",
+            ).apply { mkdirs() }
+            return File(root, "autobackup.json")
+        }
+
+    private fun appLabel(): String = runCatching {
+        val pkg = context.packageManager.getPackageInfo(context.packageName, 0)
+        "${pkg.versionName} (${pkg.longVersionCode})"
+    }.getOrDefault("unknown")
+
+    private fun nowStamp(): String =
+        java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
+            .format(java.util.Date())
+
+    /**
+     * 写一份自动备份。
+     *
+     * **只在「有用户痕迹」时写**——否则新装机的空配置会把之前的好备份覆盖掉，
+     * 那就等于备份机制失效。
+     */
+    fun autoBackupConfig() {
+        runCatching {
+            if (!ConfigBackup.hasUserTrace(prefs.all)) {
+                writeDiag("自动备份：跳过（无用户痕迹，prefs ${prefs.all.size} 项）")
+                return
+            }
+            val f = autoBackupFile
+            f.writeText(ConfigBackup.encode(prefs.all, appLabel(), nowStamp(), irFileNames()))
+            writeDiag("自动备份：已写入 ${f.absolutePath}（${prefs.all.size} 项）")
+        }.onFailure { writeDiag("自动备份失败：${it.javaClass.simpleName}: ${it.message}") }
+    }
+
+    /**
+     * 若「当前是空配置」且存在自动备份 → 返回备份时间（"MM-dd HH:mm"），供 UI 提示恢复。
+     * 否则返回 null。
+     */
+    fun pendingAutoRestoreLabel(): String? {
+        if (ConfigBackup.hasUserTrace(prefs.all)) return null
+        val f = autoBackupFile
+        if (!f.exists() || f.length() < 16L) return null
+        return runCatching {
+            java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.CHINA)
+                .format(java.util.Date(f.lastModified()))
+        }.getOrNull()
+    }
+
+    /** 从自动备份恢复（调用方需重启 App） */
+    fun restoreFromAutoBackup(): Result<ConfigBackup.Outcome> = runCatching {
+        val f = autoBackupFile
+        if (!f.exists()) error("没有可用的自动备份")
+        importConfigFromText(f.readText()).getOrThrow()
     }
 
     init {
         // 旧默认压限参数会白吃 11~15dB，先迁移再让 UI 绑定
         migrateLegacyCompressorDefaults()
+        // 自动备份：延迟 4 秒（等参数加载与迁移完成），把 prefs 快照写到外部目录。
+        // 卸载重装 / pm clear 会清空内部 prefs，但外部目录不会被清 → 可提示恢复。
+        viewModelScope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(4000L)
+            autoBackupConfig()
+        }
         // 双后端：切换/全灭 → 提示用户（全灭时必须弹窗，不能静默失效）
         viewModelScope.launch {
             privileged.events.collect { ev ->
@@ -3660,7 +3977,7 @@ class MainViewModel @Inject constructor(
     val eqPreGainDb: StateFlow<Float> = _eqPreGainDb.asStateFlow()
 
     fun setEqPreGainDb(db: Float) {
-        // ±18dB 对齐 wecho Preamp（native 同步放宽）
+        // ±18dB 对齐 早期定制版 Preamp（native 同步放宽）
         val clamped = db.coerceIn(-18f, 18f)
         _eqPreGainDb.value = clamped
         prefs.edit().putFloat(KEY_EQ_PREGAIN, clamped).apply()
@@ -5694,6 +6011,29 @@ class MainViewModel @Inject constructor(
     }
 
     /** 上限（dBFS）：实时下发到 limiter，包络受 attack/release 速率约束天然无突变 */
+    /** 分段门限：k = 0 低 / 1 中 / 2 高；范围 -12..0 dB（相对输出上限） */
+    fun setLimiterGate(k: Int, db: Float) {
+        val v = db.coerceIn(-12f, 0f)
+        val param = when (k) {
+            0 -> AudioEngine.LIMITER_PARAM_GATE_LOW_DB
+            1 -> AudioEngine.LIMITER_PARAM_GATE_MID_DB
+            else -> AudioEngine.LIMITER_PARAM_GATE_HIGH_DB
+        }
+        when (k) {
+            0 -> { _limiterGateLow.value = v; prefs.edit().putFloat(KEY_LIMITER_GATE_LOW, v).apply() }
+            1 -> { _limiterGateMid.value = v; prefs.edit().putFloat(KEY_LIMITER_GATE_MID, v).apply() }
+            else -> { _limiterGateHigh.value = v; prefs.edit().putFloat(KEY_LIMITER_GATE_HIGH, v).apply() }
+        }
+        engine.setParam(AudioEngine.LIMITER_NODE_INDEX, param, v)
+    }
+
+    fun setLimiterDcBlock(on: Boolean) {
+        _limiterDcBlock.value = on
+        prefs.edit().putBoolean(KEY_LIMITER_DC_BLOCK, on).apply()
+        engine.setParam(AudioEngine.LIMITER_NODE_INDEX, AudioEngine.LIMITER_PARAM_DC_BLOCK,
+                        if (on) 1f else 0f)
+    }
+
     fun setLimiterCeiling(db: Float) {
         val clamped = db.coerceIn(-12f, 0f)
         _limiterCeiling.value = clamped
@@ -5993,12 +6333,24 @@ class MainViewModel @Inject constructor(
             _compressorRatio.value,
         )
         engine.setBypass(AudioEngine.LIMITER_NODE_INDEX, !_limiterEnabled.value)
+        // 分段限幅的门限与去直流必须重放：engine.prepare 会把节点参数复位
+        engine.setParam(AudioEngine.LIMITER_NODE_INDEX, AudioEngine.LIMITER_PARAM_GATE_LOW_DB,
+                        _limiterGateLow.value)
+        engine.setParam(AudioEngine.LIMITER_NODE_INDEX, AudioEngine.LIMITER_PARAM_GATE_MID_DB,
+                        _limiterGateMid.value)
+        engine.setParam(AudioEngine.LIMITER_NODE_INDEX, AudioEngine.LIMITER_PARAM_GATE_HIGH_DB,
+                        _limiterGateHigh.value)
+        engine.setParam(AudioEngine.LIMITER_NODE_INDEX, AudioEngine.LIMITER_PARAM_DC_BLOCK,
+                        if (_limiterDcBlock.value) 1f else 0f)
         // 自定义脚本效果器：重建后先恢复用户脚本（新节点默认旁路，
         // 可即时重载），再按开关设置旁路。
         if (_scriptSource.value.isNotEmpty()) {
             engine.setScriptSource(_scriptSource.value, _scriptLane.value)
         }
         engine.setBypass(AudioEngine.SCRIPT_EFFECT_NODE_INDEX, !_scriptEffectEnabled.value)
+        // Surround71 也是「引擎重建后会被重置为旁路」的节点：
+        // 前台建链只补了 VS（syncVsNodeEnabled）却漏了它，导致「开关全开、7.1 环绕没声」。
+        engine.setBypass(AudioEngine.S71_NODE_INDEX, !_s71Enabled.value)
         // 三条 lane 全部恢复（脚本 + 启用状态 + 各自参数），保证重启后不丢
         replayScriptLanes()
         refreshScriptSliderMask()
@@ -6124,11 +6476,14 @@ class MainViewModel @Inject constructor(
             }
         }
         // 虚拟环绕：旁路 + 已保存参数（开关关时也下发，便于下次打开立即生效）
-        engine.setBypass(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, !_vsEnabled.value)
+        // 节点是否工作看「矩阵环绕 或 Ambisonic 任一开启」——只认 _vsEnabled 会把
+        // 「只开 Ambisonic」的场景整节点旁路（实测踩过：UI 显示开启、自检仍报 7 方位）。
+        val surroundOn = _vsEnabled.value || _vsAmbisonic.value
+        engine.setBypass(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, !surroundOn)
         engine.setParam(
             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
             AudioEngine.VS_PARAM_ENABLED,
-            if (_vsEnabled.value) 1f else 0f,
+            if (surroundOn) 1f else 0f,
         )
         engine.setParam(
             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
@@ -6201,6 +6556,26 @@ class MainViewModel @Inject constructor(
             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
             AudioEngine.VS_PARAM_BASS_ENHANCER_MODE,
             _vsBassEnhMode.value.toFloat(),
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_AMBISONIC,
+            if (_vsAmbisonic.value) _vsAmbiDecoder.value.toFloat() else 0f,
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_VBAP_SPREAD,
+            _vsVbapSpread.value,
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_AMBI_FOCUS,
+            _vsAmbiFocus.value,
+        )
+        engine.setParam(
+            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+            AudioEngine.VS_PARAM_HRTF_MODEL,
+            _vsHrtfModel.value.toFloat(),
         )
         engine.setParam(
             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
@@ -6314,16 +6689,73 @@ class MainViewModel @Inject constructor(
                 if (st is EngineState.Running) {
                     // 引擎重建后全量重推矩阵环绕参数（含 7 路 Trim/Mute），
                     // 否则 UI 显示 prefs 值、引擎却是默认值 → 假状态
-                    runCatching { pushAllVsParams() }
+                    runCatching { pushAllVsParams() }.onFailure {
+                    writeDiag("pushAll FAILED: " + it.javaClass.simpleName + ": " + it.message)
+                }
                     runCatching {
+                        // 同上：Ambisonic 也属于本节点，不能只看 _vsEnabled
+                        val surroundOn = _vsEnabled.value || _vsAmbisonic.value
                         engine.setBypass(
                             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                            !_vsEnabled.value,
+                            !surroundOn,
                         )
                         engine.setParam(
                             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
                             AudioEngine.VS_PARAM_ENABLED,
-                            if (_vsEnabled.value) 1f else 0f,
+                            if (surroundOn) 1f else 0f,
+                        )
+                        // 三个「选哪个」的参数必须在这里显式下发：
+                        // pushAllVsParams() 在启动路径上可能中途异常/被取消，
+                        // 它一旦没跑完，节点就停在默认值（经典矩阵 + 参数化 HRTF），
+                        // 表现为「UI 显示 Ambisonic/VBAP 开着，实际跑的是经典环绕」。
+                        engine.setParam(
+                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                            AudioEngine.VS_PARAM_AMBISONIC,
+                            if (_vsAmbisonic.value) _vsAmbiDecoder.value.toFloat() else 0f,
+                        )
+                        engine.setParam(
+                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                            AudioEngine.VS_PARAM_HRTF_MODEL,
+                            _vsHrtfModel.value.toFloat(),
+                        )
+                        engine.setParam(
+                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                            AudioEngine.VS_PARAM_VBAP_SPREAD,
+                            _vsVbapSpread.value,
+                        )
+                        engine.setParam(
+                            AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
+                            AudioEngine.VS_PARAM_AMBI_FOCUS,
+                            _vsAmbiFocus.value,
+                        )
+                        // Surround71 是独立节点：挂载状态与它自己的参数在引擎重建后同样回默认值，
+                        // 必须和 VS 一样在这里补一遍（否则「切到 7.1 环绕」重启后不生效）。
+                        engine.setBypass(AudioEngine.S71_NODE_INDEX, !_s71Enabled.value)
+                        engine.setParam(
+                            AudioEngine.S71_NODE_INDEX,
+                            AudioEngine.S71_PARAM_ENABLED,
+                            if (_s71Enabled.value) 1f else 0f,
+                        )
+                        engine.setParam(
+                            AudioEngine.S71_NODE_INDEX,
+                            AudioEngine.S71_PARAM_HRTF_MODEL,
+                            _vsHrtfModel.value.toFloat(),
+                        )
+                        engine.setParam(
+                            AudioEngine.S71_NODE_INDEX,
+                            AudioEngine.S71_PARAM_ROOM_SIZE,
+                            _vsRoomSize.value.toFloat(),
+                        )
+                        engine.setParam(
+                            AudioEngine.S71_NODE_INDEX,
+                            AudioEngine.S71_PARAM_ROOM_WET,
+                            _vsRoomWet.value,
+                        )
+                        writeDiag(
+                            "RUNNING push ambi=" + _vsAmbisonic.value +
+                                " decoder=" + _vsAmbiDecoder.value +
+                                " hrtf=" + _vsHrtfModel.value +
+                                " vbap=" + _vsVbapSpread.value,
                         )
                         engine.setParam(
                             AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
@@ -6366,6 +6798,8 @@ class MainViewModel @Inject constructor(
         const val KEY_USER_PRESETS_JSON = "user_presets_json"
         const val KEY_FAVORITE_IRS = "favorite_irs"
         const val KEY_INPUT_GAIN = "input_gain"
+        /** 配置导出目录（`下载/Sonicraft/`）：公共目录，卸载与清数据都不影响 */
+        const val CONFIG_DOWNLOAD_SUBDIR = "Sonicraft"
         const val KEY_BALANCE = "balance"
         const val KEY_OUTPUT_GAIN = "output_gain"
         const val KEY_EXCLUDED_PACKAGES = "excluded_packages"
@@ -6398,6 +6832,10 @@ class MainViewModel @Inject constructor(
     private const val AUTOEQ_TYPES_PREFIX = "auto_eq_types_"
         const val KEY_LIMITER_ENABLED = "limiter_enabled"
         const val KEY_LIMITER_CEILING = "limiter_ceiling"
+        const val KEY_LIMITER_GATE_LOW = "limiter_gate_low"
+        const val KEY_LIMITER_GATE_MID = "limiter_gate_mid"
+        const val KEY_LIMITER_GATE_HIGH = "limiter_gate_high"
+        const val KEY_LIMITER_DC_BLOCK = "limiter_dc_block"
         /** 界面缩放：主倍率与微调分开存 */
     const val KEY_UI_SCALE = "ui_scale"
     const val KEY_UI_FINE_SCALE = "ui_fine_scale"
@@ -6440,7 +6878,7 @@ class MainViewModel @Inject constructor(
         const val KEY_MULTIBAND_PARAM_PREFIX = "multiband_param_"
 
         /** MultibandNode param_id 总数（3 段×六参 + fc1/fc2），与 native 对齐 */
-        const val MULTIBAND_PARAM_COUNT = 20
+        const val MULTIBAND_PARAM_COUNT = AudioEngine.MULTIBAND_PARAM_COUNT
 
         /**
          * 默认：0-17 每段六参 thr/ratio/atk/rel/knee/gain，18=fc1 200Hz、19=fc2 3.5kHz。
@@ -6488,6 +6926,11 @@ class MainViewModel @Inject constructor(
     const val KEY_VS_ENCODE_STRENGTH = "vs_encode_strength"
     const val KEY_VS_CENTER_MODE = "vs_center_mode"
     const val KEY_VS_DIALOG = "vs_dialog"
+    const val KEY_VS_AMBISONIC = "vs_ambisonic_enabled"
+    const val KEY_VS_AMBI_FOCUS = "vs_ambi_focus"
+    const val KEY_VS_AMBI_DECODER = "vs_ambi_decoder"
+    const val KEY_VS_VBAP_SPREAD = "vs_vbap_spread"
+    const val KEY_VS_HRTF_MODEL = "vs_hrtf_model"
     const val KEY_VS_BASS_ENH = "vs_bass_enh"
     const val KEY_VS_BASS_ENH_MODE = "vs_bass_enh_mode"
     const val KEY_S71_ENABLED = "s71_enabled"
@@ -6537,7 +6980,7 @@ class MainViewModel @Inject constructor(
     const val KEY_VIRTUAL_BASS_ENVELOPE_RATE = "virtual_bass_envelope_rate"
 
     /**
-     * 低音增强（移植自 wecho `BassEffect` / UI 里的「低频质感」）。
+     * 低音增强（移植自上游项目的 `BassEffect` / UI 里的「低频质感」）。
      *
      * 三个参数：amount（总强度）、deep（下潜：动态增益 + 次谐波）、punch（瞬态）。
      * **与输出设备无关**，耳机与外放都能用。
@@ -6556,7 +6999,7 @@ class MainViewModel @Inject constructor(
      * **已废弃**。
      *
      * 原设计是「确认一次后不再提醒」，但对照
-     * `wecho_projectV2.5.1_studio_rack` 的实现后发现理解错了：
+     * `早期定制版工程` 的实现后发现理解错了：
      * 那边根本没有 ack 记忆 —— 「关闭提醒」按钮的语义是**不开启**（等同于取消），
      * 每次在耳机上开启都会重新弹。
      *

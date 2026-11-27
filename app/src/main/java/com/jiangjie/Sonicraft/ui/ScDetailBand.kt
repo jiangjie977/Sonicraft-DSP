@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 部分交互与布局参照本人维护的 wecho 定制版（studio_rack 分支）。
+ * 部分交互与布局参照作者本人维护的定制分支。
  */
 
 package com.jiangjie.Sonicraft.ui

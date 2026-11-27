@@ -3,8 +3,11 @@
  * SPDX-FileCopyrightText: 2026 qumolangmo
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 部分逻辑移植自 WEcho（GPL-3.0，Copyright (C) 2026 qumolangmo）；
- * 本文件由 Sonicraft 于 2026-11 在 WEcho 基础上移植并修改。
+ * 本文件的部分算法移植自上游 GPL-3.0 音频项目（Flutter + C++ DSP 音频应用）的原实现，
+ * 上游版权：Copyright (C) 2026 qumolangmo，许可证 GPL-3.0（与本项目兼容）。
+ * 移植与修改：2026-11，修改部分的版权归本仓库作者。
+ *
+ * 依据 GPL-3.0 §5，保留上游版权声明与派生说明；上游源码可得性义务见 THIRD-PARTY-NOTICES.md 第三节。
  */
 #pragma once
 
@@ -26,7 +29,7 @@ namespace sonicraft::dsp {
  * 听觉系统会从谐波结构里"还原"出缺失的基频（missing fundamental）。
  * 所以把 80~150Hz 的基频翻译成 160~300Hz 的二次谐波，大脑就以为听到了低频。
  *
- * ## 算法（移植自 wecho 的 `VirtualBassEffect`）
+ * ## 算法（移植自上游项目的 `VirtualBassEffect`）
  * ```
  * x ─┬─ 80~150Hz 带通 → 一阶平滑 → Chebyshev 二次谐波 → HP 120
  *    │                                    └→ 包络归一化(env_lp/env_har)
@@ -42,20 +45,20 @@ namespace sonicraft::dsp {
  *    让谐波能量跟随基频包络。没有基频时不会凭空造谐波，
  *    否则纯中频人声也会被"加工"出嗡嗡声。
  *
- * ## 与 wecho 的一处**有意偏离**
- * wecho 是**纯替换**：`<120Hz` 的原信号完全丢弃，输出只剩谐波 + 中高频。
+ * ## 与 早期定制版 的一处**有意偏离**
+ * 早期定制版 是**纯替换**：`<120Hz` 的原信号完全丢弃，输出只剩谐波 + 中高频。
  * 在手机扬声器上这是对的（反正放不出），但在耳机上强制开启时会**完全没有基频**，
  * 听感发空、低频怪。
  *
  * 所以这里加 `amount` 做 **dry/wet 混合**：
  *   `out = dry × (1 − amount) + wet × amount`
  * - `amount = 0` → 完全原声（逐位透明，可用于旁路等价）
- * - `amount = 1` → 纯 wecho 行为
+ * - `amount = 1` → 纯 早期定制版 行为
  * - 默认 0.7 → 保留 30% 原低频，耳机上强行开启也不至于"空掉"
  *
  * ## 参数
  *   param 0 = amount        干湿比 0~1（默认 0.7）
- *   param 1 = harmonic     谐波注入量 0~2（默认 1.3，wecho 同值）
+ *   param 1 = harmonic     谐波注入量 0~2（默认 1.3，早期定制版 同值）
  *   param 2 = midGain      120~600Hz 直通量 0~1（默认 0.5）
  *   param 3 = highGain     600Hz+ 直通量 0~1（默认 0.5）
  *   param 4 = envelopeRate 包络平滑截止 5~150Hz（默认 40）
@@ -72,11 +75,11 @@ class VirtualBassNode : public DspNode {
   static constexpr int kParamEnvelopeRate = 4;
 
   /**
-   * 默认值**逐项对齐 `wecho yuanma/native/effects/VirtualBassEffect.cpp` 构造函数**
+   * 默认值**逐项对齐 `早期定制版 yuanma/native/effects/VirtualBassEffect.cpp` 构造函数**
    * 。
    *
-   * wecho: envelope_rate=50 / mid_gain=0.08 / high_gain=0.16 / harmonic_gain=1.00。
-   * wecho 没有 amount（纯替换），这里 1.0 = 不带干声；参数仍保留供耳机上手动降。
+   * 早期定制版: envelope_rate=50 / mid_gain=0.08 / high_gain=0.16 / harmonic_gain=1.00。
+   * 早期定制版 没有 amount（纯替换），这里 1.0 = 不带干声；参数仍保留供耳机上手动降。
    */
   static constexpr float kDefaultAmount = 0.80f;        // 强度 80%
   static constexpr float kDefaultHarmonic = 1.30f;      // 谐波量 130%
@@ -95,7 +98,7 @@ class VirtualBassNode : public DspNode {
   static constexpr float kMidLoHz = 120.0f;
   static constexpr float kMidHiHz = 600.0f;
   static constexpr float kHighHz = 600.0f;
-  /** wecho 的整体补偿量（谐波能量天生偏小） */
+  /** 早期定制版 的整体补偿量（谐波能量天生偏小） */
   static constexpr float kPostGainDb = 12.0f;
   static constexpr float kEnvRateMin = 5.0f;
   static constexpr float kEnvRateMax = 150.0f;
@@ -205,15 +208,15 @@ class VirtualBassNode : public DspNode {
         const float mid = mid_band_[ci].Process(x);
         const float high = high_band_[ci].Process(x);
 
-        // **按 `wecho yuanma` 1:1 还原混合公式**
+        // **按 `早期定制版 yuanma` 1:1 还原混合公式**
         // yuanma: out = (mid_gain*0.25*bp + high_gain*0.25*hp
         //                + 2.4*y*harmonic_gain) * post_gain;  audio = out;
         // 昨天 L2 为了修「200Hz −19dB」把 mid/high 抬成 kMidThroughGain=2.5、
-        // 且 post_gain 只给谐波，结果中频直通比 wecho 高 5~11 倍，谐波被稀释
-        // 到「谐波÷中频」只有 wecho 的 ~6%，听感因此只剩一半。
-        // **中频被压低本来就是 wecho 让谐波突出的设计，不是缺陷** ——
+        // 且 post_gain 只给谐波，结果中频直通比 早期定制版 高 5~11 倍，谐波被稀释
+        // 到「谐波÷中频」只有 早期定制版 的 ~6%，听感因此只剩一半。
+        // **中频被压低本来就是 早期定制版 让谐波突出的设计，不是缺陷** ——
         // 「频响平坦」基准不适用于故意失真的心理声学效果器。
-        // 这里同时保留 dry/wet（wecho 无此参数）：amount=1.0 时 dry=0，等价纯替换。
+        // 这里同时保留 dry/wet（早期定制版 无此参数）：amount=1.0 时 dry=0，等价纯替换。
         const float wet_sig =
             (mid_gain_ * 0.25f * mid +
              high_gain_ * 0.25f * high +
@@ -274,7 +277,7 @@ class VirtualBassNode : public DspNode {
   }
 
  private:
-  /** 带通 = 2 阶 HP ×2 级联 + 2 阶 LP ×2 级联（等效 LR4×LR4，与 wecho 的 setBandPass 一致）。 */
+  /** 带通 = 2 阶 HP ×2 级联 + 2 阶 LP ×2 级联（等效 LR4×LR4，与 早期定制版 的 setBandPass 一致）。 */
   struct Band {
     Biquad hp[2];
     Biquad lp[2];
@@ -332,7 +335,7 @@ class VirtualBassNode : public DspNode {
 
   void updateEnvelopeCoeffs() {
     const float sr = static_cast<float>(sample_rate_);
-    // **按 `wecho yuanma` 对齐**：
+    // **按 `早期定制版 yuanma` 对齐**：
     //   envelope_alpha = 2π×25/sr（固定，setEnvelopeRate 不更新它）
     //   lp_soft_alpha  = 2π×envelopeRate/sr（跟随「跟随速度」滑块）
     // 新版 studio_rack 把「两者都跟参数」当成 bug 修了，但用户实听对比的

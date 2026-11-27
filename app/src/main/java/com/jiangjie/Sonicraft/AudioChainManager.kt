@@ -237,323 +237,34 @@ class AudioChainManager @Inject constructor(
 
         runCatching {
             // 增益 / 平衡 / 宽度
-            engine.setParam(AudioEngine.INPUT_GAIN_NODE_INDEX, AudioEngine.GAIN_PARAM_GAIN, f("input_gain", 1f))
-            engine.setParam(AudioEngine.OUTPUT_GAIN_NODE_INDEX, AudioEngine.GAIN_PARAM_GAIN, f("output_gain", 1f))
-            engine.setParam(AudioEngine.BALANCE_NODE_INDEX, AudioEngine.BALANCE_PARAM_BALANCE, f("balance", 0f))
-            engine.setParam(
-                AudioEngine.STEREO_WIDTH_NODE_INDEX,
-                AudioEngine.STEREO_WIDTH_PARAM_WIDTH,
-                f("stereo_width", 1f),
-            )
-            engine.setBypass(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, !b("vs_enabled", false))
-            // Surround71 环绕（与矩阵环绕互斥，prefs 里两者不会同时为 true）
-            engine.setBypass(AudioEngine.S71_NODE_INDEX, !b("s71_enabled", false))
-            engine.setParam(
-                AudioEngine.S71_NODE_INDEX,
-                AudioEngine.S71_PARAM_ENABLED,
-                if (b("s71_enabled", false)) 1f else 0f,
-            )
-            engine.setParam(
-                AudioEngine.S71_NODE_INDEX,
-                AudioEngine.S71_PARAM_UPMIX,
-                prefs.getFloat("s71_upmix", 0.85f),
-            )
-            engine.setParam(
-                AudioEngine.S71_NODE_INDEX,
-                AudioEngine.S71_PARAM_EXTERNALIZE,
-                prefs.getFloat("s71_externalize", 0.35f),
-            )
-            engine.setParam(
-                AudioEngine.S71_NODE_INDEX,
-                AudioEngine.S71_PARAM_BASS_BOOST_DB,
-                prefs.getFloat("s71_bass_boost", 2.0f),
-            )
-            engine.setParam(
-                AudioEngine.S71_NODE_INDEX,
-                AudioEngine.S71_PARAM_BASS_MANAGEMENT,
-                prefs.getFloat("s71_bass_mgmt", 0.25f),
-            )
-            // 必须同时下发 enabled：节点内该参数默认 0，仅解除 bypass 仍会直通，
-            // 表现为"开关显示开启却没有效果、手动切一次才生效"（开机初始化缺陷）。
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_ENABLED,
-                if (b("vs_enabled", false)) 1f else 0f,
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_MODE,
-                prefs.getInt("vs_mode", 0).toFloat(),
-            )
-            engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_SURROUND_GAIN, 0f)
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_BS775,
-                if (b("vs_bs775", false)) 1f else 0f,
-            )
-            engine.setParam(AudioEngine.VIRTUAL_SURROUND_NODE_INDEX, AudioEngine.VS_PARAM_CENTER_GAIN, 0f)
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_DISTANCE,
-                f("vs_distance", 0.5f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_HEIGHT_STRENGTH,
-                f("vs_height", 0.5f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_STEREO_EXPAND,
-                f("vs_rear_space", 0.5f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_ROOM_SIZE,
-                prefs.getInt("vs_room_size", 0).toFloat(),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_ROOM_WET_DRY,
-                f("vs_room_wet", 0.35f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_ENCODE_STRENGTH,
-                f("vs_encode_strength", 0.5f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_CENTER_MODE,
-                prefs.getInt("vs_center_mode", 1).toFloat(),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_DIALOG,
-                f("vs_dialog", 0f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_BASS_ENHANCER,
-                f("vs_bass_enh", 0f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_BASS_ENHANCER_MODE,
-                prefs.getInt("vs_bass_enh_mode", 0).toFloat(),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_REAR_CENTER_ENABLED,
-                if (prefs.getBoolean("vs_rear_center", false)) 1f else 0f,
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_REAR_CENTER_DELAY_MS,
-                f("vs_rear_delay", 5f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_SURROUND_NODE_INDEX,
-                AudioEngine.VS_PARAM_ENABLED,
-                if (b("vs_enabled", false)) 1f else 0f,
-            )
+            // 增益 / 平衡 / 宽度（含中性值旁路判断，与前台同一套语义）
+            ParamReplay.applyGainBalanceWidth(engine, prefs)
+            // Surround71：旁路 + enabled 参数 + 四参统一走表
+            ParamReplay.applyS71(engine, prefs)
+            // 虚拟环绕：旁路 + 全量参数统一走表（含 Ambisonic/HRTF/Trim/Mute，headless 此前全缺）
+            ParamReplay.applyVs(engine, prefs)
             engine.setBypass(AudioEngine.STEREO_WIDTH_NODE_INDEX, !b("stereo_width_enabled", true))
             // 三个 Gain/Balance 节点的旁路：
             // 前台 applyEqSettings 有 setBypass，headless 此前只发 setParam ——
             // engine.prepare 后它们保持默认 bypass=true，用户调过的输入/输出增益
             // 与平衡会在「系统杀进程自愈」后静默失效。中性值时不启用，与前台语义一致。
-            engine.setBypass(AudioEngine.INPUT_GAIN_NODE_INDEX, f("input_gain", 1f) == 1f)
-            engine.setBypass(AudioEngine.BALANCE_NODE_INDEX, f("balance", 0f) == 0f)
-            engine.setBypass(AudioEngine.OUTPUT_GAIN_NODE_INDEX, f("output_gain", 1f) == 1f)
+            // 低频管家三节点（动态低音 / 低音增强 / 虚拟低音）
+            ParamReplay.applyLowfreq(engine, prefs)
 
-            // 动态低音：五个参数 + 旁路。
-            // 任何一处漏重放都会导致"重启后静默回默认"——本项目已中过两次
-            // （重放只发 param 0、compressor_sidechain_hp 无写入端），所以逐个列全。
-            engine.setParam(
-                AudioEngine.DYNAMIC_BASS_NODE_INDEX,
-                AudioEngine.DYNAMIC_BASS_PARAM_AMOUNT, f("dynamic_bass_amount", 0.35f),
-            )
-            engine.setParam(
-                AudioEngine.DYNAMIC_BASS_NODE_INDEX,
-                AudioEngine.DYNAMIC_BASS_PARAM_SUBSONIC_HZ, f("dynamic_bass_subsonic_hz", 30f),
-            )
-            engine.setParam(
-                AudioEngine.DYNAMIC_BASS_NODE_INDEX,
-                AudioEngine.DYNAMIC_BASS_PARAM_FOCUS_HZ, f("dynamic_bass_focus_hz", 80f),
-            )
-            engine.setParam(
-                AudioEngine.DYNAMIC_BASS_NODE_INDEX,
-                AudioEngine.DYNAMIC_BASS_PARAM_BOOST_DEPTH, f("dynamic_bass_boost_depth", 0.5f),
-            )
-            engine.setParam(
-                AudioEngine.DYNAMIC_BASS_NODE_INDEX,
-                AudioEngine.DYNAMIC_BASS_PARAM_PROTECT_LEVEL, f("dynamic_bass_protect_level", 0.6f),
-            )
-            // 注：动态低音/虚拟低音的 bypass 由下面的表驱动循环统一处理
-            // （EffectGroups.all 遍历），这里只重放各自的**参数**。
+            // EQ：段数（eq_mode 即段数）+ 增益/Q/频率/类型/预增益，含 AutoEQ 旁路
+            ParamReplay.applyEq(engine, prefs)
 
-            // 低音增强：三个参数逐个列全。
-            engine.setParam(
-                AudioEngine.BASS_ENHANCE_NODE_INDEX,
-                AudioEngine.BASS_ENHANCE_PARAM_AMOUNT, f("bass_enhance_amount", 0.5f),
-            )
-            engine.setParam(
-                AudioEngine.BASS_ENHANCE_NODE_INDEX,
-                AudioEngine.BASS_ENHANCE_PARAM_DEEP, f("bass_enhance_deep", 0.3f),
-            )
-            engine.setParam(
-                AudioEngine.BASS_ENHANCE_NODE_INDEX,
-                AudioEngine.BASS_ENHANCE_PARAM_PUNCH, f("bass_enhance_punch", 0.6f),
-            )
-            // 双模式：模式 + 经典模式三个参数。
-            // **两套参数都要重放**（不只是当前模式那套）——否则切模式后
-            // 另一套参数会回默认，用户会觉得"切回去音色变了"。
-            // **必须用 getInt 而不是 f**：
-            // `bass_enhance_mode` 在 prefs 里是 Int（setBassEnhanceMode 用 putInt），
-            // 而 `f` = prefs.getFloat —— Android 对 Int 键调 getFloat 会抛
-            // ClassCastException，被外层 runCatching 吞掉 →
-            // **整个重放块静默中断**，后面所有参数都不下发。
-            // 这类错误没有日志、没有崩溃，只有"某些参数重启后回默认"的症状。
-            engine.setParam(
-                AudioEngine.BASS_ENHANCE_NODE_INDEX,
-                AudioEngine.BASS_ENHANCE_PARAM_MODE,
-                prefs.getInt("bass_enhance_mode", 1).toFloat(),
-            )
-            engine.setParam(
-                AudioEngine.BASS_ENHANCE_NODE_INDEX,
-                AudioEngine.BASS_ENHANCE_PARAM_CLASSIC_GAIN,
-                f("bass_enhance_classic_gain", 6f),
-            )
-            engine.setParam(
-                AudioEngine.BASS_ENHANCE_NODE_INDEX,
-                AudioEngine.BASS_ENHANCE_PARAM_CLASSIC_Q,
-                f("bass_enhance_classic_q", 0.7071f),
-            )
-            engine.setParam(
-                AudioEngine.BASS_ENHANCE_NODE_INDEX,
-                AudioEngine.BASS_ENHANCE_PARAM_CLASSIC_CENTER,
-                f("bass_enhance_classic_center", 60f),
-            )
+            // 卷积混响 + 算法混响（FDN）
+            ParamReplay.applyReverb(engine, prefs)
 
-            // 虚拟低音：五个参数逐个列全。
-            engine.setParam(
-                AudioEngine.VIRTUAL_BASS_NODE_INDEX,
-                AudioEngine.VIRTUAL_BASS_PARAM_AMOUNT, f("virtual_bass_amount", 0.80f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_BASS_NODE_INDEX,
-                AudioEngine.VIRTUAL_BASS_PARAM_HARMONIC, f("virtual_bass_harmonic", 1.30f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_BASS_NODE_INDEX,
-                AudioEngine.VIRTUAL_BASS_PARAM_MID_GAIN, f("virtual_bass_mid_gain", 0.20f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_BASS_NODE_INDEX,
-                AudioEngine.VIRTUAL_BASS_PARAM_HIGH_GAIN, f("virtual_bass_high_gain", 0.60f),
-            )
-            engine.setParam(
-                AudioEngine.VIRTUAL_BASS_NODE_INDEX,
-                AudioEngine.VIRTUAL_BASS_PARAM_ENVELOPE_RATE,
-                f("virtual_bass_envelope_rate", 80f),
-            )
-
-            // EQ：段数固定 10，曲线从 CSV 解析
-            engine.setBypass(AudioEngine.EQ_NODE_INDEX, !b("eq_enabled", false))
-            // AutoEQ 不在 EffectGroups 里（它挂在 EQ 段，与 PEQ 独立），
-            // 必须单独重放旁路，否则打开 AutoEQ 后重启不生效（假开关）。
-            engine.setBypass(
-                AudioEngine.AUTO_EQ_NODE_INDEX,
-                !(prefs.getBoolean("eq_section_enabled", true) &&
-                    prefs.getBoolean("auto_eq_enabled", false)),
-            )
-            prefs.getString("eq_bands_10", null)?.split(',')?.forEachIndexed { i, s ->
-                s.trim().toFloatOrNull()?.let { engine.setParam(AudioEngine.EQ_NODE_INDEX, i, it) }
-            }
-            engine.setParam(AudioEngine.EQ_NODE_INDEX, AudioEngine.EQ_PARAM_BAND_COUNT, 10f)
-
-            // 卷积混响
-            engine.setParam(
-                AudioEngine.CONVOLVER_NODE_INDEX,
-                AudioEngine.CONVOLVER_PARAM_PRESET,
-                prefs.getInt("reverb_preset", AudioEngine.REVERB_PRESET_SMALL_ROOM).toFloat(),
-            )
-            engine.setParam(
-                AudioEngine.CONVOLVER_NODE_INDEX,
-                AudioEngine.CONVOLVER_PARAM_WET,
-                f("user_wet_gain", 1f),
-            )
-            engine.setBypass(AudioEngine.CONVOLVER_NODE_INDEX, !b("reverb_enabled", false))
-
-            // 算法混响（FDN）
-            val rv = AudioEngine.ALGORITHMIC_REVERB_NODE_INDEX
-            engine.setParam(rv, AudioEngine.REVERB_PARAM_ROOM_SIZE, f("fdn_room_size", 0.5f))
-            engine.setParam(rv, AudioEngine.REVERB_PARAM_HUMIDITY, f("fdn_humidity", 0.5f))
-            engine.setParam(rv, AudioEngine.REVERB_PARAM_STEREO_WIDTH, f("fdn_stereo_width", 1f))
-            engine.setParam(rv, AudioEngine.REVERB_PARAM_WET, f("fdn_wet", 0.3f))
-            engine.setParam(rv, AudioEngine.REVERB_PARAM_DRY, f("fdn_dry", 1f))
-            engine.setParam(rv, AudioEngine.REVERB_PARAM_MODE, f("fdn_mode", 0f))
-            engine.setBypass(rv, !b("fdn_enabled", false))
-
-            // 限幅 / 压限 / 多段
-            engine.setParam(AudioEngine.LIMITER_NODE_INDEX, 0, f("limiter_ceiling", -1f))
-            engine.setBypass(AudioEngine.LIMITER_NODE_INDEX, !b("limiter_enabled", true))
+            // 限幅 / 压限 / 多段（限幅器自带 true-peak 安全常量，一并走表）
+            ParamReplay.applyLimiter(engine, prefs)
             // 自定义脚本效果器：恢复用户脚本（新节点默认旁路可重载）+ 旁路
             val scriptSrc = prefs.getString("script_effect_source", "") ?: ""
             if (scriptSrc.isNotEmpty()) engine.setScriptSource(scriptSrc)
             engine.setBypass(AudioEngine.SCRIPT_EFFECT_NODE_INDEX, !b("script_effect_enabled", false))
-            // 单段压缩器：**全参数重放**
-            // 原来只发了 param 0（threshold，且默认值写成 0f 应为 -20f），
-            // ratio/attack/release/makeup 在重启后全部回到 node 内默认值——用户调过的
-            // 压缩比会静默丢失。这里按 prefs 逐一重放六参。
-            engine.setParam(
-                AudioEngine.COMPRESSOR_NODE_INDEX,
-                AudioEngine.COMPRESSOR_PARAM_THRESHOLD_DB, f("compressor_threshold", -20f),
-            )
-            engine.setParam(
-                AudioEngine.COMPRESSOR_NODE_INDEX,
-                AudioEngine.COMPRESSOR_PARAM_RATIO, f("compressor_ratio", 4f),
-            )
-            engine.setParam(
-                AudioEngine.COMPRESSOR_NODE_INDEX,
-                AudioEngine.COMPRESSOR_PARAM_ATTACK_MS, f("compressor_attack_ms", 10f),
-            )
-            engine.setParam(
-                AudioEngine.COMPRESSOR_NODE_INDEX,
-                AudioEngine.COMPRESSOR_PARAM_RELEASE_MS, f("compressor_release_ms", 150f),
-            )
-            engine.setParam(
-                AudioEngine.COMPRESSOR_NODE_INDEX,
-                AudioEngine.COMPRESSOR_PARAM_KNEE_DB, f("compressor_knee_db", 6f),
-            )
-            engine.setParam(
-                AudioEngine.COMPRESSOR_NODE_INDEX,
-                AudioEngine.COMPRESSOR_PARAM_MAKEUP_DB, f("compressor_makeup_db", 0f),
-            )
-            // 新增四项 + 侧链高通（param 6 此前也漏了重放）：
-            // 这五个参数若漏重放，重启后会静默回默认。
-            // 侧链高通原先更是**只有重放没有写入端**（永远读到默认 120），
-            // 已补 `setCompressorSidechainHp` 与 UI 档位，此处是它的持久化读端。
-            engine.setParam(
-                AudioEngine.COMPRESSOR_NODE_INDEX,
-                AudioEngine.COMPRESSOR_PARAM_SIDECHAIN_HP_HZ, f("compressor_sidechain_hp", 120f),
-            )
-            engine.setParam(
-                AudioEngine.COMPRESSOR_NODE_INDEX,
-                AudioEngine.COMPRESSOR_PARAM_MIX, f("compressor_mix", 1f),
-            )
-            engine.setParam(
-                AudioEngine.COMPRESSOR_NODE_INDEX,
-                AudioEngine.COMPRESSOR_PARAM_DETECT_MODE, f("compressor_detect_mode", 0f),
-            )
-            engine.setParam(
-                AudioEngine.COMPRESSOR_NODE_INDEX,
-                AudioEngine.COMPRESSOR_PARAM_LOOKAHEAD_MS, f("compressor_lookahead_ms", 0f),
-            )
-            engine.setParam(
-                AudioEngine.COMPRESSOR_NODE_INDEX,
-                AudioEngine.COMPRESSOR_PARAM_OVERSAMPLE, f("compressor_oversample", 1f),
-            )
+            // 单段压缩器（六参 + 侧链/混合/检测/前瞻/过采样）
+            ParamReplay.applyCompressor(engine, prefs)
             // 效果组的旁通重放：遍历 [EffectGroups.all]，
             // 每组每槽都按「总闸 && 该槽记忆」下发。
             // 这样新增一个效果组只需在 EffectGroups 里加一条 spec ——
@@ -563,12 +274,7 @@ class AudioChainManager @Inject constructor(
                     engine.setBypass(slot.nodeIndex, !group.shouldPlay(prefs, slot.key))
                 }
             }
-            for (i in 0..20) {
-                val key = "multiband_param_$i"
-                if (prefs.contains(key)) {
-                    engine.setParam(AudioEngine.MULTIBAND_NODE_INDEX, i, prefs.getFloat(key, 0f))
-                }
-            }
+            ParamReplay.applyMultiband(engine, prefs)
         }.onFailure { diag("参数重放部分失败: ${it.javaClass.simpleName}: ${it.message}") }
     }
 }

@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 部分交互与布局参照本人维护的 wecho 定制版（studio_rack 分支）。
+ * 部分交互与布局参照作者本人维护的定制分支。
  */
 
 package com.jiangjie.Sonicraft.ui
@@ -178,39 +178,97 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 internal fun ScLimiterDetailContent(viewModel: MainViewModel) {
     val limiterEnabled by viewModel.limiterEnabled.collectAsStateWithLifecycle()
     val limiterCeiling by viewModel.limiterCeiling.collectAsStateWithLifecycle()
-    val ceilingExpanded = rememberExpandedFollowing(limiterEnabled, "limiter_card")
+    val gateLow by viewModel.limiterGateLow.collectAsStateWithLifecycle()
+    val gateMid by viewModel.limiterGateMid.collectAsStateWithLifecycle()
+    val gateHigh by viewModel.limiterGateHigh.collectAsStateWithLifecycle()
+    val dcBlock by viewModel.limiterDcBlock.collectAsStateWithLifecycle()
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-            ScSlotHeader(
-                title = "输出上限：${"%.1f".format(limiterCeiling)} dBFS",
-                checked = limiterEnabled,
-                onCheckedChange = { viewModel.setLimiterEnabled(!limiterEnabled) },
-                switchEnabled = true,
-                expanded = ceilingExpanded.value,
-                onToggleExpand = { ceilingExpanded.value = !ceilingExpanded.value },
-                showSwitch = false,
-            )
-            if (ceilingExpanded.value) {
-                Column(
-                    modifier = Modifier.padding(bottom = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+            Column(
+                // 卡头已删除：顶部必须自己留白（原卡头的 18dp），否则第一个控件会贴顶
+                modifier = Modifier.padding(top = 18.dp, bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // 去直流放在旋钮上方：它是"整卡"的开关，不属于某一频段
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Slider(
+                    Text("去直流", fontSize = 11.sp, color = ScColors.TextSub)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    ScAdvChip(
+                        text = if (dcBlock) "开" else "关",
+                        active = dcBlock,
+                    ) { viewModel.setLimiterDcBlock(!dcBlock) }
+                }
+                // 两两成行：一行四个在手机宽度下太挤，旋钮也偏小不好拧
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    ScKnob(
+                        label = "输出上限",
                         value = limiterCeiling,
+                        min = -12f,
+                        max = 0f,
+                        sizeDp = 96,
+                        textScale = 0.6f,
+                        format = { "%.1f".format(it) },
+                        resetValue = -1f,
                         onValueChange = viewModel::setLimiterCeiling,
-                        valueRange = -12f..0f,
-                        enabled = limiterEnabled,
                     )
-                    Text(
-                        text = "超过上限的采样被硬钳制到天花板，杜绝削波爆音。与压缩器分层工作：" +
-                            "压缩器先压平动态范围，限幅器只兜瞬时峰值，明显减少呼吸感。" +
-                            "配合输出增益（响度补偿）使用：先补偿响度，再由限幅器收口。" +
-                            "look-ahead 2.5ms 预读：EQ 增益拉大或源音量突增时保护听感仍生效。",
-                        fontSize = 11.sp,
-                        color = ScColors.TextSub,
+                    ScKnob(
+                        label = "低频",
+                        value = gateLow,
+                        min = -12f,
+                        max = 0f,
+                        sizeDp = 96,
+                        textScale = 0.6f,
+                        format = { "%.0f".format(it) },
+                        resetValue = -5f,
+                        onValueChange = { viewModel.setLimiterGate(0, it) },
                     )
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    ScKnob(
+                        label = "中频",
+                        value = gateMid,
+                        min = -12f,
+                        max = 0f,
+                        sizeDp = 96,
+                        textScale = 0.6f,
+                        format = { "%.0f".format(it) },
+                        resetValue = -5f,
+                        onValueChange = { viewModel.setLimiterGate(1, it) },
+                    )
+                    ScKnob(
+                        label = "高频",
+                        value = gateHigh,
+                        min = -12f,
+                        max = 0f,
+                        sizeDp = 96,
+                        textScale = 0.6f,
+                        format = { "%.0f".format(it) },
+                        resetValue = -2f,
+                        onValueChange = { viewModel.setLimiterGate(2, it) },
+                    )
+                }
+                ScInfoChip(
+                    body = "输出上限：超过上限的采样被硬钳制到天花板，杜绝削波爆音。" +
+                        "与压缩器分层工作——压缩器先压平动态范围，限幅器只兜瞬时峰值。\n\n" +
+                        "分段限幅：信号先分成三段各自限幅再求和，低频峰值不会再压掉高频，" +
+                        "大增益下听感是「响」而不是「闷」。分频点固定 100 / 600 Hz，" +
+                        "前瞻 2.5 ms（增益在峰值到来之前就算好），末级再压到上面的输出上限。\n\n" +
+                        "门限：三条旋钮都是「相对输出上限的偏移」，数值越低留的余量越大。" +
+                        "默认 低 −5 / 中 −5 / 高 −2 dB——低频压太狠鼓点会发软，高频只需轻收峰。\n\n" +
+                        "去直流：限幅会累积直流偏移，直流占掉的余量表现为莫名削顶，一般保持开启。",
+                    title = "限幅器说明",
+                )
             }
+        
         }
     }
     // ---- U9m 静音门限（自音效库列表迁入：门限与输出链收口同属一处） ----
@@ -228,12 +286,8 @@ internal fun ScLimiterDetailContent(viewModel: MainViewModel) {
                 valueRange = 0f..0.05f,
                 enabled = true,
             )
-            Text(
-                text = "输入电平低于门限时输出平滑静音。注意：流媒体源（抖音等）弱电平人声段常低于门限被切断，" +
-                    "与混响叠加会形成「干声断了尾巴还在」的断裂听感——一般保持禁用，仅在源底噪明显时小幅启用。",
-                fontSize = 11.sp,
-                color = ScColors.TextSub,
-            )
+            ScInfoChip(body = "输入电平低于门限时输出平滑静音。注意：流媒体源（抖音等）弱电平人声段常低于门限被切断，" +
+                    "与混响叠加会形成「干声断了尾巴还在」的断裂听感——一般保持禁用，仅在源底噪明显时小幅启用。", title = "混响")
         }
     }
 }
@@ -820,13 +874,9 @@ internal fun ScConvolverContent(viewModel: MainViewModel) {
                         }
                         ScSwitch(checked = wetAutoCal, onCheckedChange = { viewModel.setWetAutoCal(!wetAutoCal) })
                     }
-                    Text(
-                        text = "卷积混响（两阶段分区：head 时域 + tail 频域批处理）。内置 4 预设或加载 WAV/.irs 文件" +
+                    ScInfoChip(body = "卷积混响（两阶段分区：head 时域 + tail 频域批处理）。内置 4 预设或加载 WAV/.irs 文件" +
                             "（PCM16/24/32/float，1-4 声道，自动重采样，超 2731ms 尾音截断）。" +
-                            "4 声道 HRTF/交叉 IR 走完整 2×2 交叉卷积（湿声含对侧串扰，空间感成立）。",
-                        fontSize = 11.sp,
-                        color = ScColors.TextSub,
-                    )
+                            "4 声道 HRTF/交叉 IR 走完整 2×2 交叉卷积（湿声含对侧串扰，空间感成立）。", title = "混响")
                 }
             }
         }

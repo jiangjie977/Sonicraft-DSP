@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 部分交互与布局参照本人维护的 wecho 定制版（studio_rack 分支）。
+ * 部分交互与布局参照作者本人维护的定制分支。
  */
 
 package com.jiangjie.Sonicraft.ui
@@ -210,6 +210,14 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     val vsRearCenter by viewModel.vsRearCenter.collectAsStateWithLifecycle()
     val vsRearDelay by viewModel.vsRearDelay.collectAsStateWithLifecycle()
     val vsExpanded = rememberExpandedFollowing(vsEnabled, "vs_card")
+    // ---- Ambisonic 解码器（第三个空间化器）----
+    val vsAmbisonic by viewModel.vsAmbisonic.collectAsStateWithLifecycle()
+    val vsAmbiFocus by viewModel.vsAmbiFocus.collectAsStateWithLifecycle()
+    val vsAmbiDecoder by viewModel.vsAmbiDecoder.collectAsStateWithLifecycle()
+    val vsVbapSpread by viewModel.vsVbapSpread.collectAsStateWithLifecycle()
+    val vsHrtfModel by viewModel.vsHrtfModel.collectAsStateWithLifecycle()
+    // 三个空间化器任一开启 → 下方三张「公共接口」卡才显示
+    val surroundActive = vsEnabled || s71Enabled || vsAmbisonic
     // 自检在后台线程跑（会分配内存、算 7 个方位 × 2 轮），结果写回 State 再弹窗
     var vsReport by remember { mutableStateOf<String?>(null) }
     var vsTesting by remember { mutableStateOf(false) }
@@ -217,7 +225,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             ScSlotHeader(
-                title = "矩阵环绕（解码器）",
+                title = "解码器：经典环绕",
                 checked = vsEnabled,
                 onCheckedChange = { viewModel.setVsEnabled(!vsEnabled) },
                 switchEnabled = true,
@@ -227,7 +235,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
             if (vsExpanded.value) {
                 Column(
                     modifier = Modifier.padding(bottom = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     // 三个开关并排（按下=启用，弹起=禁用）
                     Row(
@@ -336,14 +344,129 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
 
     // 空间环绕 · 公共接口：以下参数对**所有**环绕模式生效（房间 / 中置 / 对话 /
     // 低音 / 后中置），新增环绕模式时直接复用，不必重复实现。
-    // ==================== Surround71 环绕（与矩阵环绕互斥）====================
+    // ==================== 解码器：Ambisonic（与经典环绕 / 7.1 环绕 互斥）====================
+    // 二阶 HOA：10 声源 → 9 通道球谐 → 12 虚拟扬声器（8 水平 45° 等距 + 4 上方 35°）→ HRTF。
+    // 与经典环绕共用同一个 native 节点，只切换解码方式，因此两者不能同时开。
+    val ambiExpanded = rememberExpandedFollowing(vsAmbisonic, "ambi_card")
+    ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            ScSlotHeader(
+                title = "解码器：Ambisonic",
+                checked = vsAmbisonic,
+                onCheckedChange = { viewModel.setAmbisonicEnabled(it) },
+                switchEnabled = true,
+                expanded = ambiExpanded.value,
+                onToggleExpand = { ambiExpanded.value = !ambiExpanded.value },
+            )
+            if (ambiExpanded.value) {
+                Column(
+                    modifier = Modifier.padding(bottom = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    // 解码方式：同一组 12 只虚拟扬声器，两种算法
+                    Text(
+                        text = "解码方式",
+                        fontSize = 11.5.sp,
+                        color = ScColors.TextSub,
+                    )
+                    VsChoiceRow(
+                        options = listOf("HOA（球谐）", "VBAP（摆位）"),
+                        selected = if (vsAmbiDecoder == 2) 1 else 0,
+                        enabled = vsAmbisonic,
+                        onSelect = { viewModel.setVsAmbiDecoder(if (it == 1) 2 else 1) },
+                    )
+                    // 旋钮自带外发光，紧贴上方按钮会显得"顶住"——额外留 10dp
+                    Spacer(modifier = Modifier.height(10.dp))
+                    // HOA 只有三个客观参数 → 一行放下；VBAP 多一个扩散 → 两两成行
+                    if (vsAmbiDecoder == 2) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                        ) {
+                            // VBAP 只点亮 2 只扬声器，加一点扩散能减轻"硬点"
+                            AmbiKnob(
+                                label = "VBAP 扩散",
+                                value = vsVbapSpread,
+                                max = 1f,
+                                modifier = Modifier.weight(1f),
+                                sizeDp = 84,
+                                onChange = { viewModel.setVsVbapSpread(it) },
+                            )
+                            AmbiKnob(
+                                label = "前向聚焦",
+                                value = vsAmbiFocus,
+                                max = 1f,
+                                modifier = Modifier.weight(1f),
+                                sizeDp = 84,
+                                onChange = { viewModel.setAmbiFocus(it) },
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                        ) {
+                            AmbiKnob(
+                                label = "高度强度",
+                                value = vsHeight,
+                                max = 1f,
+                                modifier = Modifier.weight(1f),
+                                sizeDp = 84,
+                                onChange = { viewModel.setVsHeight(it) },
+                            )
+                            AmbiKnob(
+                                label = "环绕声扩展",
+                                value = vsRearSpace,
+                                max = 2f,
+                                modifier = Modifier.weight(1f),
+                                sizeDp = 84,
+                                onChange = { viewModel.setVsRearSpace(it) },
+                            )
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                        ) {
+                            AmbiKnob(
+                                label = "前向聚焦",
+                                value = vsAmbiFocus,
+                                max = 1f,
+                                modifier = Modifier.weight(1f),
+                                onChange = { viewModel.setAmbiFocus(it) },
+                            )
+                            AmbiKnob(
+                                label = "高度强度",
+                                value = vsHeight,
+                                max = 1f,
+                                modifier = Modifier.weight(1f),
+                                onChange = { viewModel.setVsHeight(it) },
+                            )
+                            AmbiKnob(
+                                label = "环绕声扩展",
+                                value = vsRearSpace,
+                                max = 2f,
+                                modifier = Modifier.weight(1f),
+                                onChange = { viewModel.setVsRearSpace(it) },
+                            )
+                        }
+                    }
+                    ScInfoChip(body = "二阶球谐（9 通道）编码 → 12 虚拟扬声器解码，最大 rE 加窗压制旁瓣。" +
+                            "与「经典环绕」互斥：两者共用同一渲染节点，只是解码方式不同。", title = "空间环绕")
+                    // 同上：说明按钮与卡片下边框之间留出呼吸
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+            }
+        }
+    }
+
+    // ==================== 解码器：7.1 环绕（与经典环绕互斥）====================
     // 独立效果器：7.1 上混 + HRTF 双耳化（算法参考开源项目 Surround71）。
-    // 与矩阵环绕互斥——两个空间化器同时开启会叠加成乱声，VM 层已做自动关闭。
+    // 与经典环绕互斥——两个空间化器同时开启会叠加成乱声，VM 层已做自动关闭。
     val s71Expanded = rememberExpandedFollowing(s71Enabled, "s71_card")
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             ScSlotHeader(
-                title = "Surround71 环绕",
+                title = "解码器：7.1 环绕",
                 checked = s71Enabled,
                 onCheckedChange = { viewModel.setS71Enabled(it) },
                 switchEnabled = true,
@@ -353,14 +476,10 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
             if (s71Expanded.value) {
                 Column(
                     modifier = Modifier.padding(bottom = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text(
-                        text = "立体声 → 7.1 上混 → HRTF 双耳化。算法与参数参考开源项目 Surround71，"
-                            + "与上方「矩阵环绕」互斥（开启任一后另一个自动关闭）。",
-                        fontSize = 11.sp,
-                        color = ScColors.TextSub,
-                    )
+                    // 旋钮自带外发光，紧贴卡头会显得顶住
+                    Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -401,18 +520,22 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     }
                     Text(
                         text = if (s71Enabled) {
-                            "当前生效：Surround71（矩阵环绕已自动关闭）"
+                            "当前生效：7.1 环绕（经典环绕已自动关闭）"
                         } else {
                             "当前未启用"
                         },
                         fontSize = 11.sp,
                         color = if (s71Enabled) ScColors.Primary else ScColors.TextSub,
                     )
+                    ScInfoChip(body = "立体声 → 7.1 上混 → HRTF 双耳化。算法与参数参考开源项目 Surround71，"
+                            + "与上方「经典环绕」互斥（开启任一后另一个自动关闭）。", title = "空间环绕")
                 }
             }
         }
     }
 
+    // 三个空间化器全关时，公共接口整体隐藏（它们只对"正在跑的环绕"有意义）
+    if (surroundActive) {
     val publicExpanded = rememberExpandedFollowing(false, "vs_public_card")
     ScCard(modifier = Modifier.fillMaxWidth(), padded = false) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
@@ -426,13 +549,37 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                 showSwitch = false,
             )
             if (publicExpanded.value) {
-                Text(
-                    text = "以下参数对「所有」环绕模式生效，新增模式无需重复实现。" +
-                        "声道 Trim 与声像定位自检同属公共能力（见下方两卡）。",
-                    fontSize = 11.sp,
-                    color = ScColors.TextSub,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
+                    // ---- HRTF 模型（影响两个环绕引擎的双耳渲染）----
+                    // 0 = 参数化（低算力）；1..5 = 实测 HRIR，557 tap 卷积
+                    Text(
+                        text = "HRTF 模型（耳机渲染）",
+                        fontSize = 12.sp,
+                        color = ScColors.TextMain,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    // 两行共用同一个模型下标：不在本行的候选项必须不选中（-1）。
+                    // 直接 coerceIn(0,2) 会把 0..2 的模型映射成本行第 0 项，导致两行同时高亮。
+                    //
+                    // 行距单独给 14dp（放在内层 Column 里，不受外层 spacedBy 影响）：
+                    // 按钮高 40dp，默认间距下两行几乎贴在一起，手指容易点到相邻行。
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        VsChoiceRow(
+                            options = listOf("参数化", "KEMAR", "K-Hannover"),
+                            selected = if (vsHrtfModel in 0..2) vsHrtfModel else -1,
+                            enabled = surroundActive,
+                            onSelect = viewModel::setVsHrtfModel,
+                        )
+                        VsChoiceRow(
+                            options = listOf("CIPIC", "ARI", "LISTEN"),
+                            selected = if (vsHrtfModel in 3..5) vsHrtfModel - 3 else -1,
+                            enabled = surroundActive,
+                            onSelect = { viewModel.setVsHrtfModel(it + 3) },
+                        )
+                    }
+
                     // ---- 房间（RIR 卷积，预设名与卷积器一致：小房间/客厅/音乐厅/大教堂）----
                     Text(
                         text = "环境声场",
@@ -443,7 +590,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     VsChoiceRow(
                         options = listOf("关", "小房间", "客厅", "音乐厅", "大教堂"),
                         selected = vsRoomSize,
-                        enabled = vsEnabled || s71Enabled,
+                        enabled = surroundActive,
                         onSelect = viewModel::setVsRoomSize,
                     )
 
@@ -468,7 +615,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                                     .clip(shape)
                                     .background(
                                         when {
-                                            !(vsEnabled || s71Enabled) -> Color(0xFFF2F4F7)
+                                            !surroundActive -> Color(0xFFF2F4F7)
                                             active -> ScColors.Primary
                                             else -> Color(0xFFF6F9FC)
                                         },
@@ -476,14 +623,14 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                                     .border(
                                         width = 1.dp,
                                         color = when {
-                                            !(vsEnabled || s71Enabled) -> Color(0xFFE6EBF1)
+                                            !surroundActive -> Color(0xFFE6EBF1)
                                             active -> ScColors.Primary
                                             else -> Color(0xFFD9E1EA)
                                         },
                                         shape = shape,
                                     )
                                     .then(
-                                        if (vsEnabled || s71Enabled) {
+                                        if (surroundActive) {
                                             Modifier.scNoRippleClick { viewModel.setVsCenterMode(index) }
                                         } else {
                                             Modifier
@@ -498,19 +645,19 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                                     maxLines = 1,
                                     fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                                     color = when {
-                                        !(vsEnabled || s71Enabled) -> ScColors.TextSub.copy(alpha = 0.5f)
+                                        !surroundActive -> ScColors.TextSub.copy(alpha = 0.5f)
                                         active -> Color.White
                                         else -> ScColors.TextSub
                                     },
                                 )
                             }
                         }
-                        // Surround71 是 7.1，没有「后中置」这一路 —— 该模式下隐藏此开关
+                        // 7.1 环绕没有「后中置」这一路 —— 该模式下隐藏此开关
                         if (!s71Enabled) {
                             VsButtonToggle(
                                 label = "后中置",
                                 checked = vsRearCenter,
-                                enabled = vsEnabled || s71Enabled,
+                                enabled = surroundActive,
                                 modifier = Modifier.weight(1f),
                                 onCheckedChange = { viewModel.setVsRearCenter(it) },
                             )
@@ -528,57 +675,73 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     VsChoiceRow(
                         options = listOf("取自 LFE", "取自前置"),
                         selected = vsBassEnhMode,
-                        enabled = vsEnabled || s71Enabled,
+                        enabled = surroundActive,
                         onSelect = viewModel::setVsBassEnhMode,
                     )
 
 
-                // 三个连续量用旋钮（与矩阵环绕卡同一套 ScKnob 样式）
+                // 房间为「关」时混响量不生效 —— 只用于下方提示文案
+                val roomWetEnabled = surroundActive && vsRoomSize > 0
+                // 三个连续量用旋钮（与经典环绕卡同一套 ScKnob 样式）
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    // 三个旋钮各占 1/3 等宽单元格：混响量外套了 8dp padding
+                    // （给 alpha 图层留空），用 SpaceEvenly 的话它的宽度不一样、
+                    // 相邻间距会不均匀；改成等宽单元格后间距恒定。
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // 房间为「关」时混响量不生效，旋钮置灰避免误导
-                    // 两个引擎互斥：任一开启且房间不为「关」时，混响量都可调
-                    val roomWetEnabled = (vsEnabled || s71Enabled) && vsRoomSize > 0
-                    Box(modifier = Modifier.alpha(if (roomWetEnabled) 1f else 0.45f)) {
+                    // 房间为「关」时混响量不生效 → 用 alpha 压暗。
+                    // 关键：padding 必须放在 alpha 的**内层**。
+                    // alpha 会把子树渲染进离屏图层并按图层 bounds 裁剪；
+                    // padding 在内层时，图层比旋钮大一圈，外发光落在图层内不会被切。
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        Box(
+                            modifier = Modifier
+                                .alpha(if (roomWetEnabled) 1f else 0.45f)
+                                .padding(8.dp),
+                        ) {
+                            ScKnob(
+                                label = "混响量",
+                                value = vsRoomWet,
+                                min = 0f,
+                                max = 1f,
+                                sizeDp = 94,
+                                textScale = 0.60f,
+                                format = { "%.2f".format(it) },
+                                resetValue = 0.3f,
+                                onValueChange = viewModel::setVsRoomWet,
+                            )
+                        }
+                    }
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         ScKnob(
-                            label = "混响量",
-                            value = vsRoomWet,
+                            label = "对话清晰度",
+                            value = vsDialog,
+                            min = -6f,
+                            max = 6f,
+                            sizeDp = 94,
+                            textScale = 0.60f,
+                            bipolar = true,
+                            format = { "%+.1f dB".format(it) },
+                            resetValue = 0f,
+                            onValueChange = viewModel::setVsDialog,
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        ScKnob(
+                            label = "低音增强",
+                            value = vsBassEnh,
                             min = 0f,
                             max = 1f,
                             sizeDp = 94,
                             textScale = 0.60f,
                             format = { "%.2f".format(it) },
-                            resetValue = 0.3f,
-                            onValueChange = viewModel::setVsRoomWet,
+                            resetValue = 0f,
+                            onValueChange = viewModel::setVsBassEnh,
                         )
                     }
-                    ScKnob(
-                        label = "对话清晰度",
-                        value = vsDialog,
-                        min = -6f,
-                        max = 6f,
-                        sizeDp = 94,
-                        textScale = 0.60f,
-                        bipolar = true,
-                        format = { "%+.1f dB".format(it) },
-                        resetValue = 0f,
-                        onValueChange = viewModel::setVsDialog,
-                    )
-                    ScKnob(
-                        label = "低音增强",
-                        value = vsBassEnh,
-                        min = 0f,
-                        max = 1f,
-                        sizeDp = 94,
-                        textScale = 0.60f,
-                        format = { "%.2f".format(it) },
-                        resetValue = 0f,
-                        onValueChange = viewModel::setVsBassEnh,
-                    )
                 }
 
                 // LFE 电平 / 低音管理：仅 Surround71 有这两级（矩阵环绕的 LFE 电平由
@@ -619,13 +782,17 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                             value = vsRearDelay,
                             range = 0f..15f,
                             suffix = " ms",
-                            enabled = vsEnabled || s71Enabled,
+                            enabled = surroundActive,
                             onChange = viewModel::setVsRearDelay,
                         )
                     }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                ScInfoChip(body = "以下参数对「所有」环绕模式生效，新增模式无需重复实现。" +
+                        "声道 Trim 与声像定位自检同属公共能力（见下方两卡）。", title = "空间环绕")
+                // 公共接口块没有内层 Column 的底部内边距，这里补一段，避免说明按钮贴住卡片下边框
+                Spacer(modifier = Modifier.height(18.dp))
             }
         }
     }
@@ -645,7 +812,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
             )
             if (trimExpanded.value) {
                 Column(modifier = Modifier.padding(bottom = 20.dp)) {
-                    // 横向滚动：矩阵环绕 7 列 / S71 8 列，每列 52dp 固定宽，
+                    // 横向滚动：经典环绕 7 列 / 7.1 环绕 8 列，每列 52dp 固定宽，
                     // 总宽超出屏幕时左右滑动查看（原来 SpaceEvenly 会被压扁到挤在一起）
                     Row(
                         modifier = Modifier
@@ -654,9 +821,11 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                             .padding(top = 8.dp, bottom = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        // 按「当前实际生效的节点」切换声道列表：
-                        //   矩阵环绕 → L / C / R / SL / SR / CS / LFE（7 路）
-                        //   Surround71 → FL / FR / FC / LFE / BL / BR / SL / SR（8 路，顺序同 C++ 枚举）
+                        // 按「当前实际生效的解码器」切换声道列表：
+                        //   经典环绕 / Ambisonic → L / C / R / SL / SR / CS / LFE（7 路，即 HOA 的 6 声源 + LFE）
+                        //   7.1 环绕 → FL / FR / FC / LFE / BL / BR / SL / SR（8 路，顺序同 C++ 枚举）
+                        // Ambisonic 的 4 路「上方声源」由 FL/FR/SL/SR 的 >3 kHz 派生，
+                        // 电平由「高度强度（上方包围）」控制，不单列 Trim。
                         val s71Mode = s71Enabled && !vsEnabled
                         val names = if (s71Mode) {
                             listOf("FL", "FR", "FC", "LFE", "BL", "BR", "SL", "SR")
@@ -676,7 +845,7 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                                 } else {
                                     vsMutes.getOrElse(index) { 0f } > 0.5f
                                 },
-                                enabled = vsEnabled || s71Enabled,
+                                enabled = surroundActive,
                                 onValue = {
                                     if (s71Mode) viewModel.setS71Trim(index, it)
                                     else viewModel.setVsTrim(index, it)
@@ -720,14 +889,10 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                         color = ScColors.TextSub,
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
-                    Text(
-                        text = "逐声道校验：把某一路拉到 +12 dB 或静音，即可确认该声道是否真的在工作。" +
+                    ScInfoChip(body = "逐声道校验：把某一路拉到 +12 dB 或静音，即可确认该声道是否真的在工作。" +
                             "LFE 不走双耳渲染，直接混入双耳。\n" +
                             "打开「仅解码测试」后链路只剩：解码 → 声道 trim → 双耳渲染，" +
-                            "编解码往返、后处理与房间全部旁通。",
-                        fontSize = 11.sp,
-                        color = ScColors.TextSub,
-                    )
+                            "编解码往返、后处理与房间全部旁通。", title = "空间环绕")
                 }
             }
         }
@@ -752,8 +917,13 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        text = "用带限噪声测 7 个方位的 ITD/ILD，校验左右手性与镜像对称，" +
-                            "并把偏差写回渲染器做自动校正。与构建期 harness 断言同一套代码。",
+                        text = (if (vsAmbisonic) {
+                            "用带限噪声逐个测 Ambisonic 的 12 个扬声器（8 水平 + 4 上方 35°）的 ITD/ILD，"
+                        } else {
+                            "用带限噪声测 7 个方位的 ITD/ILD，"
+                        }) +
+                            "校验左右手性与镜像对称，并把偏差写回渲染器做自动校正。" +
+                            "测量方位随解码器切换（经典 7 声道 / Ambisonic 12 扬声器）。",
                         fontSize = 11.sp,
                         color = ScColors.TextSub,
                     )
@@ -788,7 +958,11 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
                                         color = ScColors.TextMain,
                                     )
                                     Text(
-                                        text = "声道：SL/SR 侧后 ±110°　FL/FR 前置 ±30°　C 中置 0°　CS 正后 180°\n" +
+                                        text = (if (vsAmbisonic) {
+                                "Ambisonic 布局：8 水平（0/45/…/315°）+ 4 上方（±45°/±135° @35°）\n"
+                            } else {
+                                "声道：SL/SR 侧后 ±110°　FL/FR 前置 ±30°　C 中置 0°　CS 正后 180°\n"
+                            }) +
                                             "ITD_me/th = 实测/期望耳间时延（样本）\n" +
                                             "ILD_me/tg = 实测/目标耳间电平差（dB）\n" +
                                             "LFE 不参与 HRTF，与 C 同为 0°，仅作参考",
@@ -806,6 +980,31 @@ internal fun ScVsDetailContent(viewModel: MainViewModel) {
             }
         }
     }
+    }
+}
+
+/** 0~1 百分比滑条（Ambisonic 的「前向聚焦 / 上方权重」） */
+@Composable
+private fun AmbiKnob(
+    label: String,
+    value: Float,
+    max: Float,
+    modifier: Modifier = Modifier,
+    sizeDp: Int = 88,
+    onChange: (Float) -> Unit,
+) {
+    // 百分比参数（前向聚焦 / 高度强度 / 扩散 / 环绕扩展）统一用旋钮
+    ScKnob(
+        label = label,
+        value = value,
+        min = 0f,
+        max = max,
+        modifier = modifier,
+        sizeDp = sizeDp,
+        textScale = 0.6f,
+        format = { "%.2f".format(it) },
+        onValueChange = onChange,
+    )
 }
 
 /** 单个增益滑条：标签 + 数值 + 滑块（范围与单位可配，低音增强用 0~1） */

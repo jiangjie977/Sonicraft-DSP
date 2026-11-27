@@ -33,6 +33,7 @@
 
 #include "sonicraft/dsp/dsp_node.hpp"
 #include "sonicraft/dsp/convolver.hpp"
+#include "sonicraft/dsp/hrir_bank.hpp"
 #include "sonicraft/dsp/s71/s71_hrir.hpp"   // MIT KEMAR HRIR（8 路方位）    // 复用 ConvolverNode（内置 5 档 RIR）
 #include "sonicraft/dsp/vs_decoder.hpp"   // 复用 LowPass2 / Biquad
 
@@ -58,7 +59,7 @@ enum Param : int {
   kParamHeadphoneMode = 1,  // [未实现] 1=HRTF 双耳化（默认，也是唯一路径）；0=音箱直通模式未实现
   kParamUpmixStrength = 2,  // 0~1   上混强度（保留 FL/FR 主体，其余按比例派生）
   kParamExternalize = 3,    // 0~1   外部化（早期反射强度）
-  kParamWidth = 4,          // 0~2   M/S 展宽（1 = 原样）
+  kParamWidth = 4,          // [固定值] 宽度：UI 未暴露，按 kDefault 生效          // 0~2   M/S 展宽（1 = 原样）
   kParamOutputGainDb = 5,   // [未实现] 输出增益：改由 kHrirGain 常量统一标定，此参数未读取
 
   // ---- 电平组 ----
@@ -81,8 +82,9 @@ enum Param : int {
   kParamRoomWet = 29,     // 0~1 混响量
   kParamCenterMode = 30,  // 0=关闭 1=直通 2=混入前置
   kParamDialog = 31,      // -6~+6 dB 对话清晰度
+  kParamHrtfModel = 32,   // 0=内置 139-tap KEMAR；1..5=实测 HRIR 数据集（557 tap）
 
-  kParamCount = 32,
+  kParamCount = 33,
 };
 
 /** 默认值（照搬 Surround71 的 SurroundSettings 默认） */
@@ -109,6 +111,7 @@ constexpr float kDefault[kParamCount] = {
     0.3f,   // room_wet
     1.0f,   // center_mode（直通）
     0.0f,   // dialog
+    0.0f,   // hrtf_model（默认内置 KEMAR 139-tap）
 };
 
 /**
@@ -155,6 +158,7 @@ class Surround71Node : public DspNode {
     harm_lp_ = 0.0f;
     room_.Reset();
     for (int i = 0; i < kChannelCount; ++i) hrir_conv_[i].Reset();
+    for (auto& c : hrir_conv_x_) c.Reset();
     fix_low_l_.Reset();
     fix_low_r_.Reset();
     fix_peak_l_.Reset();
@@ -170,6 +174,15 @@ class Surround71Node : public DspNode {
     const bool want = param_[kParamEnabled] > 0.5f;
     if (!want) return;
     if (channels == nullptr || channels[0] == nullptr || channels[1] == nullptr) return;
+
+    // HRTF 模型：0 = 内置 139-tap KEMAR；1..5 = 实测 HRIR（与矩阵环绕同一套）
+    {
+      const int model = static_cast<int>(param_[kParamHrtfModel] + 0.5f);
+      if (model != hrtf_model_) {
+        ApplyHrtfModel(model);
+        hrtf_model_ = model;
+      }
+    }
 
     // ---- S1：立体声 → 7.1 上混，再简单折叠回双耳（S2 换成 HRTF）----
     const float s = ClampF(param_[kParamUpmixStrength], 0.0f, 1.0f);
@@ -263,6 +276,13 @@ class Surround71Node : public DspNode {
       float lo = 0.0f;
       float ro = 0.0f;
       for (int c = 0; c < kChannelCount; ++c) {
+        if (ext_taps_ > 0 && ext_l_[c] != nullptr) {
+          // 实测数据集（557 tap）：与矩阵环绕/Ambisonic 用同一套 HRIR
+          const float g = ext_scale_[c];
+          lo += hrir_conv_x_[c].Process(ch8[c], ext_l_[c], ext_taps_) * g;
+          ro += hrir_conv_x_[c].Process(ch8[c], ext_r_[c], ext_taps_) * g;
+          continue;
+        }
         const HrirPair* hp = HrirForChannel(c);
         if (hp == nullptr) {
           lo += ch8[c] * 0.5f;
@@ -528,7 +548,65 @@ class Surround71Node : public DspNode {
   vs::LowPass2 bm_lp_;   // 低音管理的独立低通（避免污染 LFE 生成用的 lfe_lp_）
   float harm_lp_ = 0.0f;  // 低音增强的 120 Hz 近似一阶低通状态
   dsp::ConvolverNode room_;   // 环境声场（复用内置五档 RIR）
-  HrirConv hrir_conv_[kChannelCount];   // 8 路 HRTF 卷积状态
+  HrirConv hrir_conv_[kChannelCount];   // 8 路 HRTF 卷积状态（内置 139-tap）
+  /**
+   * 实测 IR 用的可变长度卷积器（最长 557 tap）。
+   *
+   * 与内联的 HrirConv 同一套「写两份、回读不越界」技巧，只是环形长度取最大 tap 数，
+   * 这样同一实例既能跑 139 也能跑 557，不需要按数据集重新实例化。
+   */
+  struct HrirConvX {
+    static constexpr int kN = vs::HrirBank::kMaxTaps;
+    float hist[2 * kN]{};
+    int pos = 0;
+    void Reset() {
+      for (int i = 0; i < 2 * kN; ++i) hist[i] = 0.0f;
+      pos = 0;
+    }
+    inline float Process(float x, const float* h, int taps) {
+      hist[pos] = x;
+      hist[pos + kN] = x;
+      const int base = pos + kN;
+      float acc = 0.0f;
+      for (int t = 0; t < taps; ++t) acc += hist[base - t] * h[t];
+      if (++pos >= kN) pos = 0;
+      return acc;
+    }
+  };
+  HrirConvX hrir_conv_x_[kChannelCount];
+
+  // 实测 IR 表（模型 >0 时生效）
+  const float* ext_l_[kChannelCount]{};
+  const float* ext_r_[kChannelCount]{};
+  float ext_scale_[kChannelCount]{};
+  int ext_taps_ = 0;
+  int hrtf_model_ = -1;
+
+  /** 按模型装载 8 路实测 IR；model=0 时卸载（回到内置 139-tap KEMAR） */
+  void ApplyHrtfModel(int model) {
+    ext_taps_ = 0;
+    for (int c = 0; c < kChannelCount; ++c) {
+      ext_l_[c] = nullptr;
+      ext_r_[c] = nullptr;
+      ext_scale_[c] = 1.0f;
+    }
+    if (model <= 0) return;
+    int taps = 0;
+    for (int c = 0; c < kChannelCount; ++c) {
+      const vs::HrirPair ir = vs::HrirBank::Lookup(model, kAzimuthDeg[c]);
+      if (!ir.valid()) continue;
+      taps = ir.taps;
+      float peak = 0.0f;
+      for (int i = 0; i < ir.taps; ++i) {
+        peak = std::fmax(peak, std::fabs(ir.l[i]));
+        peak = std::fmax(peak, std::fabs(ir.r[i]));
+      }
+      ext_l_[c] = ir.l;
+      ext_r_[c] = ir.r;
+      ext_scale_[c] = peak > 1e-6f ? 1.0f / peak : 1.0f;
+    }
+    ext_taps_ = taps;
+  }
   ChanDelay delay_[kChannelCount];   // 8 路独立延迟（0~20 ms）
   // 外部化（早期反射）：4 抽头环形延迟线，50 ms 容量
   static constexpr int kErSize = 2400;

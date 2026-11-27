@@ -1,59 +1,76 @@
 /*
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * 三段分频前瞻限幅器（峰值上限保护）。
+ *
+ * ## 为什么不做单段
+ *
+ * 单段限幅在大增益（+9~+12 dB）下有个固有问题：低频峰值决定全带增益，
+ * 一记贝斯/底鼓会把高频一起压下去，听感是"抽吸、发闷"。
+ * 本机实测：单段 + 高增益使用时，用户描述为"很响但被压紧、动态变小"。
+ *
+ * ## 做法
+ *
+ *    输入 ─┬─ 检测支路（未延迟）→ LR4 三分频 ─→ 包络/增益
+ *          └─ 音频支路（延迟 2.5ms）→ LR4 三分频 ─→ × 增益 ─┐
+ *                                                          ├→ 求和 → 末级限幅 → 去直流 → 输出
+ *    门限逐段收紧（相对 ceiling）：低 −8 dB / 中 −5 dB / 高 −2 dB
+ *
+ * - **前瞻**：检测支路不加延迟、音频支路延迟 look_ahead 帧，
+ *   所以增益在峰值到来之前就算好，不需要事后削波，也不产生削波谐波；
+ * - **分频**：Linkwitz-Riley 4 阶（= 两级 Butterworth 2 阶级联，Q=0.7071），
+ *   分频点 100 Hz / 600 Hz，两路交叉点幅度平（LR 的经典性质）；
+ * - **末级**：对"检测支路的限幅后和"再算一次增益，压到 ceiling，并做硬钳位保底；
+ * - **去直流**：单极性限幅会累积直流偏移，直流占掉的余量表现为"莫名削顶"，
+ *   因此最后串一节一阶高通 y[n] = x[n] − x[n−1] + 0.999·y[n−1]。
+ *
+ * ## 参数
+ *
+ *   param 0 = ceiling（dBFS，默认 −1.0）——指**末级**上限，各段门限由它推导
+ *   param 1 = release（ms，默认 60）
+ *   param 2 = true-peak 检测（0/1，对末级检测信号做 4x 过采样）
+ *
+ * 响度计量（LUFS/峰值）在**旁路时也照常统计**，否则关掉限幅器就看不到响度。
  */
 #pragma once
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <string_view>
+#include <vector>
 
 #include "sonicraft/dsp/dsp_node.hpp"
 #include "sonicraft/dsp/loudness_meter.hpp"
 
-#include <cmath>
-#include <vector>
-
 namespace sonicraft::dsp {
 
-/**
- * Look-ahead 峰值限幅器（末级防削波安全网）。
- *
- * 结构（教科书式）：
- *   信号 → 延迟线(look-ahead) ─────────────────────┐
- *   信号 → 峰值包络(瞬时攻击+指数衰减) → 增益计算 → 包络平滑(env) →×→ 输出
- *
- *  - 增益必须对峰值包络计算而非瞬时样本：瞬时 |x| 在过零点把 target 弹回 1，
- *    造成信号频率的增益锯齿调制（深度压限时可闻抖动/杂音）。
- *
- *  - look-ahead 2.5ms：包络提前于信号知道未来峰值，允许有限速率 attack
- *    （1ms 内从 1 压到任意目标），look-ahead 深度 > attack 所需帧数，保证不超 ceiling。
- *  - attack = 每样本固定下降量（线性，非瞬时）——瞬时 attack 会让 look-ahead 失去意义；
- *    release = 一阶指数平滑（时间常数可调）。
- *  - ceiling/release 变更无需斜坡：env 本身受 attack/release 速率约束，天然无突变。
- *  - bypass 时输出原样透传，但 ring 与 env 照常推进——解除 bypass 时不产生
- *    「2.5ms 旧信号回声」。
- *
- * 参数约定（node 内自洽，经 PushCommand 的 node_index 区分节点）：
- *      param 0 = ceiling（dBFS，负值，默认 -1.0）
- *      param 1 = release（ms，默认 60）
- *      param 2 = true-peak 检测开关（0=关/采样峰值，1=开；native 默认 0，
- *                Kotlin 引擎构链后显式下发 1——真机默认启用，harness 默认链
- *                不受影响以保住 7a2 等 bit-exact 回归参照）
- *
- * true-peak 检测：
- *  采样峰值 ≤ ceiling 不代表 DAC 理想带限重构后的真峰 ≤ ceiling——陡沿/方波类
- *  信号的 sinc 重构存在 Gibbs 带内过冲（±0.88 方波过采样峰实测 ~1.10 → 超
- *  ceiling 0.89 一档），采样峰值检测对此有洞。开启后以 4x 过采样（3 个子样本
- *  相位 × 24 tap Blackman 窗 sinc 插值核 + 原样本恒等）估计重构真峰值，包络
- *  跟随取 max(采样峰, 真峰估计)。检测滞后 ~12 帧 << look-ahead 余量
- *  （2.5ms−1ms attack = 72 帧 @48k），「look-ahead 覆盖 attack」保证不变。
- */
 class LimiterNode : public DspNode {
  public:
   static constexpr int kParamCeilingDb = 0;
-  static constexpr int kParamReleaseMs = 1;
+  static constexpr int kParamReleaseMs = 1;   // [固定值] UI 未暴露，按默认释放时间生效
   static constexpr int kParamTruePeak = 2;
+  // 分段门限（相对 ceiling 的 dB 偏移，负值；默认 -8 / -5 / -2）与去直流开关
+  static constexpr int kParamGateLowDb = 3;
+  static constexpr int kParamGateMidDb = 4;
+  static constexpr int kParamGateHighDb = 5;
+  static constexpr int kParamDcBlock = 6;
+
   static constexpr float kLookAheadMs = 2.5f;
   static constexpr float kAttackMs = 1.0f;
+  static constexpr float kBandAttackMs = 0.5f;   // 分段用更快 attack（频段内峰值更陡）
   static constexpr float kDefaultCeilingDb = -1.0f;
   static constexpr float kDefaultReleaseMs = 60.0f;
+
+  // 分频点与各段相对 ceiling 的门限（dB）
+  static constexpr float kXoverLowHz = 100.0f;
+  static constexpr float kXoverHighHz = 600.0f;
+  static constexpr float kGateOffsetLow = -5.0f;   // 出厂默认：低频少压，保住鼓点冲击
+  static constexpr float kGateOffsetMid = -5.0f;
+  static constexpr float kGateOffsetHigh = -2.0f;
+  static constexpr float kGateOffsetMin = -12.0f;
+  static constexpr float kGateOffsetMax = 0.0f;
 
   std::string_view id() const override { return "limiter"; }
 
@@ -69,81 +86,136 @@ class LimiterNode : public DspNode {
     sample_rate_ = sample_rate;
     look_ahead_ = static_cast<int>(kLookAheadMs * 0.001f * static_cast<float>(sample_rate));
     if (look_ahead_ < 1) look_ahead_ = 1;
-    ring_capacity_ = look_ahead_ + 128;  // 稳态占用恒为 look_ahead_，+128 为跨块余量
+    ring_capacity_ = look_ahead_ + 128;   // 稳态占用恒为 look_ahead_，+128 为跨块余量
     ring_.assign(static_cast<std::size_t>(ring_capacity_) * channels_, 0.0f);
     write_idx_.assign(channels_, 0);
-    peak_env_.assign(channels_, 0.0f);
+
+    // 每条支路每声道 8 个二阶级（LP100×2 / HP100×2 / LP600×2 / HP600×2）
+    detect_bq_.assign(static_cast<std::size_t>(channels_) * kSections, Bq{});
+    audio_bq_.assign(static_cast<std::size_t>(channels_) * kSections, Bq{});
+    for (int c = 0; c < channels_; ++c) {
+      SetBands(detect_bq_.data() + static_cast<std::size_t>(c) * kSections);
+      SetBands(audio_bq_.data() + static_cast<std::size_t>(c) * kSections);
+    }
+
+    band_peak_.assign(static_cast<std::size_t>(channels_) * 3, 0.0f);
+    band_env_.assign(static_cast<std::size_t>(channels_) * 3, 1.0f);
+    final_peak_.assign(channels_, 0.0f);
+    final_env_.assign(channels_, 1.0f);
+    dc_x_.assign(channels_, 0.0f);
+    dc_y_.assign(channels_, 0.0f);
+    tp_hist_.assign(static_cast<std::size_t>(channels_) * kTpTaps, 0.0f);
+
     ceiling_db_ = kDefaultCeilingDb;
     release_ms_ = kDefaultReleaseMs;
+    gate_off_[0] = kGateOffsetLow;
+    gate_off_[1] = kGateOffsetMid;
+    gate_off_[2] = kGateOffsetHigh;
+    dc_block_ = true;
     recomputeRates();
-    env_.assign(channels_, 1.0f);
-    tp_hist_.assign(static_cast<std::size_t>(channels_) * kTpTaps, 0.0f);
   }
 
   void Reset() override {
     for (auto& v : ring_) v = 0.0f;
-    for (auto& v : env_) v = 1.0f;
-    for (auto& v : peak_env_) v = 0.0f;
     for (auto& v : write_idx_) v = 0;
+    for (auto& s : detect_bq_) s.Reset();
+    for (auto& s : audio_bq_) s.Reset();
+    for (auto& v : band_peak_) v = 0.0f;
+    for (auto& v : band_env_) v = 1.0f;
+    for (auto& v : final_peak_) v = 0.0f;
+    for (auto& v : final_env_) v = 1.0f;
+    for (auto& v : dc_x_) v = 0.0f;
+    for (auto& v : dc_y_) v = 0.0f;
     for (auto& v : tp_hist_) v = 0.0f;
   }
 
   void Process(float* const* channels, int frames) override {
-    // 响度计量放在最前面：**旁路时也照常统计**，否则关掉限幅器就看不到响度了。
-    // 只读不改，不影响信号路径。
+    // 响度计量放在最前面：旁路时也照常统计，只读不改。
     meter_.Process(channels, frames);
+
     const std::size_t cap = static_cast<std::size_t>(ring_capacity_);
     const std::size_t look = static_cast<std::size_t>(look_ahead_);
+
     for (int c = 0; c < channels_; ++c) {
       float* ch = channels[c];
       float* ring = ring_.data() + static_cast<std::size_t>(c) * ring_capacity_;
-      float env = env_[c];
-      float peak = peak_env_[c];
-      std::size_t w = write_idx_[c];  // 写指针每声道独立（共享会跨声道/跨块错位）
+      Bq* det = detect_bq_.data() + static_cast<std::size_t>(c) * kSections;
+      Bq* aud = audio_bq_.data() + static_cast<std::size_t>(c) * kSections;
+      float* bpeak = band_peak_.data() + static_cast<std::size_t>(c) * 3;
+      float* benv = band_env_.data() + static_cast<std::size_t>(c) * 3;
+      float fp = final_peak_[c];
+      float fe = final_env_[c];
+      std::size_t w = write_idx_[c];   // 写指针每声道独立（共享会跨声道/跨块错位）
+
       for (int n = 0; n < frames; ++n) {
         const float x = ch[n];
-        // 峰值包络跟随：瞬时攻击（精确捕捉峰值）+ 指数衰减（平滑）。
-        // 增益对包络计算而非瞬时样本——瞬时值会在过零点把 target 弹回 1，
-        // 产生信号频率的增益锯齿调制（深度压限时可闻抖动/杂音）。
-        const float ax = std::fabs(x);
-        float detect = ax;
-        if (tp_enabled_) {
-          // true-peak：BS.1770-4 式 4x 过采样（4 相 12 tap 多相 FIR），取 4 相
-          // 幅值最大者为重构真峰估计；包络跟随取 max(采样峰, 真峰估计)。
-          float* h = tp_hist_.data() + static_cast<std::size_t>(c) * kTpTaps;
-          for (int i = kTpTaps - 1; i > 0; --i) h[i] = h[i - 1];
-          h[0] = x;
-          for (int p = 0; p < 3; ++p) {
-            const float* k = kTpCoef[p];
-            float acc = 0.0f;
-            for (int i = 0; i < kTpTaps; ++i) acc += h[i] * k[i];
-            const float a = std::fabs(acc);
-            if (a > detect) detect = a;
-          }
-        }
-        if (detect > peak) {
-          peak = detect;
-        } else {
-          peak += (detect - peak) * release_coef_;
-        }
-        // 增益计算：把包络压到 ceiling 所需的增益（<=1）
-        float target = ceiling_lin_ / (peak + 1e-9f);
-        if (target > 1.0f) target = 1.0f;
-        if (target < env) {
-          env -= attack_step_;          // 有限速率下压（look-ahead 已提前覆盖此时间）
-          if (env < target) env = target;
-        } else {
-          env += (target - env) * release_coef_;  // 一阶指数回落
-        }
-        // 延迟线：写入当前样本，读出 look_ahead_ 帧前的样本（写指针逐样本推进）
+
+        // ---- 音频支路：延迟 look_ahead_ 帧 ----
         ring[w] = x;
         const std::size_t read_idx = (w + cap - look) % cap;
-        const float delayed = ring[read_idx];
+        const float xd = ring[read_idx];
         w = (w + 1) % cap;
-        ch[n] = bypass_ ? x : delayed * env;
+
+        // ---- 两条支路各自分频 ----
+        const Bands bd = Split(det, x);    // 检测（未延迟）
+        const Bands ba = Split(aud, xd);   // 音频（已延迟）
+
+        // ---- 每段独立限幅增益 ----
+        float g[3];
+        const float dl[3] = {bd.low, bd.mid, bd.high};
+        for (int k = 0; k < 3; ++k) {
+          const float ax = std::fabs(dl[k]);
+          bpeak[k] = (ax > bpeak[k]) ? ax : (bpeak[k] + (ax - bpeak[k]) * release_coef_);
+          float target = gate_lin_[k] / (bpeak[k] + 1e-9f);
+          if (target > 1.0f) target = 1.0f;
+          if (target < benv[k]) {
+            benv[k] -= band_attack_step_;
+            if (benv[k] < target) benv[k] = target;
+          } else {
+            benv[k] += (target - benv[k]) * release_coef_;
+          }
+          g[k] = benv[k];
+        }
+
+        // ---- 求和：检测支路用于末级判定，音频支路用于输出 ----
+        const float yd = bd.low * g[0] + bd.mid * g[1] + bd.high * g[2];
+        const float ya = ba.low * g[0] + ba.mid * g[1] + ba.high * g[2];
+
+        // ---- 末级限幅（对检测侧求和算增益，作用于已延迟的音频） ----
+        float detect = std::fabs(yd);
+        if (tp_enabled_) {
+          detect = std::max(detect, TruePeak(tp_hist_.data() +
+                                             static_cast<std::size_t>(c) * kTpTaps, yd));
+        }
+        fp = (detect > fp) ? detect : (fp + (detect - fp) * release_coef_);
+        float ftarget = ceiling_lin_ / (fp + 1e-9f);
+        if (ftarget > 1.0f) ftarget = 1.0f;
+        if (ftarget < fe) {
+          fe -= attack_step_;
+          if (fe < ftarget) fe = ftarget;
+        } else {
+          fe += (ftarget - fe) * release_coef_;
+        }
+
+        float y = ya * fe;
+
+        // 硬钳位保底：任何情况下不允许超过 ceiling
+        if (y > ceiling_lin_) y = ceiling_lin_;
+        else if (y < -ceiling_lin_) y = -ceiling_lin_;
+
+        // ---- 去直流（一阶高通）：抵消单极性限幅累积的偏移；可单独关闭 ----
+        float yy = y;
+        if (dc_block_) {
+          yy = (y - dc_x_[c]) + 0.999f * dc_y_[c];
+          dc_x_[c] = y;
+          dc_y_[c] = yy;
+        }
+
+        ch[n] = bypass_ ? x : yy;
       }
-      env_[c] = env;
-      peak_env_[c] = peak;
+
+      final_peak_[c] = fp;
+      final_env_[c] = fe;
       write_idx_[c] = w;
     }
   }
@@ -153,27 +225,126 @@ class LimiterNode : public DspNode {
 
   void SetParam(int param_id, float value) override {
     if (param_id == kParamCeilingDb) {
-      ceiling_db_ = value;  // 单位 dBFS
+      ceiling_db_ = value;   // 单位 dBFS
       recomputeRates();
     } else if (param_id == kParamReleaseMs) {
-      release_ms_ = value;  // 单位 ms
+      release_ms_ = value;   // 单位 ms
       recomputeRates();
     } else if (param_id == kParamTruePeak) {
       tp_enabled_ = value > 0.5f;
+    } else if (param_id == kParamGateLowDb || param_id == kParamGateMidDb ||
+               param_id == kParamGateHighDb) {
+      const int k = (param_id == kParamGateLowDb) ? 0 : (param_id == kParamGateMidDb ? 1 : 2);
+      gate_off_[k] = std::max(kGateOffsetMin, std::min(kGateOffsetMax, value));
+      recomputeRates();
+    } else if (param_id == kParamDcBlock) {
+      const bool on = value > 0.5f;
+      if (on != dc_block_) {
+        // 切换时清状态，避免残留偏移造成一次直流跳变
+        for (auto& v : dc_x_) v = 0.0f;
+        for (auto& v : dc_y_) v = 0.0f;
+      }
+      dc_block_ = on;
     }
   }
 
   /** 外部在 AddNode 前设置声道数（与 ParametricEqNode 同一约定） */
-  void set_channel_count(int channels) {
-    channels_ = channels;
-  }
+  void set_channel_count(int channels) { channels_ = channels; }
 
  private:
+  // ---- 二分阶 biquad（转置直接 II） ----
+  struct Bq {
+    float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f;
+    float z1 = 0.0f, z2 = 0.0f;
+    void Reset() { z1 = z2 = 0.0f; }
+    inline float Run(float x) {
+      const float y = b0 * x + z1;
+      z1 = b1 * x - a1 * y + z2;
+      z2 = b2 * x - a2 * y;
+      return y;
+    }
+    void SetLowPass(float fc, float fs) { Set(fc, fs, true); }
+    void SetHighPass(float fc, float fs) { Set(fc, fs, false); }
+    void Set(float fc, float fs, bool low) {
+      const float kPi = 3.14159265358979f;
+      const float w0 = 2.0f * kPi * fc / fs;
+      const float cw = std::cos(w0);
+      const float sw = std::sin(w0);
+      const float q = 0.70710678f;              // Butterworth
+      const float alpha = sw / (2.0f * q);
+      const float a0 = 1.0f + alpha;
+      if (low) {
+        b0 = (1.0f - cw) * 0.5f / a0;
+        b1 = (1.0f - cw) / a0;
+        b2 = b0;
+      } else {
+        b0 = (1.0f + cw) * 0.5f / a0;
+        b1 = -(1.0f + cw) / a0;
+        b2 = b0;
+      }
+      a1 = (-2.0f * cw) / a0;
+      a2 = (1.0f - alpha) / a0;
+    }
+  };
+
+  struct Bands {
+    float low, mid, high;
+  };
+
+  static constexpr int kSections = 8;
+
+  /** 一帧分频：low = LP100(LR4)；mid = HP100 → LP600；high = HP600(LR4) */
+  static inline Bands Split(Bq* s, float x) {
+    float low = s[0].Run(x);
+    low = s[1].Run(low);
+    float hp = s[2].Run(x);
+    hp = s[3].Run(hp);
+    float mid = s[4].Run(hp);
+    mid = s[5].Run(mid);
+    float high = s[6].Run(x);
+    high = s[7].Run(high);
+    return {low, mid, high};
+  }
+
+  void SetBands(Bq* s) {
+    const float fs = static_cast<float>(sample_rate_);
+    s[0].SetLowPass(kXoverLowHz, fs);
+    s[1].SetLowPass(kXoverLowHz, fs);      // LR4 = 两级 Butterworth 级联
+    s[2].SetHighPass(kXoverLowHz, fs);
+    s[3].SetHighPass(kXoverLowHz, fs);
+    s[4].SetLowPass(kXoverHighHz, fs);
+    s[5].SetLowPass(kXoverHighHz, fs);
+    s[6].SetHighPass(kXoverHighHz, fs);
+    s[7].SetHighPass(kXoverHighHz, fs);
+  }
+
+  /** 4x 过采样真峰估计（3 个相位的 24 tap 多相 FIR），返回幅值 */
+  float TruePeak(float* h, float x) {
+    for (int i = kTpTaps - 1; i > 0; --i) h[i] = h[i - 1];
+    h[0] = x;
+    float peak = 0.0f;
+    for (int p = 0; p < 3; ++p) {
+      const float* k = kTpCoef[p];
+      float acc = 0.0f;
+      for (int i = 0; i < kTpTaps; ++i) acc += h[i] * k[i];
+      peak = std::max(peak, std::fabs(acc));
+    }
+    return peak;
+  }
+
+  void recomputeRates() {
+    ceiling_lin_ = std::pow(10.0f, ceiling_db_ / 20.0f);
+    const float fs = static_cast<float>(sample_rate_);
+    attack_step_ = 1.0f / (kAttackMs * 0.001f * fs);
+    band_attack_step_ = 1.0f / (kBandAttackMs * 0.001f * fs);
+    release_coef_ = 1.0f - std::exp(-1.0f / (release_ms_ * 0.001f * fs));
+    for (int k = 0; k < 3; ++k) {
+      gate_lin_[k] = std::pow(10.0f, (ceiling_db_ + gate_off_[k]) / 20.0f);
+    }
+  }
+
   // 4x 过采样真峰值插值核：3 个子样本相位（d=0.25/0.5/0.75）× 24 tap
   // Blackman 窗 sinc（截止 0.25 归一，堵 4x 镜像带），每相 DC 归一。
-  // 原样本点直接取 |x|（恒等精确）；d=0.5 相的 sinc 网格本性近 δ，作用有限
-  // 但无害，保留以维持网格均匀。检测点滞后 ~12 帧 << look-ahead 余量 72 帧
-  // （2.5ms−1ms attack @48k），「look-ahead 覆盖 attack」的不超 ceiling 保证不变。
   static constexpr int kTpTaps = 24;
   static constexpr float kTpCoef[3][kTpTaps] = {
       {0.0000000000f, 0.0001446395f, -0.0006845229f, 0.0018882074f, -0.0041852741f,
@@ -193,29 +364,38 @@ class LimiterNode : public DspNode {
        -0.0021647381f, 0.0007745222f, -0.0001619348f, -0.0000000000f},
   };
 
-  void recomputeRates() {
-    ceiling_lin_ = std::pow(10.0f, ceiling_db_ / 20.0f);
-    attack_step_ = 1.0f / (kAttackMs * 0.001f * static_cast<float>(sample_rate_));
-    release_coef_ = 1.0f - std::exp(-1.0f / (release_ms_ * 0.001f * static_cast<float>(sample_rate_)));
-  }
-
   int sample_rate_ = 48000;
   int channels_ = 2;
   LoudnessMeter meter_;
-  bool bypass_ = true;  // 默认透传；UI 持久化状态由引擎 Running 后补发
+  bool bypass_ = true;   // 默认透传；UI 持久化状态由引擎 Running 后补发
+
   int look_ahead_ = 120;
   int ring_capacity_ = 248;
-  std::vector<std::size_t> write_idx_;  // 每声道独立写指针
+  std::vector<float> ring_;              // [channel][ring_capacity_]
+  std::vector<std::size_t> write_idx_;   // 每声道独立写指针
+
+  std::vector<Bq> detect_bq_;   // [channel][kSections]
+  std::vector<Bq> audio_bq_;    // [channel][kSections]
+
+  std::vector<float> band_peak_;   // [channel][3] 每段峰值包络
+  std::vector<float> band_env_;    // [channel][3] 每段增益包络
+  std::vector<float> final_peak_;  // [channel]
+  std::vector<float> final_env_;   // [channel]
+  std::vector<float> dc_x_;        // [channel] 去直流历史
+  std::vector<float> dc_y_;        // [channel]
+
+  float gate_off_[3] = {kGateOffsetLow, kGateOffsetMid, kGateOffsetHigh};
+  bool dc_block_ = true;
   float ceiling_db_ = kDefaultCeilingDb;
   float release_ms_ = kDefaultReleaseMs;
-  float ceiling_lin_ = 0.891f;   // 10^(-1/20)
+  float ceiling_lin_ = 0.891f;      // 10^(-1/20)
+  float gate_lin_[3] = {0.0f, 0.0f, 0.0f};
   float attack_step_ = 0.0f;
+  float band_attack_step_ = 0.0f;
   float release_coef_ = 0.0f;
-  std::vector<float> ring_;      // [channel][ring_capacity_]
-  std::vector<float> env_;       // 每声道增益包络
-  std::vector<float> peak_env_;  // 每声道峰值包络（瞬时攻击 + 指数衰减）
-  bool tp_enabled_ = false;      // true-peak 检测（param 2；Kotlin 构链后显式开）
-  std::vector<float> tp_hist_;   // [channel][kTpTaps] true-peak FIR 历史
+
+  bool tp_enabled_ = false;         // true-peak 检测（param 2；Kotlin 构链后显式开）
+  std::vector<float> tp_hist_;      // [channel][kTpTaps]
 };
 
 }  // namespace sonicraft::dsp

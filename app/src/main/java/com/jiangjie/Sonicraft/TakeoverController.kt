@@ -41,11 +41,11 @@ import javax.inject.Singleton
  * 静音双轨阶梯：
  *  ① APPOPS 轨（主）：uid 级 AppOps PLAY_AUDIO ignore，系统服务层禁止播放，对
  *     AAudio Exclusive/MMAP 低延迟路径同样有效；带 appops get 回读验证
- *     （某些 ROM set 返回 0 但未生效，WEcho/RocoDSP/本 app 三方实测同坑）。
+ *     （某些 ROM set 返回 0 但未生效，早期定制版/RocoDSP/本 app 三方实测同坑）。
  *  ② DP_SESSION 轨（回退）：① 回读失败时下探——对该 uid 的活跃 audio session 挂
- *     DynamicsProcessing 输入增益 -200dB（WEcho MuteEffectFactory 同款模式）。
+ *     DynamicsProcessing 输入增益 -200dB（早期定制版 MuteEffectFactory 同款模式）。
  *     已知局限：对部分直播/独占 session 挂载失败（Error -3，实测），
- *     失败进 30s 冷却；自愈靠 500ms 轮询补挂（替代 WEcho 的反射 listener），
+ *     失败进 30s 冷却；自愈靠 500ms 轮询补挂（替代 早期定制版 的反射 listener），
  *     补挂失败则干净放弃，行为退化为无阶梯现状（双声），不会更糟。
  *
  * 铁律（对应无声事故与「通话优先」要求）：
@@ -343,7 +343,7 @@ class TakeoverController @Inject constructor(
      * release/enable）。：与止损协程并发，用并发容器 */
     private val dpEffects = ConcurrentHashMap<Int, android.media.audiofx.AudioEffect>()
 
-    /** DP 轨挂载失败冷却：sessionId → 冷却到期时间戳（WEcho 同款 30s，避免疯狂重试） */
+    /** DP 轨挂载失败冷却：sessionId → 冷却到期时间戳（早期定制版 同款 30s，避免疯狂重试） */
     private val dpFailedSessions = ConcurrentHashMap<Int, Long>()
 
     /** EQ 轨停用期已 restore allow 的名单 uid：去重防每轮空跑
@@ -836,52 +836,87 @@ class TakeoverController @Inject constructor(
     }
 
     private fun pollOnce() {
+        probeSelfAudioPermission()
+
+        if (_mutingSuspended.value) {
+            pollSuspendedTick()
+            return
+        }
+
+        val snapshot = fetchAudioSnapshot() ?: return
+
+        var takenOver = 0
+        var rolledBack = 0
+        var dpDescended = 0
+        val now = System.currentTimeMillis()
+
+        rolledBack += rollbackDisappearedUids(snapshot.activeUsages, snapshot.healthy, now)
+
+        val scan = scanActiveUidsForTakeover(snapshot, now)
+        takenOver += scan.takenOver
+        rolledBack += scan.rolledBack
+        dpDescended += scan.dpDescended
+
+        monitorLoopbackMutes()
+
+        healDpTracks()
+
+        reportPollHeartbeat(snapshot, takenOver, rolledBack, dpDescended)
+    }
+
+    /** 1/7 自身播放权限自愈探针（每 20 轮 ≈10s 一次） */
+    private fun probeSelfAudioPermission() {
         // 自身播放权限自愈探针：必须在 _mutingSuspended 早退
         // 之前——事故 deny 恰落在保险丝挂起窗口（15:56:50~15:57:09），探针若被挂起
         // 屏蔽等于关闭唯一自救通道。低频（每 20 轮 ≈10s）控制 shell 开销。
         selfAuditCounter++
         if (selfAuditCounter % SELF_AUDIT_EVERY_POLLS == 0L) runSelfAudit()
-        // 采集断链保险丝挂起期间：不新增任何接管（保直出），直到 resumeMuting。
-        // 定案：挂起空转此前零 diag 输出，与协程死亡在日志上无法区分
-        // （三次误判「轮询静默」，实为挂起空转+灭屏降频叠加的假死）——空转期保心跳留痕
-        if (_mutingSuspended.value) {
-            pollCount++
-            if (pollCount % 10L == 1L) {
-                writeDiag("poll#$pollCount 挂起空转（保险丝挂起中，capture 零电平；恢复播放后自动解除）")
-            }
-            // 息屏案：空转轮必须继续跑 dumpsys——①挂起期活跃快照若冻结，
-            // 挂起后开播的 app 永远不被看见（酷狗 09:21 开播无人接管实锤）；②拓扑变化
-            // 是比「电平恢复」更可靠的解除信号：断续流（网易云恒零）误触发挂起后电平
-            // 永不恢复=死锁，但用户切歌/开新流必然改变拓扑。拓扑变化+满 30s → 解除，
-            // 真断链会在解除后 15s 再挂起——宁抖动不死锁。
-            val dump = privileged.runCommand("dumpsys", "audio")
-            if (dump.exitCode == 0) {
-                val active = parseActiveUsages(dump.stdout, Process.myUid()).keys
-                activeUidsSnapshot = active
-                if (active != suspendActiveUids &&
-                    SystemClock.elapsedRealtime() - suspendSince >= SUSPEND_MIN_MS
-                ) {
-                    suspendActiveUids = active
-                    resumeMuting()
-                    _captureBrokenWarning.value = null
-                    writeDiag("保险丝解除：活跃流拓扑变化（防死锁自愈），恢复正常轮询")
-                }
-            }
-            // 电平恢复解除（防死锁第二通道）：拓扑变化解除的盲区=同一组 app 持续播时
-            // 拓扑不变 → 死锁依旧（10:23 酷狗案挂起死锁 6 分钟实锤，用户感知「循环几次
-            // 后直接出原声」）。挂起已回滚接管=原声直出，直出流可抓者直声必然进投影
-            // =电平恢复 → 满防抖后解除。probe 判决与正常接管都依赖解除后才有机会跑。
-            captureLevelProbe?.let { probe ->
-                if (probe() >= BROKEN_CAPTURE_LEVEL &&
-                    SystemClock.elapsedRealtime() - suspendSince >= SUSPEND_MIN_MS
-                ) {
-                    _captureBrokenWarning.value = null
-                    resumeMuting()
-                    writeDiag("保险丝解除：回滚直声进投影（电平恢复），恢复正常轮询")
-                }
-            }
-            return
+    }
+
+    /** 2/7 保险丝挂起空转：保直出 + 拓扑/电平双通道防死锁解除 */
+    private fun pollSuspendedTick() {
+    // 采集断链保险丝挂起期间：不新增任何接管（保直出），直到 resumeMuting。
+    // 定案：挂起空转此前零 diag 输出，与协程死亡在日志上无法区分
+    // （三次误判「轮询静默」，实为挂起空转+灭屏降频叠加的假死）——空转期保心跳留痕
+        pollCount++
+        if (pollCount % 10L == 1L) {
+            writeDiag("poll#$pollCount 挂起空转（保险丝挂起中，capture 零电平；恢复播放后自动解除）")
         }
+        // 息屏案：空转轮必须继续跑 dumpsys——①挂起期活跃快照若冻结，
+        // 挂起后开播的 app 永远不被看见（酷狗 09:21 开播无人接管实锤）；②拓扑变化
+        // 是比「电平恢复」更可靠的解除信号：断续流（网易云恒零）误触发挂起后电平
+        // 永不恢复=死锁，但用户切歌/开新流必然改变拓扑。拓扑变化+满 30s → 解除，
+        // 真断链会在解除后 15s 再挂起——宁抖动不死锁。
+        val dump = privileged.runCommand("dumpsys", "audio")
+        if (dump.exitCode == 0) {
+            val active = parseActiveUsages(dump.stdout, Process.myUid()).keys
+            activeUidsSnapshot = active
+            if (active != suspendActiveUids &&
+                SystemClock.elapsedRealtime() - suspendSince >= SUSPEND_MIN_MS
+            ) {
+                suspendActiveUids = active
+                resumeMuting()
+                _captureBrokenWarning.value = null
+                writeDiag("保险丝解除：活跃流拓扑变化（防死锁自愈），恢复正常轮询")
+            }
+        }
+        // 电平恢复解除（防死锁第二通道）：拓扑变化解除的盲区=同一组 app 持续播时
+        // 拓扑不变 → 死锁依旧（10:23 酷狗案挂起死锁 6 分钟实锤，用户感知「循环几次
+        // 后直接出原声」）。挂起已回滚接管=原声直出，直出流可抓者直声必然进投影
+        // =电平恢复 → 满防抖后解除。probe 判决与正常接管都依赖解除后才有机会跑。
+        captureLevelProbe?.let { probe ->
+            if (probe() >= BROKEN_CAPTURE_LEVEL &&
+                SystemClock.elapsedRealtime() - suspendSince >= SUSPEND_MIN_MS
+            ) {
+                _captureBrokenWarning.value = null
+                resumeMuting()
+                writeDiag("保险丝解除：回滚直声进投影（电平恢复），恢复正常轮询")
+            }
+        }
+    }
+
+    /** 3/7 拉取 dumpsys audio 快照；失败已写 diag 并返回 null */
+    private fun fetchAudioSnapshot(): PollSnapshot? {
         // AudioPlaybackConfiguration 的 uid 是隐藏 API（App 进程内反射已被 Android 15 hidden API
         // 封锁），走特权 dumpsys audio 解析活跃播放快照：每行 AudioPlaybackConfiguration 含
         // u/pid:<uid>/<pid>、state:started、usage=USAGE_*（格式实测稳定）
@@ -890,7 +925,7 @@ class TakeoverController @Inject constructor(
             reportCommandFailure("dumpsys audio", dump)
             writeDiag("dumpsys 失败 exit=${dump.exitCode} err=${dump.stderr.take(80)}")
             lastDumpFailed = true
-            return
+            return null
         }
         _privilegeError.value = null // 特权可用，解除 UI 警示
 
@@ -910,10 +945,16 @@ class TakeoverController @Inject constructor(
         lastDumpFailed = false   // 成功轮消费冻结标志
         if (activeUsages.isNotEmpty()) lastHealthyDumpBytes = dump.stdout.length
 
-        var takenOver = 0
+        return PollSnapshot(dump, activeUsages, dumpHealthy)
+    }
+
+    /** 4/7 消失超时回滚（按轨分派），返回回滚条数 */
+    private fun rollbackDisappearedUids(
+        activeUsages: Map<Int, Set<String>>,
+        dumpHealthy: Boolean,
+        now: Long,
+    ): Int {
         var rolledBack = 0
-        var dpDescended = 0
-        val now = System.currentTimeMillis()
         // 消失超时回滚（按轨分派）：接管中的 uid 若从活跃列表消失超过阈值（微信语音通话时
         // 媒体停、VOIP 不入列表 → uid 消失 → usage 触发的通话保护永不执行 → 静音残留 →
         // 挂断后微信媒体被静音且回滚无从发生）。回滚后不设长冷却：媒体回现时下一轮
@@ -939,6 +980,16 @@ class TakeoverController @Inject constructor(
                 SonicraftLog.w(TAG, "uid 消失超时回滚 uid=$uid track=$track goneMs=$goneMs ok=$ok")
             }
         }
+        return rolledBack
+    }
+
+    /** 5/7 逐 uid 接管扫描（通话保护 / 名单 / Loopback / appops 阶梯） */
+    private fun scanActiveUidsForTakeover(snapshot: PollSnapshot, now: Long): ScanCounters {
+        val dump = snapshot.dump
+        val activeUsages = snapshot.activeUsages
+        var takenOver = 0
+        var rolledBack = 0
+        var dpDescended = 0
         for ((uid, usages) in activeUsages) {
             // uid=1000 误接管修复：系统域 uid（system_server/systemui 的
             // SoundPool 音效偶标 usage=USAGE_MEDIA + state:started 数秒，NX733J 实锤
@@ -1051,7 +1102,7 @@ class TakeoverController @Inject constructor(
                 continue
             }
             if (setAppopsForUid(uid, APPOPS_IGNORE)) {
-                // 回读验证：某些 ROM appops set 返回 0 但实际未生效（WEcho/RocoDSP 同坑），
+                // 回读验证：某些 ROM appops set 返回 0 但实际未生效（早期定制版/RocoDSP 同坑），
                 // 不验证就会退化成「静默失效 = 用户只看到双声」
                 if (verifyIgnored(uid)) {
                     autoTakenOverUids[uid] = MuteTrack.APPOPS
@@ -1091,7 +1142,11 @@ class TakeoverController @Inject constructor(
                 writeDiag("appops ignore 失败 uid=$uid")
             }
         }
+        return ScanCounters(takenOver, rolledBack, dpDescended)
+    }
 
+    /** 6/7 轮询级持续静音监测（SilenceFuse：宁双声不静音） */
+    private fun monitorLoopbackMutes() {
         // ★ 轮询级持续静音监测：原实现只在 muteUid（新会话挂静音）时
         // 检查一次，注释写的「每轮 500ms 盯一次」与实现不符——切歌/蓝牙切换导致副本
         // 掉零时，静音仍保持 = 原声被压 + 副本无数据 = 彻底无声（用户听感：几秒后没声）。
@@ -1131,18 +1186,38 @@ class TakeoverController @Inject constructor(
                 }
             }
         }
+    }
 
-        healDpTracks()
-
+    /** 7/7 轮询心跳（每 10 轮一行 diag） */
+    private fun reportPollHeartbeat(
+        snapshot: PollSnapshot,
+        takenOver: Int,
+        rolledBack: Int,
+        dpDescended: Int,
+    ) {
         pollCount++
         if (pollCount % 10L == 1L) {
             writeDiag(
-                "poll#$pollCount dump=${dump.stdout.length}B 活跃uid=${activeUsages.size} " +
+                "poll#$pollCount dump=${snapshot.dump.stdout.length}B 活跃uid=${snapshot.activeUsages.size} " +
                     "新增接管=$takenOver DP下探=$dpDescended 通话回滚=$rolledBack " +
                     "已接管=${autoTakenOverUids.size} 冷却中=${cooldownUids.size}",
             )
         }
     }
+
+    /** pollOnce 的 dumpsys 快照结果 */
+    private data class PollSnapshot(
+        val dump: CommandResult,
+        val activeUsages: Map<Int, Set<String>>,
+        val healthy: Boolean,
+    )
+
+    /** 一轮扫描的接管/回滚计数 */
+    private data class ScanCounters(
+        val takenOver: Int,
+        val rolledBack: Int,
+        val dpDescended: Int,
+    )
 
     /** 通话保护冷却中（到期自动解禁） */
     private fun isCoolingDown(uid: Int): Boolean {
@@ -1610,7 +1685,7 @@ class TakeoverController @Inject constructor(
 
     /**
      * session 发现：uid → 活跃 audio session id。
-     * 主路径 dumpsys media.audio_policy（WEcho 同款两条正则，覆盖新旧 ROM 格式）；
+     * 主路径 dumpsys media.audio_policy（早期定制版 同款两条正则，覆盖新旧 ROM 格式）；
      * 降级 activePlaybackConfigurations + 反射（hidden API 封锁下可能失败，失败即放弃 DP 轨）。
      */
     private fun findSessionForUid(uid: Int): Int? {
@@ -1635,7 +1710,7 @@ class TakeoverController @Inject constructor(
                 break // 该格式已命中但无此 uid，不再尝试其他格式
             }
         }
-        // 降级：WEcho 实测 NX733J 上 AudioPlaybackConfiguration 的隐藏方法反射可用
+        // 降级：早期定制版 实测 NX733J 上 AudioPlaybackConfiguration 的隐藏方法反射可用
         return try {
             audioManager.activePlaybackConfigurations.firstOrNull { config ->
                 invokeIntMethod(config, "getUid") == uid &&
@@ -1647,9 +1722,9 @@ class TakeoverController @Inject constructor(
         }
     }
 
-    /** DP 静音效果挂载（WEcho makeMuteEffect 同款）：创建 → -200dB 输入增益 → 启用，重试 2 次 */
+    /** DP 静音效果挂载（早期定制版 makeMuteEffect 同款）：创建 → -200dB 输入增益 → 启用，重试 2 次 */
     private fun makeDpMuteEffect(sid: Int): DynamicsProcessing? {
-        // 数量上限（WEcho MAX_MUTE_EFFECTS 同款）：EQ 轨与 mute 轨同为 DP session 效果，
+        // 数量上限（早期定制版 MAX_MUTE_EFFECTS 同款）：EQ 轨与 mute 轨同为 DP session 效果，
         // 共占系统 effect 引擎资源，超限继续挂会连锁失败
         if (dpEffects.size >= DP_MAX_MUTE_EFFECTS) {
             writeDiag("DP 挂载跳过 sid=$sid：活跃 DP 效果已达上限 $DP_MAX_MUTE_EFFECTS")
@@ -1683,7 +1758,7 @@ class TakeoverController @Inject constructor(
     }
 
     /**
-     * DP 轨轮询自愈（替代 WEcho 的反射 listener）：目标 app 抢回控制权/系统禁用效果时，
+     * DP 轨轮询自愈（替代 早期定制版 的反射 listener）：目标 app 抢回控制权/系统禁用效果时，
      * 500ms 内补挂 -200dB；补挂失败则释放并放弃该 uid（退化为双声现状，不劣于无阶梯）。
      */
     private fun healDpTracks() {
@@ -1737,7 +1812,7 @@ class TakeoverController @Inject constructor(
         return anyOk
     }
 
-    /** appops get 回读：确认 ignore 真实生效（set 返回 0 ≠ 生效，WEcho 实测踩坑） */
+    /** appops get 回读：确认 ignore 真实生效（set 返回 0 ≠ 生效，早期定制版 实测踩坑） */
     private fun verifyIgnored(uid: Int): Boolean {
         val pkg = context.packageManager.getPackagesForUid(uid)
             ?.firstOrNull { it != context.packageName } ?: return false
@@ -1852,8 +1927,8 @@ class TakeoverController @Inject constructor(
         /** 自身播放权限自愈探针：每 N 轮轮询自检一次（500ms/轮 → ≈10s 一次） */
         private const val SELF_AUDIT_EVERY_POLLS = 20L
 
-        // ===== DP_SESSION 回退轨常量（取值沿用 WEcho MuteEffectFactory 实战值） =====
-        private const val DP_MAX_MUTE_EFFECTS = 20  // 同 WEcho：最多同时活跃的 DP 效果数，防系统 effect 引擎上限
+        // ===== DP_SESSION 回退轨常量（取值沿用 早期定制版 MuteEffectFactory 实战值） =====
+        private const val DP_MAX_MUTE_EFFECTS = 20  // 同 早期定制版：最多同时活跃的 DP 效果数，防系统 effect 引擎上限
         private const val DP_CREATE_RETRY_COUNT = 2
         private const val DP_CREATE_RETRY_DELAY_MS = 100L
         private const val DP_FAILED_COOLDOWN_MS = 30_000L
@@ -1883,7 +1958,7 @@ class TakeoverController @Inject constructor(
         private const val EQ_GAIN_HIGH_DB = 2.5f   // >5kHz 亮度
 
         /**
-         * dumpsys media.audio_policy 的 session→uid 映射正则（WEcho 同款，截取前两个捕获组）：
+         * dumpsys media.audio_policy 的 session→uid 映射正则（早期定制版 同款，截取前两个捕获组）：
          * 旧格式单条块 "Session Id: 257 UID: 10099 ..."；Android 13+ 单行
          * "Session ID: 257; uid 10099; ..."。捕获组 1=sessionId、2=uid。
          */

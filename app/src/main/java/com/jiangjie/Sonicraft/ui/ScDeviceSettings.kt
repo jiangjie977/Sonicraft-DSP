@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 部分交互与布局参照本人维护的 wecho 定制版（studio_rack 分支）。
+ * 部分交互与布局参照作者本人维护的定制分支。
  */
 
 package com.jiangjie.Sonicraft.ui
@@ -776,7 +776,7 @@ internal fun ScAdvChip(text: String, active: Boolean, onClick: () -> Unit) {
 /**
  * 卡外分组大标题。
  *
- * wecho 的分组标题在**卡片之外**，字号明显大于行标题，形成「章 / 节」两级层次。
+ * 早期定制版 的分组标题在**卡片之外**，字号明显大于行标题，形成「章 / 节」两级层次。
  * Sonicraft 原来把 11sp 的小字标题放进卡内，层级与行标题打架，整块读起来是平的。
  */
 @Composable
@@ -790,7 +790,7 @@ internal fun ScSectionTitle(text: String) {
     )
 }
 
-/** 行间分割线：1dp 极淡，条条通到卡片内边距（不做左侧缩进，与 wecho 一致） */
+/** 行间分割线：1dp 极淡，条条通到卡片内边距（不做左侧缩进，与 早期定制版 一致） */
 @Composable
 private fun ScSettingDivider() {
     Box(
@@ -802,7 +802,7 @@ private fun ScSettingDivider() {
 }
 
 /**
- * 设置行：左「标题 + 副标题」、右「控件」（wecho `ListTile` 的 Kotlin 版）。
+ * 设置行：左「标题 + 副标题」、右「控件」（早期定制版 `ListTile` 的 Kotlin 版）。
  * 整行可点（传 onClick 时），末尾按需画分割线。
  */
 @Composable
@@ -885,7 +885,7 @@ fun ScSettingsSection(viewModel: MainViewModel) {
     val running = engineState is EngineState.Running || engineState is EngineState.Suspended
 
     // ============ 界面缩放============
-    // wecho 是三级：autoScale(按 440dp 基准自动算) × uiScale(粗调) × uiFineScale(微调)。
+    // 早期定制版 是三级：autoScale(按 440dp 基准自动算) × uiScale(粗调) × uiFineScale(微调)。
     // 这里把三者的乘积直接显示出来，用户改滑块就能看到「总 X%」跟着动。
     val uiScale by viewModel.uiScale.collectAsStateWithLifecycle()
     val uiFineScale by viewModel.uiFineScale.collectAsStateWithLifecycle()
@@ -1139,13 +1139,28 @@ fun ScSettingsSection(viewModel: MainViewModel) {
             val ctx = LocalContext.current
             var backupMsg by remember { mutableStateOf<String?>(null) }
             var needRestart by remember { mutableStateOf(false) }
+
+            // 导出：直接写公共目录「下载/Sonicraft」（MediaStore 自动建目录，一次点击）。
+            // 导入：手搓 ACTION_OPEN_DOCUMENT 并带 EXTRA_INITIAL_URI，起始目录同样是该文件夹
+            //       —— 契约类 OpenDocument 不带这个 extra，所以不能用它。
             val importLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.OpenDocument(),
-            ) { uri ->
-                if (uri != null) {
+                ActivityResultContracts.StartActivityForResult(),
+            ) { result ->
+                val uri = result.data?.data
+                if (result.resultCode == android.app.Activity.RESULT_OK && uri != null) {
                     viewModel.importConfig(uri)
-                        .onSuccess { n ->
-                            backupMsg = "已导入 $n 项配置。"
+                        .onSuccess { r ->
+                            val sb = StringBuilder("已导入 ${r.written} 项配置。")
+                            if (r.migrated > 0) sb.append("\n· 其中 ${r.migrated} 项按新键名迁移")
+                            if (r.ignored > 0) sb.append("\n· 忽略 ${r.ignored} 项无法识别的内容")
+                            if (r.missingIrFiles.isNotEmpty()) {
+                                sb.append("\n\n缺少 ${r.missingIrFiles.size} 个脉冲文件，")
+                                sb.append("需在「脉冲库」里重新导入：")
+                                sb.append(r.missingIrFiles.take(3).joinToString("、"))
+                                if (r.missingIrFiles.size > 3) sb.append(" 等")
+                            }
+                            sb.append("\n\n重启应用后生效。")
+                            backupMsg = sb.toString()
                             needRestart = true
                         }
                         .onFailure { backupMsg = "导入失败：${it.message}" }
@@ -1154,21 +1169,30 @@ fun ScSettingsSection(viewModel: MainViewModel) {
 
             ScSettingRow(
                 title = "导出配置",
-                subtitle = "全部参数写成 JSON，存到应用外部目录",
+                subtitle = "保存到「下载/Sonicraft」，卸载也不丢",
                 showDivider = true,
                 onClick = {
-                    viewModel.exportConfig()
-                        .onSuccess { backupMsg = "已导出：\n$it" }
+                    viewModel.exportConfigToDownloads()
+                        .onSuccess { path -> backupMsg = "已导出：\n$path" }
                         .onFailure { backupMsg = "导出失败：${it.message}" }
                 },
                 trailing = { Text("›", fontSize = 18.sp, color = ScColors.TextSub) },
             )
             ScSettingRow(
                 title = "导入配置",
-                subtitle = "从 JSON 恢复全部参数（需重启应用）",
+                subtitle = "从「下载/Sonicraft」选择 JSON（需重启）",
                 showDivider = false,
                 onClick = {
-                    importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                    val intent = android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(android.content.Intent.CATEGORY_OPENABLE)
+                        type = "*/*"
+                        putExtra(
+                            android.content.Intent.EXTRA_MIME_TYPES,
+                            arrayOf("application/json", "text/plain"),
+                        )
+                        putExtra("android.provider.extra.INITIAL_URI", viewModel.importStartFolderUri())
+                    }
+                    runCatching { importLauncher.launch(intent) }
                 },
                 trailing = { Text("›", fontSize = 18.sp, color = ScColors.TextSub) },
             )

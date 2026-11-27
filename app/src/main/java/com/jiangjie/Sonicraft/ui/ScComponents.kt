@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 jiangjie
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * 部分交互与布局参照本人维护的 wecho 定制版（studio_rack 分支）。
+ * 部分交互与布局参照作者本人维护的定制分支。
  */
 
 package com.jiangjie.Sonicraft.ui
@@ -741,3 +741,41 @@ internal fun ScBandMeterCanvas(
 internal fun reverbName(preset: Int, names: Array<String>): String =
     names.getOrNull(preset) ?: if (preset == 0) "干声" else "预设 $preset"
 
+/**
+ * 「ⓘ 说明」：把卡片里的长说明收进弹窗。
+ *
+ * 为什么需要：效果器卡片里的算法说明动辄 80~150 字，平铺会把卡片撑高、
+ * 挤压其它卡片、滚动时也读不完。这类内容是"读一次"的，收进弹窗更合适。
+ *
+ * 用法：把原来平铺的长 Text 换成 `ScInfoChip(body = "…")`；
+ * **安全警告不要用它收起来**（例如"前瞻会引入等量延迟"），必须常驻可见。
+ */
+@Composable
+internal fun ScInfoChip(
+    body: String,
+    title: String = "说明",
+    label: String = "说明",
+) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    // 整行左对齐：放在卡片内容区的最后一行时，始终贴左下角
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+        ScAdvChip(text = "ⓘ $label", active = false) { open = true }
+    }
+    if (open) {
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text(title) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // 双换行分段落，单换行保留在同一段内（避免把列表拆散）
+                    body.split("\n\n").forEach { para ->
+                        if (para.isNotBlank()) Text(para, fontSize = 12.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { open = false }) { Text("知道了") }
+            },
+        )
+    }
+}

@@ -120,7 +120,7 @@ object EffectGroups {
         slots = listOf(
             // 动态低音：LR4 分频重构 + 动态增强 + 单元保护（**设备无关**）
             EffectSlotSpec("dynamic_bass", AudioEngine.DYNAMIC_BASS_NODE_INDEX),
-            // 低音增强：M/S + EQ + 瞬态 + 次谐波（**设备无关**，移植自 wecho「低频质感」）
+            // 低音增强：M/S + EQ + 瞬态 + 次谐波（**设备无关**，移植自上游项目的「低频质感」）
             EffectSlotSpec("bass_enhance", AudioEngine.BASS_ENHANCE_NODE_INDEX),
             // 虚拟低音：心理声学谐波翻译（**只适合外放**）
             EffectSlotSpec("virtual_bass", AudioEngine.VIRTUAL_BASS_NODE_INDEX),

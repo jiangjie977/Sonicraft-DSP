@@ -90,7 +90,7 @@ class CaptureRelaySource(
         // 匹配 MEDIA + GAME：短视频/游戏等内容音。故意不匹配 UNKNOWN——该 usage 常被
         // 通知/系统短音使用，误捕会产生"提示音双声"；抖音等主流 app 短视频走 MEDIA/GAME。
         // 注意：努比亚要求 AudioPlaybackCaptureConfiguration 至少匹配一个 usage，否则 build 抛异常。
-        // excludeUid(自己)：防回环——不捕获本 app 引擎自己的输出（WEcho 同款做法）。
+        // excludeUid(自己)：防回环——不捕获本 app 引擎自己的输出（早期定制版 同款做法）。
         // excludeUid(黑名单)：用户排除清单的 app 不被捕获（排除自身的重复 excludeUid 系统会忽略）。
         val captureConfig = try {
             val builder = AudioPlaybackCaptureConfiguration.Builder(projection)

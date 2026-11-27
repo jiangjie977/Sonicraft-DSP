@@ -188,6 +188,11 @@ NativeAudioEngine::NativeAudioEngine(int sample_rate, int channels, int max_fram
   auto outputGain = std::make_unique<dsp::GainNode>();
   outputGain->set_channel_count(channels);
   outputGain->set_id("output_gain");
+  // 输出级内建基准：+3 dB（×1.4125）。
+  // 最初按用户实测的"正常音量"设成 +12 dB，后改为 +3 dB（用户 2026-11-27 决定），
+  // 剩余缺口由旋钮（0~2×，相对基准 +6 dB）自行补足。
+  // 输入增益（kNodeInputGain）不设基准、上限仍 +6 dB——前端削顶不可逆。
+  outputGain->set_makeup_gain(1.4125f);
   AddNodeAt(*graph_, std::move(outputGain), kNodeOutputGain);
   // 自定义脚本效果器：插在 OutputGain 之后、Limiter 之前，
   // 保证 Limiter 仍是绝对末级（用户脚本 boost 也会被限幅兜住）。
@@ -588,19 +593,19 @@ std::string NativeAudioEngine::RunVirtualSurroundSelfTest() {
                 rep.symmetric_ok ? "OK" : "FAIL",
                 rep.itd_scale, rep.ild_trim);
   out += line;
-  // 声道标注：顺序与 LocalizationSelfTest::kAngles 一一对应
-  //   kAngles = {-110, -30, 0, 180, 0, 30, 110}
-  static const char* kChan[dsp::vs::LocalizationSelfTest::kAngleCount] = {
-      "SL", "FL", "C", "CS", "LFE", "FR", "SR"};
+  // 声道标注：条数与名称由报告给出（经典 = 7 声道 5.1；Ambisonic = 12 扬声器）
+  std::snprintf(line, sizeof(line), "layout: %d direction(s)\n", rep.count);
+  out += line;
   out += "chan  azim   ITD_me  ITD_th  ILD_me  ILD_tg  dev\n";
   out += "----- ------ -------- -------- ------- ------- -----\n";
-  for (int i = 0; i < dsp::vs::LocalizationSelfTest::kAngleCount; ++i) {
+  for (int i = 0; i < rep.count; ++i) {
     const auto& a = rep.angles[i];
     const float ditd = a.itd_measured - a.itd_expected;
     const float dild = a.ild_measured_db - a.ild_target_db;
     const bool ok = std::fabs(ditd) <= 1.5f && std::fabs(dild) <= 1.5f;
+    const char* name = rep.labels[i] != nullptr ? rep.labels[i] : "--";
     std::snprintf(line, sizeof(line), "%-5s %6.0f %8.2f %8.2f %7.2f %7.2f  %s\n",
-                  kChan[i], a.azimuth, a.itd_measured, a.itd_expected,
+                  name, a.azimuth, a.itd_measured, a.itd_expected,
                   a.ild_measured_db, a.ild_target_db, ok ? "OK" : "CHECK");
     out += line;
   }
