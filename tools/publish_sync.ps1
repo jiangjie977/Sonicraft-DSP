@@ -57,12 +57,12 @@ if ($dirty -and -not $DryRun) {
 # Source-side skips (may include .git: we do not copy dev history into the mirror).
 # docs/: development notes (design/plan/roadmap) stay local only.
 # CHANGELOG.md: internal change log, not published.
-$excludeDirs = @("build", ".gradle", ".kotlin", ".codebuddy", ".git", ".cxx", "node_modules", ".idea", "keystore", "dist", "docs")
+$excludeDirs = @("build", ".gradle", ".kotlin", ".codebuddy", ".git", ".cxx", "node_modules", ".idea", "keystore", "dist", "docs", "__pycache__")
 $excludeFiles = @("*.apk", "*.jks", "*.keystore", "keystore.properties", "local.properties", "*.log", "AGENTS.md", "README.public.md", "CHANGELOG.md", "EQ_USER_MANUAL.md", "M8_MULTIBAND_USER_GUIDE.md")
 
 # Destination pruning (NEVER prune .git: the mirror owns its own repo).
-$pruneDirs = @("build", ".gradle", ".kotlin", ".codebuddy", ".cxx", "node_modules", ".idea", "keystore", "dist", "docs")
-$pruneFiles = @("*.apk", "*.jks", "*.keystore", "keystore.properties", "local.properties", "*.log", "AGENTS.md", "README.public.md", "CHANGELOG.md", "EQ_USER_MANUAL.md", "M8_MULTIBAND_USER_GUIDE.md")
+$pruneDirs = @("build", ".gradle", ".kotlin", ".codebuddy", ".cxx", "node_modules", ".idea", "keystore", "dist", "docs", "__pycache__")
+$pruneFiles = @("*.apk", "*.jks", "*.keystore", "keystore.properties", "local.properties", "*.log", "AGENTS.md", "README.public.md", "CHANGELOG.md", "EQ_USER_MANUAL.md", "M8_MULTIBAND_USER_GUIDE.md", "*.pyc")
 
 # Images are pruned ONLY under tools/ (screenshots/forensics captures).
 # Never use a global *.png filter: it would delete app launcher icons.

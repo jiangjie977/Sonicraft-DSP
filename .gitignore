@@ -99,3 +99,7 @@ tools/gain-audit/build/
 
 # 本地 IDE 配置（CodeBuddy/VS Code 自动生成，个人设置不入库）
 .vscode/
+
+# Python 缓存（scripts/ 下的检查脚本运行产物，不入库也不进镜像）
+__pycache__/
+*.pyc
